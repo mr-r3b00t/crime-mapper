@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Graph</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; display: flex; height: 100vh; font-size: 12px; transition: background-color 0.3s, color 0.3s; }
+        body.light-mode { background-color: #f0f2f5; color: #1f2a44; }
+        body.dark-mode { background-color: #1e293b; color: #e2e8f0; }
+        #controls { width: 300px; border-radius: 8px 0 0 8px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); overflow-y: auto; flex-shrink: 0; transition: background-color 0.3s; position: relative; display: flex; flex-direction: column; }
+        .light-mode #controls { background-color: #fff; }
+        .dark-mode #controls { background-color: #2d3748; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3); }
+        #myNetwork { flex-grow: 1; height: 100%; border-radius: 0 8px 8px 0; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); transition: background-color 0.3s; }
+        .light-mode #myNetwork { background-color: #fff; }
+        .dark-mode #myNetwork { background-color: #334155; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3); }
+        .tab-buttons { display: flex; flex-wrap: wrap; border-bottom: 1px solid #d1d5db; transition: border-color 0.3s; padding-top: 100px; }
+        .dark-mode .tab-buttons { border-bottom: 1px solid #4b5563; }
+        .tab-button { flex: 1 0 14.28%; padding: 10px; text-align: center; border: none; cursor: pointer; transition: background-color 0.3s, color 0.3s; font-size: 10px; }
+        .light-mode .tab-button { background-color: #f9fafb; color: #1f2a44; }
+        .dark-mode .tab-button { background-color: #374151; color: #e2e8f0; }
+        .tab-button.active { font-weight: bold; }
+        .light-mode .tab-button.active { background-color: #fff; border-bottom: 2px solid #3b82f6; }
+        .dark-mode .tab-button.active { background-color: #2d3748; border-bottom: 2px solid #60a5fa; }
+        .light-mode .tab-button:hover:not(.active) { background-color: #e5e7eb; }
+        .dark-mode .tab-button:hover:not(.active) { background-color: #4b5563; }
+        .tab-content { padding: 15px; display: none; flex-grow: 1; }
+        .tab-content.active { display: block; }
+        .input-group { margin: 15px 0; padding: 10px; border-radius: 6px; transition: background-color 0.3s; }
+        .light-mode .input-group { background-color: #f9fafb; }
+        .dark-mode .input-group { background-color: #374151; }
+        .input-group h3 { margin: 0 0 8px 0; font-size: 14px; }
+        .light-mode .input-group h3 { color: #1f2a44; }
+        .dark-mode .input-group h3 { color: #e2e8f0; }
+        input, select, textarea { margin: 4px 0; padding: 6px 10px; border-radius: 4px; font-size: 12px; transition: border-color 0.3s, background-color 0.3s, color 0.3s; width: 100%; box-sizing: border-box; }
+        .light-mode input, .light-mode select, .light-mode textarea { border: 1px solid #d1d5db; background-color: #fff; color: #1f2a44; }
+        .dark-mode input, .dark-mode select, .dark-mode textarea { border: 1px solid #4b5563; background-color: #4b5563; color: #e2e8f0; }
+        textarea { height: 100px; resize: vertical; }
+        button { padding: 6px 12px; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; transition: background-color 0.3s, color 0.3s; width: 100%; margin: 4px 0; }
+        .light-mode button { background-color: #3b82f6; color: white; }
+        .dark-mode button { background-color: #60a5fa; color: #1e293b; }
+        #mode-toggle { position: absolute; top: 10px; right: 10px; padding: 6px 12px; background-color: #6b7280; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; }
+        #pause-toggle { position: absolute; top: 40px; right: 10px; padding: 6px 12px; background-color: #6b7280; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; transition: background-color 0.3s; }
+        .light-mode #pause-toggle { background-color: #6b7280; }
+        .dark-mode #pause-toggle { background-color: #9ca3af; }
+        #pause-toggle.paused { background-color: #ef4444; }
+        #reset-layout { position: absolute; top: 70px; right: 10px; padding: 6px 12px; background-color: #6b7280; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; transition: background-color 0.3s; }
+        .light-mode #reset-layout { background-color: #6b7280; }
+        .dark-mode #reset-layout { background-color: #9ca3af; }
+        #footer { text-align: center; padding: 10px; font-size: 10px; margin-top: auto; transition: color 0.3s; }
+        .light-mode #footer { color: #6b7280; }
+        .dark-mode #footer { color: #94a3b8; }
+        #contextMenu { position: absolute; background-color: #fff; border: 1px solid #ccc; box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2); z-index: 1000; padding: 5px 0; }
+        #contextMenu button { display: block; width: 100%; text-align: left; padding: 5px 10px; background: none; border: none; cursor: pointer; }
+        #contextMenu button:hover { background-color: #f0f0f0; }
+        .dark-mode #contextMenu { background-color: #2d3748; border: 1px solid #4b5563; }
+        .dark-mode #contextMenu button { color: #e2e8f0; }
+        .dark-mode #contextMenu button:hover { background-color: #4b5563; }
+        .checkbox-label { display: flex; align-items: center; margin: 4px 0; font-size: 12px; }
+        .light-mode .checkbox-label { color: #1f2a44; }
+        .dark-mode .checkbox-label { color: #e2e8f0; }
+        input[type="checkbox"] { margin-right: 8px; width: auto; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/dist/vis-network.min.js"></script>
+</head>
+<body class="dark-mode">
+    <div id="controls">
+        <button id="mode-toggle" onclick="toggleMode()">Switch to Light Mode</button>
+        <button id="pause-toggle" onclick="togglePhysics()">Pause Physics</button>
+        <button id="reset-layout" onclick="resetLayout()">Reset Layout</button>
+        <div class="tab-buttons">
+            <button class="tab-button active" onclick="showTab('object-management')">Object Management</button>
+            <button class="tab-button" onclick="showTab('link-management')">Link Management</button>
+            <button class="tab-button" onclick="showTab('import-export')">Import/Export</button>
+            <button class="tab-button" onclick="showTab('api-keys')">API Keys</button>
+            <button class="tab-button" onclick="showTab('enrichment')">Enrichment</button>
+            <button class="tab-button" onclick="showTab('import-iocs')">Import IOCs</button>
+            <button class="tab-button" onclick="showTab('layouts')">Layouts</button>
+        </div>
+        <div id="object-management" class="tab-content active">
+            <div class="input-group">
+                <h3>Add Entity</h3>
+                <select id="entityType">
+                    <option value="contact">Contact</option>
+                    <option value="ip">IP Address</option>
+                    <option value="domain">Domain</option>
+                    <option value="organization">Organization</option>
+                    <option value="port">Port</option>
+                    <option value="wallet">Wallet</option>
+                    <option value="bank">Bank Account</option>
+                    <option value="technology">Technology</option>
+                    <option value="device">Device</option>
+                    <option value="malware">Malware</option>
+                </select>
+                <input type="text" id="nameInput" placeholder="Name">
+                <input type="email" id="emailInput" placeholder="Email">
+                <input type="text" id="ipInput" placeholder="IP Address" style="display: none;">
+                <input type="text" id="domainInput" placeholder="Domain" style="display: none;">
+                <input type="text" id="orgInput" placeholder="Organization Name" style="display: none;">
+                <input type="text" id="portNumInput" placeholder="Port Number" style="display: none;">
+                <select id="portType" style="display: none;">
+                    <option value="TCP">TCP</option>
+                    <option value="UDP">UDP</option>
+                </select>
+                <input type="text" id="walletAddressInput" placeholder="Wallet Address" style="display: none;">
+                <input type="text" id="accountNumberInput" placeholder="Account Number" style="display: none;">
+                <input type="text" id="sortCodeInput" placeholder="Sort Code" style="display: none;">
+                <input type="text" id="techNameInput" placeholder="Technology Name" style="display: none;">
+                <input type="text" id="techVersionInput" placeholder="Version" style="display: none;">
+                <select id="deviceCategory" style="display: none;">
+                    <option value="Server">Server</option>
+                    <option value="PC">PC</option>
+                    <option value="Laptop">Laptop</option>
+                    <option value="MAC">MAC</option>
+                    <option value="SmartPhone">SmartPhone</option>
+                    <option value="IOT">IOT</option>
+                    <option value="Router">Router</option>
+                    <option value="Switch">Switch</option>
+                    <option value="Wireless Access Point">Wireless Access Point</option>
+                    <option value="Other">Other</option>
+                </select>
+                <input type="text" id="deviceNameInput" placeholder="Device Name" style="display: none;">
+                <input type="text" id="malwareNameInput" placeholder="Malware Name" style="display: none;">
+                <select id="malwareType" style="display: none;">
+                    <option value="Wiper">Wiper</option>
+                    <option value="RAT">RAT</option>
+                    <option value="Encryptor">Encryptor</option>
+                    <option value="Stealer">Stealer</option>
+                    <option value="Other">Other</option>
+                </select>
+                <button onclick="addNode()">Add Entity</button>
+            </div>
+            <div class="input-group">
+                <h3>Edit Entity</h3>
+                <select id="editNode" onchange="loadNodeData()"></select>
+                <input type="text" id="editNameInput" placeholder="Name" style="display: none;">
+                <input type="email" id="editEmailInput" placeholder="Email" style="display: none;">
+                <input type="text" id="editIpInput" placeholder="IP Address" style="display: none;">
+                <input type="text" id="editDomainInput" placeholder="Domain" style="display: none;">
+                <input type="text" id="editOrgInput" placeholder="Organization Name" style="display: none;">
+                <input type="text" id="editPortNumInput" placeholder="Port Number" style="display: none;">
+                <select id="editPortType" style="display: none;">
+                    <option value="TCP">TCP</option>
+                    <option value="UDP">UDP</option>
+                </select>
+                <input type="text" id="editWalletAddressInput" placeholder="Wallet Address" style="display: none;">
+                <input type="text" id="editAccountNumberInput" placeholder="Account Number" style="display: none;">
+                <input type="text" id="editSortCodeInput" placeholder="Sort Code" style="display: none;">
+                <input type="text" id="editTechNameInput" placeholder="Technology Name" style="display: none;">
+                <input type="text" id="editTechVersionInput" placeholder="Version" style="display: none;">
+                <select id="editDeviceCategory" style="display: none;">
+                    <option value="Server">Server</option>
+                    <option value="PC">PC</option>
+                    <option value="Laptop">Laptop</option>
+                    <option value="MAC">MAC</option>
+                    <option value="SmartPhone">SmartPhone</option>
+                    <option value="IOT">IOT</option>
+                    <option value="Router">Router</option>
+                    <option value="Switch">Switch</option>
+                    <option value="Wireless Access Point">Wireless Access Point</option>
+                    <option value="Other">Other</option>
+                </select>
+                <input type="text" id="editDeviceNameInput" placeholder="Device Name" style="display: none;">
+                <input type="text" id="editMalwareNameInput" placeholder="Malware Name" style="display: none;">
+                <select id="editMalwareType" style="display: none;">
+                    <option value="Wiper">Wiper</option>
+                    <option value="RAT">RAT</option>
+                    <option value="Encryptor">Encryptor</option>
+                    <option value="Stealer">Stealer</option>
+                    <option value="Other">Other</option>
+                </select>
+                <button onclick="saveNodeEdit()">Save Changes</button>
+            </div>
+            <div class="input-group">
+                <h3>Remove Entity</h3>
+                <select id="removeNode"></select>
+                <button onclick="removeNode()">Remove Entity</button>
+            </div>
+        </div>
+        <div id="link-management" class="tab-content">
+            <div class="input-group">
+                <h3>Create Link</h3>
+                <select id="fromNode"></select>
+                <select id="toNode"></select>
+                <input type="text" id="edgeLabel" placeholder="Link Label">
+                <button onclick="addEdge()">Add Link</button>
+            </div>
+            <div class="input-group">
+                <h3>Remove Link</h3>
+                <select id="removeEdge"></select>
+                <button onclick="removeEdge()">Remove Link</button>
+            </div>
+        </div>
+        <div id="import-export" class="tab-content">
+            <div class="input-group">
+                <h3>Export/Import</h3>
+                <button onclick="exportGraph()">Export to JSON</button>
+                <input type="file" id="importFile" accept=".json">
+                <button onclick="importGraph()">Import from JSON</button>
+                <button onclick="clearGraph()">Clear Graph</button>
+            </div>
+        </div>
+        <div id="api-keys" class="tab-content">
+            <div class="input-group">
+                <h3>IPINFO API Key</h3>
+                <input type="text" id="ipinfoApiKey" placeholder="Enter IPinfo API Key">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="storeIpinfoKey"> Store in local storage
+                </label>
+                <button onclick="saveIpinfoApiKey()">Save IPinfo API Key</button>
+            </div>
+            <div class="input-group">
+                <h3>Shodan API Key</h3>
+                <input type="text" id="shodanApiKey" placeholder="Enter Shodan API Key">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="storeShodanKey"> Store in local storage
+                </label>
+                <button onclick="saveShodanApiKey()">Save Shodan API Key</button>
+            </div>
+        </div>
+        <div id="enrichment" class="tab-content">
+            <div class="input-group">
+                <h3>Bulk Enrichment</h3>
+                <button onclick="enrichAllIpinfo()">Enrich All IPs with IPinfo</button>
+                <button onclick="enrichAllShodan()">Enrich All IPs with Shodan</button>
+            </div>
+        </div>
+        <div id="import-iocs" class="tab-content">
+            <div class="input-group">
+                <h3>Import IOCs</h3>
+                <textarea id="iocText" placeholder="Paste IOC text here (IPs, domains)"></textarea>
+                <button onclick="importIOCsFromText()">Import from Text</button>
+                <input type="file" id="iocFile" accept=".txt">
+                <button onclick="importIOCsFromFile()">Import from File</button>
+            </div>
+        </div>
+        <div id="layouts" class="tab-content">
+            <div class="input-group">
+                <h3>Graph Layouts</h3>
+                <button onclick="setOrganicLayout()">Organic</button>
+                <button onclick="setCircularLayout()">Circular</button>
+                <button onclick="setOrthogonalLayout()">Orthogonal</button>
+                <button onclick="setTreeLayout()">Tree</button>
+                <button onclick="setHierarchicalLayout()">Hierarchical</button>
+            </div>
+        </div>
+        <div id="footer">
+            © Xservus Limited - v0.1
+        </div>
+    </div>
+    <div id="myNetwork"></div>
+    <div id="contextMenu" style="display: none;"></div>
+
+    <script>
+        let nodes = new vis.DataSet([]);
+        let edges = new vis.DataSet([]);
+        let nextId = 1;
+        let isDarkMode = true;
+        let ipinfoApiKey = '';
+        let shodanApiKey = '';
+        let isPhysicsPaused = false;
+        let lastRequestTime = 0;
+        const RATE_LIMIT_MS = 500;
+
+        const ipRegex = { ipv4: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/, ipv6: /^([0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}$/ };
+        const domainRegex = /^(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,}$/;
+
+        function throttleRequest(fn) {
+            return async function(...args) {
+                const now = Date.now();
+                const timeSinceLast = now - lastRequestTime;
+                if (timeSinceLast < RATE_LIMIT_MS) await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_MS - timeSinceLast));
+                lastRequestTime = now;
+                return fn(...args);
+            };
+        }
+
+        let container = document.getElementById('myNetwork');
+        let data = { nodes: nodes, edges: edges };
+        let options = {
+            nodes: { shape: 'circle', size: 20, font: { size: 12, color: '#e2e8f0' } },
+            edges: { arrows: { to: { enabled: true } }, font: { size: 16, color: '#e2e8f0', background: 'rgba(255, 255, 255, 0.8)', strokeWidth: 1, strokeColor: '#000000' }, color: { color: '#94a3b8', highlight: '#60a5fa' } },
+            physics: { enabled: true, barnesHut: { gravitationalConstant: -3000, centralGravity: 0.3, springLength: 150, springConstant: 0.05, damping: 0.09, avoidOverlap: 1 }, minVelocity: 0.75 }
+        };
+        let network = new vis.Network(container, data, options);
+
+        window.onload = function() {
+            const storedIpinfoKey = localStorage.getItem('ipinfoApiKey');
+            if (storedIpinfoKey) { ipinfoApiKey = storedIpinfoKey; document.getElementById('ipinfoApiKey').value = storedIpinfoKey; document.getElementById('storeIpinfoKey').checked = true; }
+            const storedShodanKey = localStorage.getItem('shodanApiKey');
+            if (storedShodanKey) { shodanApiKey = storedShodanKey; document.getElementById('shodanApiKey').value = storedShodanKey; document.getElementById('storeShodanKey').checked = true; }
+            updateTheme();
+        };
+
+        network.on('oncontext', function(params) {
+            params.event.preventDefault();
+            const nodeId = this.getNodeAt(params.pointer.DOM);
+            if (nodeId) {
+                const node = nodes.get(nodeId);
+                if (node.type === 'ip') showContextMenu(params.pointer.DOM.x, params.pointer.DOM.y, node.ip, nodeId);
+            }
+        });
+
+        function showContextMenu(x, y, ip, nodeId) {
+            const menu = document.getElementById('contextMenu');
+            menu.innerHTML = `<button onclick="throttledEnrichIP('${ip}', ${nodeId})">Enrich via IPINFO</button><button onclick="throttledEnrichShodan('${ip}', ${nodeId})">Enrich via Shodan</button>`;
+            menu.style.left = `${x}px`;
+            menu.style.top = `${y}px`;
+            menu.style.display = 'block';
+            document.addEventListener('click', hideContextMenu);
+        }
+
+        function hideContextMenu() {
+            const menu = document.getElementById('contextMenu');
+            menu.style.display = 'none';
+            document.removeEventListener('click', hideContextMenu);
+        }
+
+        const throttledEnrichIP = throttleRequest(async function enrichIP(ip, ipNodeId, isBulk = false) {
+            if (!ipinfoApiKey) { alert('Please set your IPinfo API key in the "API Keys" tab first.'); return; }
+            try {
+                const response = await fetch(`https://ipinfo.io/${ip}/json?token=${ipinfoApiKey}`);
+                if (!response.ok) throw new Error('Failed to fetch IP info');
+                const data = await response.json();
+                console.log('IPinfo response:', data);
+
+                const asn = data.asn?.asn || 'Unknown ASN';
+                const city = data.city || 'Unknown City';
+                const companyName = data.company?.name || 'Unknown Company';
+                const country = data.country || 'Unknown Country';
+                const privacy = data.privacy || { vpn: false, proxy: false, tor: false, relay: false, hosting: false };
+
+                function linkOrCreateNode(type, key, value, label, title, color, edgeLabel) {
+                    const existingNode = nodes.get({ filter: n => n.type === type && n[key] === value })[0];
+                    const targetId = existingNode ? existingNode.id : nextId++;
+                    if (!existingNode) nodes.add({ id: targetId, type: type, label: label, title: title, color: { background: color }, [key]: value });
+                    if (!edges.get({ filter: e => e.from === ipNodeId && e.to === targetId && e.label === edgeLabel }).length) edges.add({ from: ipNodeId, to: targetId, label: edgeLabel });
+                    return targetId;
+                }
+
+                linkOrCreateNode('asn', 'asn', asn, asn, `ASN: ${asn}`, '#a3e635', 'Assigned to');
+                linkOrCreateNode('city', 'city', city, city, `City: ${city}`, '#f97316', 'Located in');
+                linkOrCreateNode('organization', 'organization', companyName, companyName, `Company: ${companyName}`, '#facc15', 'Belongs to');
+                linkOrCreateNode('country', 'country', country, country, `Country: ${country}`, '#34d399', 'Located in');
+
+                const privacyTypes = [
+                    { key: 'vpn', label: 'VPN', color: '#9333ea' },
+                    { key: 'proxy', label: 'Proxy', color: '#f43f5e' },
+                    { key: 'tor', label: 'Tor', color: '#64748b' },
+                    { key: 'relay', label: 'Relay', color: '#eab308' },
+                    { key: 'hosting', label: 'Hosting', color: '#14b8a6' }
+                ];
+
+                privacyTypes.forEach(privacyType => {
+                    if (privacy[privacyType.key]) {
+                        const existingPrivacy = nodes.get({ filter: n => n.type === privacyType.key && n.value === ip })[0];
+                        const privacyId = existingPrivacy ? existingPrivacy.id : nextId++;
+                        if (!existingPrivacy) nodes.add({ id: privacyId, type: privacyType.key, label: privacyType.label, title: `${privacyType.label} for IP: ${ip}`, color: { background: privacyType.color }, value: ip });
+                        if (!edges.get({ filter: e => e.from === ipNodeId && e.to === privacyId && e.label === 'Uses' }).length) edges.add({ from: ipNodeId, to: privacyId, label: 'Uses' });
+                    }
+                });
+
+                updateNodeSizes();
+                updateSelectOptions();
+                updateEdgeSelectOptions();
+                network.fit();
+                if (!isBulk) alert(`IP ${ip} enrichment completed using IPinfo`);
+            } catch (error) {
+                console.error(`Error enriching IP ${ip}: ${error.message}`);
+            }
+        });
+
+        const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ipNodeId, isBulk = false) {
+            if (!shodanApiKey) { alert('Please set your Shodan API key in the "API Keys" tab first.'); return; }
+            try {
+                const response = await fetch(`https://api.shodan.io/shodan/host/${ip}?key=${shodanApiKey}`);
+                if (!response.ok) throw new Error('Failed to fetch Shodan data');
+                const data = await response.json();
+                console.log('Shodan response:', data);
+
+                if (data.ports && data.ports.length > 0) {
+                    data.ports.forEach(port => {
+                        const existingPort = nodes.get({ filter: n => n.type === 'port' && n.portNumber === port.toString() })[0];
+                        let portId = existingPort ? existingPort.id : nextId++;
+                        if (!existingPort) nodes.add({ id: portId, type: 'port', label: `TCP/${port}`, title: `Port\nType: TCP\nNumber: ${port}`, color: { background: '#a78bfa' }, portType: 'TCP', portNumber: port.toString() });
+                        if (!edges.get({ filter: e => e.from === ipNodeId && e.to === portId && e.label === 'Exposes' }).length) edges.add({ from: ipNodeId, to: portId, label: 'Exposes' });
+                    });
+                }
+
+                updateNodeSizes();
+                updateSelectOptions();
+                updateEdgeSelectOptions();
+                network.fit();
+                if (!isBulk) alert(`IP ${ip} enrichment completed using Shodan`);
+            } catch (error) {
+                console.error(`Error enriching IP ${ip} with Shodan: ${error.message}`);
+            }
+        });
+
+        async function enrichAllIpinfo() {
+            if (!ipinfoApiKey) { alert('Please set your IPinfo API key in the "API Keys" tab first.'); return; }
+            const ipNodes = nodes.get({ filter: n => n.type === 'ip' });
+            for (const node of ipNodes) await throttledEnrichIP(node.ip, node.id, true);
+            network.fit();
+            alert('Bulk IPinfo enrichment completed');
+        }
+
+        async function enrichAllShodan() {
+            if (!shodanApiKey) { alert('Please set your Shodan API key in the "API Keys" tab first.'); return; }
+            const ipNodes = nodes.get({ filter: n => n.type === 'ip' });
+            for (const node of ipNodes) await throttledEnrichShodan(node.ip, node.id, true);
+            network.fit();
+            alert('Bulk Shodan enrichment completed');
+        }
+
+        function importIOCsFromText() {
+            const text = document.getElementById('iocText').value.trim();
+            if (!text) { alert('Please enter some text containing IOCs'); return; }
+            processIOCs(text);
+            document.getElementById('iocText').value = '';
+        }
+
+        function importIOCsFromFile() {
+            const fileInput = document.getElementById('iocFile');
+            const file = fileInput.files[0];
+            if (!file) { alert('Please select a text file containing IOCs'); return; }
+            const reader = new FileReader();
+            reader.onload = function(event) { processIOCs(event.target.result); fileInput.value = ''; };
+            reader.readAsText(file);
+        }
+
+        function processIOCs(text) {
+            const ipMatches = text.match(/(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)|(?:[0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}/g) || [];
+            ipMatches.forEach(ip => {
+                if ((ipRegex.ipv4.test(ip) || ipRegex.ipv6.test(ip)) && !nodes.get({ filter: n => n.type === 'ip' && n.ip === ip }).length) 
+                    nodes.add({ id: nextId++, type: 'ip', label: ip, title: `IP Address: ${ip}`, color: { background: '#f87171' }, ip: ip, size: 20 });
+            });
+
+            const domainMatches = text.match(/(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,}/g) || [];
+            domainMatches.forEach(domain => {
+                if (domainRegex.test(domain) && !nodes.get({ filter: n => n.type === 'domain' && n.domain === domain }).length) 
+                    nodes.add({ id: nextId++, type: 'domain', label: domain, title: `Domain: ${domain}`, color: { background: '#60a5fa' }, domain: domain, size: 20 });
+            });
+
+            updateNodeSizes();
+            updateSelectOptions();
+            updateEdgeSelectOptions();
+            network.fit();
+        }
+
+        function saveIpinfoApiKey() {
+            ipinfoApiKey = document.getElementById('ipinfoApiKey').value.trim();
+            const storeKey = document.getElementById('storeIpinfoKey').checked;
+            if (ipinfoApiKey) {
+                if (storeKey) localStorage.setItem('ipinfoApiKey', ipinfoApiKey); else localStorage.removeItem('ipinfoApiKey');
+                alert('IPinfo API key saved successfully!');
+            } else {
+                localStorage.removeItem('ipinfoApiKey');
+                alert('Please enter a valid IPinfo API key.');
+            }
+        }
+
+        function saveShodanApiKey() {
+            shodanApiKey = document.getElementById('shodanApiKey').value.trim();
+            const storeKey = document.getElementById('storeShodanKey').checked;
+            if (shodanApiKey) {
+                if (storeKey) localStorage.setItem('shodanApiKey', shodanApiKey); else localStorage.removeItem('shodanApiKey');
+                alert('Shodan API key saved successfully!');
+            } else {
+                localStorage.removeItem('shodanApiKey');
+                alert('Please enter a valid Shodan API key.');
+            }
+        }
+
+        function updateTheme() {
+            if (isDarkMode) {
+                document.body.classList.remove('light-mode');
+                document.body.classList.add('dark-mode');
+                options.nodes.font.color = '#e2e8f0';
+                options.edges.font.color = '#e2e8f0';
+                options.edges.font.background = 'rgba(255, 255, 255, 0.8)';
+                options.edges.color = { color: '#94a3b8', highlight: '#60a5fa' };
+            } else {
+                document.body.classList.remove('dark-mode');
+                document.body.classList.add('light-mode');
+                options.nodes.font.color = '#1f2a44';
+                options.edges.font.color = '#1f2a44';
+                options.edges.font.background = 'rgba(255, 255, 255, 0.8)';
+                options.edges.color = { color: '#6b7280', highlight: '#3b82f6' };
+            }
+            document.getElementById('mode-toggle').textContent = isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode';
+            network.setOptions(options);
+        }
+
+        function toggleMode() { isDarkMode = !isDarkMode; updateTheme(); }
+
+        function togglePhysics() {
+            isPhysicsPaused = !isPhysicsPaused;
+            const pauseButton = document.getElementById('pause-toggle');
+            options.physics.enabled = !isPhysicsPaused;
+            network.setOptions(options);
+            pauseButton.textContent = isPhysicsPaused ? 'Resume Physics' : 'Pause Physics';
+            if (isPhysicsPaused) pauseButton.classList.add('paused'); else pauseButton.classList.remove('paused');
+        }
+
+        function resetLayout() {
+            if (!isPhysicsPaused) togglePhysics();
+            nodes.forEach(node => nodes.update({ id: node.id, x: 0, y: 0 }));
+            network.fit({ animation: { duration: 1000, easingFunction: 'easeInOutQuad' } });
+            if (isPhysicsPaused) setTimeout(() => togglePhysics(), 1000);
+        }
+
+        function setOrganicLayout() {
+            network.setOptions({ physics: { enabled: true, barnesHut: { gravitationalConstant: -3000, centralGravity: 0.3, springLength: 150, springConstant: 0.05, damping: 0.09, avoidOverlap: 1 }, minVelocity: 0.75 }, layout: { hierarchical: false } });
+            network.fit();
+        }
+
+        function setCircularLayout() {
+            network.setOptions({ physics: false, layout: { hierarchical: false } });
+            const radius = Math.min(container.clientWidth, container.clientHeight) / 2 - 50;
+            const nodeCount = nodes.length;
+            let angleStep = (2 * Math.PI) / nodeCount;
+            let i = 0;
+            nodes.forEach(node => { nodes.update({ id: node.id, x: radius * Math.cos(angleStep * i), y: radius * Math.sin(angleStep * i) }); i++; });
+            network.fit();
+        }
+
+        function setOrthogonalLayout() {
+            network.setOptions({ physics: false, layout: { hierarchical: false } });
+            const gridSize = Math.ceil(Math.sqrt(nodes.length));
+            const step = 100;
+            let i = 0;
+            nodes.forEach(node => { nodes.update({ id: node.id, x: (i % gridSize) * step, y: Math.floor(i / gridSize) * step }); i++; });
+            network.fit();
+        }
+
+        function setTreeLayout() {
+            network.setOptions({ physics: false, layout: { hierarchical: { enabled: true, levelSeparation: 150, nodeSpacing: 100, treeSpacing: 200, direction: 'UD', sortMethod: 'hubsize' } } });
+            network.fit();
+        }
+
+        function setHierarchicalLayout() {
+            network.setOptions({ physics: false, layout: { hierarchical: { enabled: true, levelSeparation: 150, nodeSpacing: 100, treeSpacing: 200, direction: 'UD', sortMethod: 'directed' } } });
+            network.fit();
+        }
+
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            document.querySelector(`.tab-button[onclick="showTab('${tabId}')"]`).classList.add('active');
+        }
+
+        document.getElementById('entityType').addEventListener('change', function() {
+            let type = this.value;
+            document.getElementById('nameInput').style.display = type === 'contact' ? 'block' : 'none';
+            document.getElementById('emailInput').style.display = type === 'contact' ? 'block' : 'none';
+            document.getElementById('ipInput').style.display = type === 'ip' ? 'block' : 'none';
+            document.getElementById('domainInput').style.display = type === 'domain' ? 'block' : 'none';
+            document.getElementById('orgInput').style.display = type === 'organization' ? 'block' : 'none';
+            document.getElementById('portNumInput').style.display = type === 'port' ? 'block' : 'none';
+            document.getElementById('portType').style.display = type === 'port' ? 'block' : 'none';
+            document.getElementById('walletAddressInput').style.display = type === 'wallet' ? 'block' : 'none';
+            document.getElementById('accountNumberInput').style.display = type === 'bank' ? 'block' : 'none';
+            document.getElementById('sortCodeInput').style.display = type === 'bank' ? 'block' : 'none';
+            document.getElementById('techNameInput').style.display = type === 'technology' ? 'block' : 'none';
+            document.getElementById('techVersionInput').style.display = type === 'technology' ? 'block' : 'none';
+            document.getElementById('deviceCategory').style.display = type === 'device' ? 'block' : 'none';
+            document.getElementById('deviceNameInput').style.display = type === 'device' ? 'block' : 'none';
+            document.getElementById('malwareNameInput').style.display = type === 'malware' ? 'block' : 'none';
+            document.getElementById('malwareType').style.display = type === 'malware' ? 'block' : 'none';
+        });
+
+        function addNode() {
+            let type = document.getElementById('entityType').value;
+            let nodeData = { id: nextId, size: 20, type: type };
+            if (type === 'contact') {
+                let name = document.getElementById('nameInput').value; let email = document.getElementById('emailInput').value;
+                if (!name || !email) return alert('Please enter both name and email for contacts');
+                if (nodes.get({ filter: n => n.type === 'contact' && n.name === name && n.email === email }).length > 0) return alert('Contact exists');
+                nodeData.label = `${name}\n${email}`; nodeData.title = `Contact\nName: ${name}\nEmail: ${email}`; nodeData.color = { background: '#4ade80' }; nodeData.name = name; nodeData.email = email;
+            } else if (type === 'ip') {
+                let ip = document.getElementById('ipInput').value.trim();
+                if (!ip) return alert('Please enter an IP address');
+                if (!ipRegex.ipv4.test(ip) && !ipRegex.ipv6.test(ip)) return alert('Please enter a valid IPv4 or IPv6 address');
+                if (nodes.get({ filter: n => n.type === 'ip' && n.ip === ip }).length > 0) return alert('IP exists');
+                nodeData.label = ip; nodeData.title = `IP Address: ${ip}`; nodeData.color = { background: '#f87171' }; nodeData.ip = ip;
+            } else if (type === 'domain') {
+                let domain = document.getElementById('domainInput').value;
+                if (!domain) return alert('Please enter a domain');
+                if (nodes.get({ filter: n => n.type === 'domain' && n.domain === domain }).length > 0) return alert('Domain exists');
+                nodeData.label = domain; nodeData.title = `Domain: ${domain}`; nodeData.color = { background: '#60a5fa' }; nodeData.domain = domain;
+            } else if (type === 'organization') {
+                let org = document.getElementById('orgInput').value;
+                if (!org) return alert('Please enter an organization name');
+                if (nodes.get({ filter: n => n.type === 'organization' && n.organization === org }).length > 0) return alert('Organization exists');
+                nodeData.label = org; nodeData.title = `Organization: ${org}`; nodeData.color = { background: '#facc15' }; nodeData.organization = org;
+            } else if (type === 'port') {
+                let portNum = document.getElementById('portNumInput').value; let portType = document.getElementById('portType').value;
+                if (!portNum) return alert('Please enter a port number');
+                if (nodes.get({ filter: n => n.type === 'port' && n.portNumber === portNum && n.portType === portType }).length > 0) return alert('Port exists');
+                nodeData.label = `${portType}/${portNum}`; nodeData.title = `Port\nType: ${portType}\nNumber: ${portNum}`; nodeData.color = { background: '#a78bfa' }; nodeData.portType = portType; nodeData.portNumber = portNum;
+            } else if (type === 'wallet') {
+                let address = document.getElementById('walletAddressInput').value;
+                if (!address) return alert('Please enter a wallet address');
+                if (nodes.get({ filter: n => n.type === 'wallet' && n.address === address }).length > 0) return alert('Wallet exists');
+                nodeData.label = address; nodeData.title = `Wallet\nAddress: ${address}`; nodeData.color = { background: '#fb923c' }; nodeData.address = address;
+            } else if (type === 'bank') {
+                let accountNumber = document.getElementById('accountNumberInput').value; let sortCode = document.getElementById('sortCodeInput').value;
+                if (!accountNumber || !sortCode) return alert('Please enter both account number and sort code');
+                if (nodes.get({ filter: n => n.type === 'bank' && n.accountNumber === accountNumber && n.sortCode === sortCode }).length > 0) return alert('Bank account exists');
+                nodeData.label = `${accountNumber}\n${sortCode}`; nodeData.title = `Bank Account\nAccount Number: ${accountNumber}\nSort Code: ${sortCode}`; nodeData.color = { background: '#10b981' }; nodeData.accountNumber = accountNumber; nodeData.sortCode = sortCode;
+            } else if (type === 'technology') {
+                let techName = document.getElementById('techNameInput').value; let techVersion = document.getElementById('techVersionInput').value;
+                if (!techName || !techVersion) return alert('Please enter both name and version');
+                if (nodes.get({ filter: n => n.type === 'technology' && n.techName === techName && n.techVersion === techVersion }).length > 0) return alert('Technology exists');
+                nodeData.label = `${techName}\n${techVersion}`; nodeData.title = `Technology\nName: ${techName}\nVersion: ${techVersion}`; nodeData.color = { background: '#ec4899' }; nodeData.techName = techName; nodeData.techVersion = techVersion;
+            } else if (type === 'device') {
+                let deviceCategory = document.getElementById('deviceCategory').value; let deviceName = document.getElementById('deviceNameInput').value;
+                if (!deviceCategory || !deviceName) return alert('Please enter both category and name');
+                if (nodes.get({ filter: n => n.type === 'device' && n.deviceCategory === deviceCategory && n.deviceName === deviceName }).length > 0) return alert('Device exists');
+                nodeData.label = `${deviceName}\n${deviceCategory}`; nodeData.title = `Device\nName: ${deviceName}\nCategory: ${deviceCategory}`; nodeData.color = { background: '#14b8a6' }; nodeData.deviceCategory = deviceCategory; nodeData.deviceName = deviceName;
+            } else if (type === 'malware') {
+                let malwareName = document.getElementById('malwareNameInput').value; let malwareType = document.getElementById('malwareType').value;
+                if (!malwareName || !malwareType) return alert('Please enter both malware name and type');
+                if (nodes.get({ filter: n => n.type === 'malware' && n.malwareName === malwareName && n.malwareType === malwareType }).length > 0) return alert('Malware exists');
+                nodeData.label = `${malwareName}\n${malwareType}`; nodeData.title = `Malware\nName: ${malwareName}\nType: ${malwareType}`; nodeData.color = { background: '#ef4444' }; nodeData.malwareName = malwareName; nodeData.malwareType = malwareType;
+            }
+            nodes.add(nodeData);
+            updateSelectOptions();
+            clearInputs();
+            nextId++;
+            network.fit();
+        }
+
+        function loadNodeData() {
+            let nodeId = document.getElementById('editNode').value;
+            let node = nodes.get(parseInt(nodeId));
+            if (!node) return clearEditInputs();
+            document.querySelectorAll('#object-management input, #object-management select').forEach(el => el.style.display = 'none');
+            if (node.type === 'contact') {
+                document.getElementById('editNameInput').value = node.name || ''; document.getElementById('editEmailInput').value = node.email || '';
+                document.getElementById('editNameInput').style.display = 'block'; document.getElementById('editEmailInput').style.display = 'block';
+            } else if (node.type === 'ip') { document.getElementById('editIpInput').value = node.ip || ''; document.getElementById('editIpInput').style.display = 'block'; }
+            else if (node.type === 'domain') { document.getElementById('editDomainInput').value = node.domain || ''; document.getElementById('editDomainInput').style.display = 'block'; }
+            else if (node.type === 'organization') { document.getElementById('editOrgInput').value = node.organization || ''; document.getElementById('editOrgInput').style.display = 'block'; }
+            else if (node.type === 'port') {
+                document.getElementById('editPortNumInput').value = node.portNumber || ''; document.getElementById('editPortType').value = node.portType || 'TCP';
+                document.getElementById('editPortNumInput').style.display = 'block'; document.getElementById('editPortType').style.display = 'block';
+            } else if (node.type === 'wallet') { document.getElementById('editWalletAddressInput').value = node.address || ''; document.getElementById('editWalletAddressInput').style.display = 'block'; }
+            else if (node.type === 'bank') {
+                document.getElementById('editAccountNumberInput').value = node.accountNumber || ''; document.getElementById('editSortCodeInput').value = node.sortCode || '';
+                document.getElementById('editAccountNumberInput').style.display = 'block'; document.getElementById('editSortCodeInput').style.display = 'block';
+            } else if (node.type === 'technology') {
+                document.getElementById('editTechNameInput').value = node.techName || ''; document.getElementById('editTechVersionInput').value = node.techVersion || '';
+                document.getElementById('editTechNameInput').style.display = 'block'; document.getElementById('editTechVersionInput').style.display = 'block';
+            } else if (node.type === 'device') {
+                document.getElementById('editDeviceCategory').value = node.deviceCategory || 'Server'; document.getElementById('editDeviceNameInput').value = node.deviceName || '';
+                document.getElementById('editDeviceCategory').style.display = 'block'; document.getElementById('editDeviceNameInput').style.display = 'block';
+            } else if (node.type === 'malware') {
+                document.getElementById('editMalwareNameInput').value = node.malwareName || ''; document.getElementById('editMalwareType').value = node.malwareType || 'Wiper';
+                document.getElementById('editMalwareNameInput').style.display = 'block'; document.getElementById('editMalwareType').style.display = 'block';
+            }
+        }
+
+        function saveNodeEdit() {
+            let nodeId = document.getElementById('editNode').value;
+            if (!nodeId) return alert('Please select a node to edit');
+            let node = nodes.get(parseInt(nodeId));
+            let updatedData = { id: parseInt(nodeId), type: node.type };
+            if (node.type === 'contact') {
+                let name = document.getElementById('editNameInput').value; let email = document.getElementById('editEmailInput').value;
+                if (!name || !email) return alert('Please enter both name and email');
+                if (nodes.get({ filter: n => n.type === 'contact' && n.name === name && n.email === email && n.id !== parseInt(nodeId) }).length > 0) return alert('Contact exists');
+                updatedData.label = `${name}\n${email}`; updatedData.title = `Contact\nName: ${name}\nEmail: ${email}`; updatedData.color = { background: '#4ade80' }; updatedData.name = name; updatedData.email = email;
+            } else if (node.type === 'ip') {
+                let ip = document.getElementById('editIpInput').value.trim();
+                if (!ip) return alert('Please enter an IP address');
+                if (!ipRegex.ipv4.test(ip) && !ipRegex.ipv6.test(ip)) return alert('Please enter a valid IPv4 or IPv6 address');
+                if (nodes.get({ filter: n => n.type === 'ip' && n.ip === ip && n.id !== parseInt(nodeId) }).length > 0) return alert('IP exists');
+                updatedData.label = ip; updatedData.title = `IP Address: ${ip}`; updatedData.color = { background: '#f87171' }; updatedData.ip = ip;
+            } else if (node.type === 'domain') {
+                let domain = document.getElementById('editDomainInput').value;
+                if (!domain) return alert('Please enter a domain');
+                if (nodes.get({ filter: n => n.type === 'domain' && n.domain === domain && n.id !== parseInt(nodeId) }).length > 0) return alert('Domain exists');
+                updatedData.label = domain; updatedData.title = `Domain: ${domain}`; updatedData.color = { background: '#60a5fa' }; updatedData.domain = domain;
+            } else if (node.type === 'organization') {
+                let org = document.getElementById('editOrgInput').value;
+                if (!org) return alert('Please enter an organization name');
+                if (nodes.get({ filter: n => n.type === 'organization' && n.organization === org && n.id !== parseInt(nodeId) }).length > 0) return alert('Organization exists');
+                updatedData.label = org; updatedData.title = `Organization: ${org}`; updatedData.color = { background: '#facc15' }; updatedData.organization = org;
+            } else if (node.type === 'port') {
+                let portNum = document.getElementById('editPortNumInput').value; let portType = document.getElementById('editPortType').value;
+                if (!portNum) return alert('Please enter a port number');
+                if (nodes.get({ filter: n => n.type === 'port' && n.portNumber === portNum && n.portType === portType && n.id !== parseInt(nodeId) }).length > 0) return alert('Port exists');
+                updatedData.label = `${portType}/${portNum}`; updatedData.title = `Port\nType: ${portType}\nNumber: ${portNum}`; updatedData.color = { background: '#a78bfa' }; updatedData.portType = portType; updatedData.portNumber = portNum;
+            } else if (node.type === 'wallet') {
+                let address = document.getElementById('editWalletAddressInput').value;
+                if (!address) return alert('Please enter a wallet address');
+                if (nodes.get({ filter: n => n.type === 'wallet' && n.address === address && n.id !== parseInt(nodeId) }).length > 0) return alert('Wallet exists');
+                updatedData.label = address; updatedData.title = `Wallet\nAddress: ${address}`; updatedData.color = { background: '#fb923c' }; updatedData.address = address;
+            } else if (node.type === 'bank') {
+                let accountNumber = document.getElementById('editAccountNumberInput').value; let sortCode = document.getElementById('editSortCodeInput').value;
+                if (!accountNumber || !sortCode) return alert('Please enter both account number and sort code');
+                if (nodes.get({ filter: n => n.type === 'bank' && n.accountNumber === accountNumber && n.sortCode === sortCode && n.id !== parseInt(nodeId) }).length > 0) return alert('Bank account exists');
+                updatedData.label = `${accountNumber}\n${sortCode}`; updatedData.title = `Bank Account\nAccount Number: ${accountNumber}\nSort Code: ${sortCode}`; updatedData.color = { background: '#10b981' }; updatedData.accountNumber = accountNumber; updatedData.sortCode = sortCode;
+            } else if (node.type === 'technology') {
+                let techName = document.getElementById('editTechNameInput').value; let techVersion = document.getElementById('editTechVersionInput').value;
+                if (!techName || !techVersion) return alert('Please enter both name and version');
+                if (nodes.get({ filter: n => n.type === 'technology' && n.techName === techName && n.techVersion === techVersion && n.id !== parseInt(nodeId) }).length > 0) return alert('Technology exists');
+                updatedData.label = `${techName}\n${techVersion}`; updatedData.title = `Technology\nName: ${techName}\nVersion: ${techVersion}`; updatedData.color = { background: '#ec4899' }; updatedData.techName = techName; updatedData.techVersion = techVersion;
+            } else if (node.type === 'device') {
+                let deviceCategory = document.getElementById('editDeviceCategory').value; let deviceName = document.getElementById('editDeviceNameInput').value;
+                if (!deviceCategory || !deviceName) return alert('Please enter both category and name');
+                if (nodes.get({ filter: n => n.type === 'device' && n.deviceCategory === deviceCategory && n.deviceName === deviceName && n.id !== parseInt(nodeId) }).length > 0) return alert('Device exists');
+                updatedData.label = `${deviceName}\n${deviceCategory}`; updatedData.title = `Device\nName: ${deviceName}\nCategory: ${deviceCategory}`; updatedData.color = { background: '#14b8a6' }; updatedData.deviceCategory = deviceCategory; updatedData.deviceName = deviceName;
+            } else if (node.type === 'malware') {
+                let malwareName = document.getElementById('editMalwareNameInput').value; let malwareType = document.getElementById('editMalwareType').value;
+                if (!malwareName || !malwareType) return alert('Please enter both malware name and type');
+                if (nodes.get({ filter: n => n.type === 'malware' && n.malwareName === malwareName && n.malwareType === malwareType && n.id !== parseInt(nodeId) }).length > 0) return alert('Malware exists');
+                updatedData.label = `${malwareName}\n${malwareType}`; updatedData.title = `Malware\nName: ${malwareName}\nType: ${malwareType}`; updatedData.color = { background: '#ef4444' }; updatedData.malwareName = malwareName; updatedData.malwareType = malwareType;
+            }
+            nodes.update(updatedData);
+            updateSelectOptions();
+            clearEditInputs();
+            network.fit();
+        }
+
+        function clearEditInputs() {
+            document.querySelectorAll('#object-management input').forEach(input => { input.value = ''; input.style.display = 'none'; });
+            document.getElementById('editPortType').style.display = 'none';
+            document.getElementById('editDeviceCategory').style.display = 'none';
+            document.getElementById('editMalwareType').style.display = 'none';
+            document.getElementById('editNode').value = '';
+        }
+
+        function addEdge() {
+            let from = document.getElementById('fromNode').value; let to = document.getElementById('toNode').value; let label = document.getElementById('edgeLabel').value;
+            if (!from || !to || from === to) return alert('Please select different nodes');
+            edges.add({ id: `edge_${from}_${to}_${Date.now()}`, from: parseInt(from), to: parseInt(to), label: label || undefined });
+            updateNodeSizes(); updateEdgeSelectOptions(); document.getElementById('edgeLabel').value = ''; network.fit();
+        }
+
+        function removeNode() {
+            let nodeId = document.getElementById('removeNode').value;
+            if (!nodeId) return alert('Please select a node');
+            edges.remove(edges.get({ filter: edge => edge.from === parseInt(nodeId) || edge.to === parseInt(nodeId) }));
+            nodes.remove({ id: parseInt(nodeId) });
+            updateNodeSizes(); updateSelectOptions(); updateEdgeSelectOptions(); network.fit();
+        }
+
+        function removeEdge() {
+            let edgeId = document.getElementById('removeEdge').value;
+            if (!edgeId) return alert('Please select an edge');
+            edges.remove({ id: edgeId });
+            updateNodeSizes(); updateEdgeSelectOptions(); document.getElementById('removeEdge').value = ''; network.fit();
+        }
+
+        function clearGraph() {
+            if (!confirm('Are you sure you want to clear the graph?')) return;
+            nodes.clear(); edges.clear(); nextId = 1; updateSelectOptions(); updateEdgeSelectOptions(); clearInputs(); network.fit();
+        }
+
+        function updateNodeSizes() {
+            nodes.forEach(node => { let connections = edges.get({ filter: edge => edge.from === node.id || edge.to === node.id }).length; nodes.update({ id: node.id, size: 20 + connections * 10 }); });
+        }
+
+        function updateSelectOptions() {
+            ['fromNode', 'toNode', 'removeNode', 'editNode'].forEach(id => {
+                let select = document.getElementById(id);
+                select.innerHTML = '<option value="">Select</option>';
+                nodes.forEach(node => { let option = document.createElement('option'); option.value = node.id; option.text = node.label.split('\n')[0]; select.appendChild(option); });
+            });
+        }
+
+        function updateEdgeSelectOptions() {
+            let select = document.getElementById('removeEdge');
+            select.innerHTML = '<option value="">Select Edge</option>';
+            edges.forEach(edge => {
+                let fromNode = nodes.get(edge.from); let toNode = nodes.get(edge.to);
+                if (fromNode && toNode) {
+                    let option = document.createElement('option');
+                    option.value = edge.id; option.text = `${fromNode.label.split('\n')[0]} -> ${toNode.label.split('\n')[0]}${edge.label ? ' (' + edge.label + ')' : ''}`;
+                    select.appendChild(option);
+                }
+            });
+        }
+
+        function clearInputs() {
+            document.querySelectorAll('#object-management input').forEach(input => input.value = '');
+            document.getElementById('deviceCategory').value = 'Server';
+            document.getElementById('malwareType').value = 'Wiper';
+        }
+
+        function exportGraph() {
+            const exportData = { nodes: nodes.get().map(node => ({ id: node.id, type: node.type, name: node.name, email: node.email, ip: node.ip, domain: node.domain, organization: node.organization, portType: node.portType, portNumber: node.portNumber, address: node.address, accountNumber: node.accountNumber, sortCode: node.sortCode, techName: node.techName, techVersion: node.techVersion, deviceCategory: node.deviceCategory, deviceName: node.deviceName, malwareName: node.malwareName, malwareType: node.malwareType, country: node.country, asn: node.asn, city: node.city, value: node.value })), edges: edges.get().map(edge => ({ id: edge.id, from: edge.from, to: edge.to, label: edge.label })) };
+            const json = JSON.stringify(exportData, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = 'network_graph.json'; a.click(); URL.revokeObjectURL(url);
+        }
+
+        function importGraph() {
+            let fileInput = document.getElementById('importFile');
+            let file = fileInput.files[0];
+            if (!file) return alert('Please select a JSON file');
+            let reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    let importedData = JSON.parse(event.target.result);
+                    nodes.clear(); edges.clear();
+                    importedData.nodes.forEach(node => {
+                        let nodeData = { id: node.id, size: 20, type: node.type, label: '', title: '', color: { background: '' } };
+                        if (node.type === 'contact') {
+                            if (!node.name || !node.email) return;
+                            nodeData.label = `${node.name}\n${node.email}`; nodeData.title = `Contact\nName: ${node.name}\nEmail: ${node.email}`; nodeData.color.background = '#4ade80'; nodeData.name = node.name; nodeData.email = node.email;
+                        } else if (node.type === 'ip') {
+                            if (!node.ip) return;
+                            nodeData.label = node.ip; nodeData.title = `IP Address: ${node.ip}`; nodeData.color.background = '#f87171'; nodeData.ip = node.ip;
+                        } else if (node.type === 'domain') {
+                            if (!node.domain) return;
+                            nodeData.label = node.domain; nodeData.title = `Domain: ${node.domain}`; nodeData.color.background = '#60a5fa'; nodeData.domain = node.domain;
+                        } else if (node.type === 'organization') {
+                            if (!node.organization) return;
+                            nodeData.label = node.organization; nodeData.title = `Organization: ${node.organization}`; nodeData.color.background = '#facc15'; nodeData.organization = node.organization;
+                        } else if (node.type === 'port') {
+                            if (!node.portNumber || !node.portType) return;
+                            nodeData.label = `${node.portType}/${node.portNumber}`; nodeData.title = `Port\nType: ${node.portType}\nNumber: ${node.portNumber}`; nodeData.color.background = '#a78bfa'; nodeData.portType = node.portType; nodeData.portNumber = node.portNumber;
+                        } else if (node.type === 'wallet') {
+                            if (!node.address) return;
+                            nodeData.label = node.address; nodeData.title = `Wallet\nAddress: ${node.address}`; nodeData.color.background = '#fb923c'; nodeData.address = node.address;
+                        } else if (node.type === 'bank') {
+                            if (!node.accountNumber || !node.sortCode) return;
+                            nodeData.label = `${node.accountNumber}\n${node.sortCode}`; nodeData.title = `Bank Account\nAccount Number: ${node.accountNumber}\nSort Code: ${node.sortCode}`; nodeData.color.background = '#10b981'; nodeData.accountNumber = node.accountNumber; nodeData.sortCode = node.sortCode;
+                        } else if (node.type === 'technology') {
+                            if (!node.techName || !node.techVersion) return;
+                            nodeData.label = `${node.techName}\n${node.techVersion}`; nodeData.title = `Technology\nName: ${node.techName}\nVersion: ${node.techVersion}`; nodeData.color.background = '#ec4899'; nodeData.techName = node.techName; nodeData.techVersion = node.techVersion;
+                        } else if (node.type === 'device') {
+                            if (!node.deviceCategory || !node.deviceName) return;
+                            nodeData.label = `${node.deviceName}\n${node.deviceCategory}`; nodeData.title = `Device\nName: ${node.deviceName}\nCategory: ${node.deviceCategory}`; nodeData.color.background = '#14b8a6'; nodeData.deviceCategory = node.deviceCategory; nodeData.deviceName = node.deviceName;
+                        } else if (node.type === 'malware') {
+                            if (!node.malwareName || !node.malwareType) return;
+                            nodeData.label = `${node.malwareName}\n${node.malwareType}`; nodeData.title = `Malware\nName: ${node.malwareName}\nType: ${node.malwareType}`; nodeData.color.background = '#ef4444'; nodeData.malwareName = node.malwareName; nodeData.malwareType = node.malwareType;
+                        } else if (node.type === 'country') {
+                            if (!node.country) return;
+                            nodeData.label = node.country; nodeData.title = `Country: ${node.country}`; nodeData.color.background = '#34d399'; nodeData.country = node.country;
+                        } else if (node.type === 'asn') {
+                            if (!node.asn) return;
+                            nodeData.label = node.asn; nodeData.title = `ASN: ${node.asn}`; nodeData.color.background = '#a3e635'; nodeData.asn = node.asn;
+                        } else if (node.type === 'city') {
+                            if (!node.city) return;
+                            nodeData.label = node.city; nodeData.title = `City: ${node.city}`; nodeData.color.background = '#f97316'; nodeData.city = node.city;
+                        } else if (node.type === 'vpn' || node.type === 'proxy' || node.type === 'tor' || node.type === 'relay' || node.type === 'hosting') {
+                            if (!node.value) return;
+                            nodeData.label = node.type.charAt(0).toUpperCase() + node.type.slice(1); nodeData.title = `${nodeData.label} for IP: ${node.value}`;
+                            nodeData.color.background = { vpn: '#9333ea', proxy: '#f43f5e', tor: '#64748b', relay: '#eab308', hosting: '#14b8a6' }[node.type]; nodeData.value = node.value;
+                        }
+                        if (!nodes.get({ filter: n => n.type === nodeData.type && ((nodeData.ip && n.ip === nodeData.ip) || (nodeData.domain && n.domain === nodeData.domain) || (nodeData.organization && n.organization === nodeData.organization) || (nodeData.country && n.country === nodeData.country) || (nodeData.asn && n.asn === nodeData.asn) || (nodeData.city && n.city === nodeData.city) || (nodeData.value && n.value === nodeData.value) || (nodeData.name && nodeData.email && n.name === nodeData.name && n.email === nodeData.email) || (nodeData.portNumber && nodeData.portType && n.portNumber === nodeData.portNumber && n.portType === nodeData.portType) || (nodeData.address && n.address === nodeData.address) || (nodeData.accountNumber && nodeData.sortCode && n.accountNumber === nodeData.accountNumber && n.sortCode === nodeData.sortCode) || (nodeData.techName && nodeData.techVersion && n.techName === nodeData.techName && n.techVersion === nodeData.techVersion) || (nodeData.deviceCategory && nodeData.deviceName && n.deviceCategory === nodeData.deviceCategory && n.deviceName === nodeData.deviceName) || (nodeData.malwareName && nodeData.malwareType && n.malwareName === nodeData.malwareName && n.malwareType === nodeData.malwareType)) }).length) nodes.add(nodeData);
+                    });
+                    importedData.edges.forEach(edge => { 
+                        if (edge.from && edge.to) edges.add({ id: edge.id || `edge_${edge.from}_${edge.to}_${Date.now()}`, from: edge.from, to: edge.to, label: edge.label || undefined }); 
+                    });
+                    updateNodeSizes(); updateSelectOptions(); updateEdgeSelectOptions(); nextId = Math.max(...importedData.nodes.map(n => n.id)) + 1 || 1; fileInput.value = ''; network.fit();
+                } catch (e) { console.error('Error importing JSON:', e); alert('Error importing JSON: ' + e.message); }
+            };
+            reader.readAsText(file);
+        }
+
+        document.addEventListener('keypress', event => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                const activeElement = document.activeElement;
+                if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
+                    const start = activeElement.selectionStart; const end = activeElement.selectionEnd; const value = activeElement.value;
+                    activeElement.value = value.substring(0, start) + '\r\n' + value.substring(end);
+                    activeElement.selectionStart = activeElement.selectionEnd = start + 2;
+                }
+            }
+        });
+    </script>
+</body>
+</html>
