@@ -483,58 +483,34 @@
                 const country = data.country || 'Unknown Country';
                 const privacy = data.privacy || { vpn: false, proxy: false, tor: false, relay: false, hosting: false };
 
-                if (!nodes.get({ filter: n => n.type === 'asn' && n.asn === asn }).length) {
-                    const asnNode = {
-                        id: nextId++,
-                        type: 'asn',
-                        label: asn,
-                        title: `ASN: ${asn}`,
-                        color: { background: '#a3e635' },
-                        asn: asn
-                    };
-                    nodes.add(asnNode);
-                    edges.add({ from: ipNodeId, to: asnNode.id, label: 'Assigned to' });
+                // Helper function to link to existing or create new node
+                function linkOrCreateNode(type, key, value, label, title, color, edgeLabel) {
+                    const existingNode = nodes.get({ filter: n => n.type === type && n[key] === value })[0];
+                    const targetId = existingNode ? existingNode.id : nextId++;
+                    if (!existingNode) {
+                        nodes.add({
+                            id: targetId,
+                            type: type,
+                            label: label,
+                            title: title,
+                            color: { background: color },
+                            [key]: value
+                        });
+                    }
+                    // Only add edge if it doesn't exist
+                    if (!edges.get({ filter: e => e.from === ipNodeId && e.to === targetId && e.label === edgeLabel }).length) {
+                        edges.add({ from: ipNodeId, to: targetId, label: edgeLabel });
+                    }
+                    return targetId;
                 }
 
-                if (!nodes.get({ filter: n => n.type === 'city' && n.city === city }).length) {
-                    const cityNode = {
-                        id: nextId++,
-                        type: 'city',
-                        label: city,
-                        title: `City: ${city}`,
-                        color: { background: '#f97316' },
-                        city: city
-                    };
-                    nodes.add(cityNode);
-                    edges.add({ from: ipNodeId, to: cityNode.id, label: 'Located in' });
-                }
+                // Link or create nodes
+                linkOrCreateNode('asn', 'asn', asn, asn, `ASN: ${asn}`, '#a3e635', 'Assigned to');
+                linkOrCreateNode('city', 'city', city, city, `City: ${city}`, '#f97316', 'Located in');
+                linkOrCreateNode('organization', 'organization', companyName, companyName, `Company: ${companyName}`, '#facc15', 'Belongs to');
+                linkOrCreateNode('country', 'country', country, country, `Country: ${country}`, '#34d399', 'Located in');
 
-                if (!nodes.get({ filter: n => n.type === 'organization' && n.organization === companyName }).length) {
-                    const companyNode = {
-                        id: nextId++,
-                        type: 'organization',
-                        label: companyName,
-                        title: `Company: ${companyName}`,
-                        color: { background: '#facc15' },
-                        organization: companyName
-                    };
-                    nodes.add(companyNode);
-                    edges.add({ from: ipNodeId, to: companyNode.id, label: 'Belongs to' });
-                }
-
-                if (!nodes.get({ filter: n => n.type === 'country' && n.country === country }).length) {
-                    const countryNode = {
-                        id: nextId++,
-                        type: 'country',
-                        label: country,
-                        title: `Country: ${country}`,
-                        color: { background: '#34d399' },
-                        country: country
-                    };
-                    nodes.add(countryNode);
-                    edges.add({ from: ipNodeId, to: countryNode.id, label: 'Located in' });
-                }
-
+                // Privacy nodes
                 const privacyTypes = [
                     { key: 'vpn', label: 'VPN', color: '#9333ea' },
                     { key: 'proxy', label: 'Proxy', color: '#f43f5e' },
@@ -544,17 +520,22 @@
                 ];
 
                 privacyTypes.forEach(privacyType => {
-                    if (privacy[privacyType.key] && !nodes.get({ filter: n => n.type === privacyType.key && n.value === ip }).length) {
-                        const privacyNode = {
-                            id: nextId++,
-                            type: privacyType.key,
-                            label: privacyType.label,
-                            title: `${privacyType.label} for IP: ${ip}`,
-                            color: { background: privacyType.color },
-                            value: ip
-                        };
-                        nodes.add(privacyNode);
-                        edges.add({ from: ipNodeId, to: privacyNode.id, label: 'Uses' });
+                    if (privacy[privacyType.key]) {
+                        const existingPrivacy = nodes.get({ filter: n => n.type === privacyType.key && n.value === ip })[0];
+                        const privacyId = existingPrivacy ? existingPrivacy.id : nextId++;
+                        if (!existingPrivacy) {
+                            nodes.add({
+                                id: privacyId,
+                                type: privacyType.key,
+                                label: privacyType.label,
+                                title: `${privacyType.label} for IP: ${ip}`,
+                                color: { background: privacyType.color },
+                                value: ip
+                            });
+                        }
+                        if (!edges.get({ filter: e => e.from === ipNodeId && e.to === privacyId && e.label === 'Uses' }).length) {
+                            edges.add({ from: ipNodeId, to: privacyId, label: 'Uses' });
+                        }
                     }
                 });
 
