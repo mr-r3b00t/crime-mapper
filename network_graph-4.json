@@ -1,0 +1,532 @@
+{
+  "nodes": [
+    {
+      "id": 1,
+      "type": "domain",
+      "domain": "example.com"
+    },
+    {
+      "id": 2,
+      "type": "contact",
+      "name": "Attacker",
+      "email": "attacker@example.com"
+    },
+    {
+      "id": 3,
+      "type": "contact",
+      "name": "Victim",
+      "email": "victim@example.com"
+    },
+    {
+      "id": 4,
+      "type": "wallet",
+      "address": "0xWallet1"
+    },
+    {
+      "id": 5,
+      "type": "wallet",
+      "address": "0xWallet2"
+    },
+    {
+      "id": 6,
+      "type": "wallet",
+      "address": "0xWallet3"
+    },
+    {
+      "id": 7,
+      "type": "wallet",
+      "address": "0xWallet4"
+    },
+    {
+      "id": 8,
+      "type": "wallet",
+      "address": "0xWallet5"
+    },
+    {
+      "id": 9,
+      "type": "ip",
+      "ip": "192.168.1.1"
+    },
+    {
+      "id": 10,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "443"
+    },
+    {
+      "id": 11,
+      "type": "ip",
+      "ip": "192.168.1.2"
+    },
+    {
+      "id": 12,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "443"
+    },
+    {
+      "id": 13,
+      "type": "ip",
+      "ip": "192.168.1.3"
+    },
+    {
+      "id": 14,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "443"
+    },
+    {
+      "id": 15,
+      "type": "ip",
+      "ip": "192.168.1.4"
+    },
+    {
+      "id": 16,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "443"
+    },
+    {
+      "id": 17,
+      "type": "ip",
+      "ip": "192.168.1.5"
+    },
+    {
+      "id": 18,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "443"
+    },
+    {
+      "id": 19,
+      "type": "ip",
+      "ip": "192.168.1.6"
+    },
+    {
+      "id": 20,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "443"
+    },
+    {
+      "id": 21,
+      "type": "ip",
+      "ip": "192.168.1.7"
+    },
+    {
+      "id": 22,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "443"
+    },
+    {
+      "id": 23,
+      "type": "ip",
+      "ip": "192.168.1.8"
+    },
+    {
+      "id": 24,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "443"
+    },
+    {
+      "id": 25,
+      "type": "ip",
+      "ip": "192.168.1.9"
+    },
+    {
+      "id": 26,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "443"
+    },
+    {
+      "id": 27,
+      "type": "ip",
+      "ip": "192.168.1.10"
+    },
+    {
+      "id": 28,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "443"
+    },
+    {
+      "id": 29,
+      "type": "ip",
+      "ip": "192.168.1.11"
+    },
+    {
+      "id": 30,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "443"
+    },
+    {
+      "id": 31,
+      "type": "ip",
+      "ip": "192.168.1.12"
+    },
+    {
+      "id": 32,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "443"
+    },
+    {
+      "id": 33,
+      "type": "ip",
+      "ip": "192.168.1.13"
+    },
+    {
+      "id": 34,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "443"
+    },
+    {
+      "id": 35,
+      "type": "ip",
+      "ip": "192.168.1.14"
+    },
+    {
+      "id": 36,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "443"
+    },
+    {
+      "id": 37,
+      "type": "ip",
+      "ip": "192.168.1.15"
+    },
+    {
+      "id": 38,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "443"
+    },
+    {
+      "id": 39,
+      "type": "ip",
+      "ip": "192.168.1.16"
+    },
+    {
+      "id": 40,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "443"
+    },
+    {
+      "id": 41,
+      "type": "ip",
+      "ip": "192.168.1.17"
+    },
+    {
+      "id": 42,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "443"
+    },
+    {
+      "id": 43,
+      "type": "ip",
+      "ip": "192.168.1.18"
+    },
+    {
+      "id": 44,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "443"
+    },
+    {
+      "id": 45,
+      "type": "ip",
+      "ip": "192.168.1.19"
+    },
+    {
+      "id": 46,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "443"
+    },
+    {
+      "id": 47,
+      "type": "ip",
+      "ip": "192.168.1.20"
+    },
+    {
+      "id": 48,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "443"
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_2_1_1742037176201",
+      "from": 2,
+      "to": 1,
+      "label": "attacks"
+    },
+    {
+      "id": "edge_1_3_1742037176203",
+      "from": 1,
+      "to": 3,
+      "label": "targets"
+    },
+    {
+      "id": "edge_7_1_1742037176204",
+      "from": 7,
+      "to": 1,
+      "label": "owns"
+    },
+    {
+      "id": "edge_8_1_1742037176204",
+      "from": 8,
+      "to": 1,
+      "label": "owns"
+    },
+    {
+      "id": "edge_9_1_1742037176205",
+      "from": 9,
+      "to": 1,
+      "label": "resolves"
+    },
+    {
+      "id": "edge_9_10_1742037176205",
+      "from": 9,
+      "to": 10,
+      "label": "exposes"
+    },
+    {
+      "id": "edge_11_1_1742037176205",
+      "from": 11,
+      "to": 1,
+      "label": "resolves"
+    },
+    {
+      "id": "edge_11_12_1742037176206",
+      "from": 11,
+      "to": 12,
+      "label": "exposes"
+    },
+    {
+      "id": "edge_13_1_1742037176206",
+      "from": 13,
+      "to": 1,
+      "label": "resolves"
+    },
+    {
+      "id": "edge_13_14_1742037176206",
+      "from": 13,
+      "to": 14,
+      "label": "exposes"
+    },
+    {
+      "id": "edge_15_1_1742037176207",
+      "from": 15,
+      "to": 1,
+      "label": "resolves"
+    },
+    {
+      "id": "edge_15_16_1742037176207",
+      "from": 15,
+      "to": 16,
+      "label": "exposes"
+    },
+    {
+      "id": "edge_17_1_1742037176207",
+      "from": 17,
+      "to": 1,
+      "label": "resolves"
+    },
+    {
+      "id": "edge_17_18_1742037176208",
+      "from": 17,
+      "to": 18,
+      "label": "exposes"
+    },
+    {
+      "id": "edge_19_1_1742037176208",
+      "from": 19,
+      "to": 1,
+      "label": "resolves"
+    },
+    {
+      "id": "edge_19_20_1742037176208",
+      "from": 19,
+      "to": 20,
+      "label": "exposes"
+    },
+    {
+      "id": "edge_21_1_1742037176209",
+      "from": 21,
+      "to": 1,
+      "label": "resolves"
+    },
+    {
+      "id": "edge_21_22_1742037176209",
+      "from": 21,
+      "to": 22,
+      "label": "exposes"
+    },
+    {
+      "id": "edge_23_1_1742037176209",
+      "from": 23,
+      "to": 1,
+      "label": "resolves"
+    },
+    {
+      "id": "edge_23_24_1742037176210",
+      "from": 23,
+      "to": 24,
+      "label": "exposes"
+    },
+    {
+      "id": "edge_25_1_1742037176210",
+      "from": 25,
+      "to": 1,
+      "label": "resolves"
+    },
+    {
+      "id": "edge_25_26_1742037176211",
+      "from": 25,
+      "to": 26,
+      "label": "exposes"
+    },
+    {
+      "id": "edge_27_1_1742037176211",
+      "from": 27,
+      "to": 1,
+      "label": "resolves"
+    },
+    {
+      "id": "edge_27_28_1742037176211",
+      "from": 27,
+      "to": 28,
+      "label": "exposes"
+    },
+    {
+      "id": "edge_29_1_1742037176212",
+      "from": 29,
+      "to": 1,
+      "label": "resolves"
+    },
+    {
+      "id": "edge_29_30_1742037176212",
+      "from": 29,
+      "to": 30,
+      "label": "exposes"
+    },
+    {
+      "id": "edge_31_1_1742037176212",
+      "from": 31,
+      "to": 1,
+      "label": "resolves"
+    },
+    {
+      "id": "edge_31_32_1742037176213",
+      "from": 31,
+      "to": 32,
+      "label": "exposes"
+    },
+    {
+      "id": "edge_33_1_1742037176213",
+      "from": 33,
+      "to": 1,
+      "label": "resolves"
+    },
+    {
+      "id": "edge_33_34_1742037176214",
+      "from": 33,
+      "to": 34,
+      "label": "exposes"
+    },
+    {
+      "id": "edge_35_1_1742037176214",
+      "from": 35,
+      "to": 1,
+      "label": "resolves"
+    },
+    {
+      "id": "edge_35_36_1742037176214",
+      "from": 35,
+      "to": 36,
+      "label": "exposes"
+    },
+    {
+      "id": "edge_37_1_1742037176215",
+      "from": 37,
+      "to": 1,
+      "label": "resolves"
+    },
+    {
+      "id": "edge_37_38_1742037176216",
+      "from": 37,
+      "to": 38,
+      "label": "exposes"
+    },
+    {
+      "id": "edge_39_1_1742037176216",
+      "from": 39,
+      "to": 1,
+      "label": "resolves"
+    },
+    {
+      "id": "edge_39_40_1742037176216",
+      "from": 39,
+      "to": 40,
+      "label": "exposes"
+    },
+    {
+      "id": "edge_41_1_1742037176217",
+      "from": 41,
+      "to": 1,
+      "label": "resolves"
+    },
+    {
+      "id": "edge_41_42_1742037176217",
+      "from": 41,
+      "to": 42,
+      "label": "exposes"
+    },
+    {
+      "id": "edge_43_1_1742037176217",
+      "from": 43,
+      "to": 1,
+      "label": "resolves"
+    },
+    {
+      "id": "edge_43_44_1742037176218",
+      "from": 43,
+      "to": 44,
+      "label": "exposes"
+    },
+    {
+      "id": "edge_45_1_1742037176218",
+      "from": 45,
+      "to": 1,
+      "label": "resolves"
+    },
+    {
+      "id": "edge_45_46_1742037176218",
+      "from": 45,
+      "to": 46,
+      "label": "exposes"
+    },
+    {
+      "id": "edge_47_1_1742037176219",
+      "from": 47,
+      "to": 1,
+      "label": "resolves"
+    },
+    {
+      "id": "edge_47_48_1742037176219",
+      "from": 47,
+      "to": 48,
+      "label": "exposes"
+    }
+  ]
+}
