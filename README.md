@@ -3,9 +3,11 @@ A tool for mapping cyber crime
 
 Created by @UK_Daniel_Card
 
+https://mr-r3b00t.github.io/crime-mapper/crimemapper.html
+
 Includes Import and Export to JSON
 
-Runs locally but uses an external js library.
+Runs locally or via Github pages but uses an external js library and third party API keys (bring your own keys)
 
 Made using GROK3 and ChatGPT
 
