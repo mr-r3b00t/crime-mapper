@@ -625,29 +625,43 @@
 
                 privacyTypes.forEach(privacyType => {
                     if (privacy[privacyType.key]) {
-                        // Check for existing node with same type AND IP value
-                        const existingPrivacy = nodes.get({ 
-                            filter: n => n.type === privacyType.key && n.value === ip 
-                        })[0];
-                        
-                        if (!existingPrivacy) {
-                            const privacyId = nextId++;
-                            nodes.add({
-                                id: privacyId,
-                                type: privacyType.key,
-                                label: privacyType.label,
-                                title: `${privacyType.label} for IP: ${ip}`,
-                                color: { background: privacyType.color },
-                                value: ip
-                            });
-                            if (!edges.get({ filter: e => e.from === ipNodeId && e.to === privacyId && e.label === 'Uses' }).length) {
-                                edges.add({ from: ipNodeId, to: privacyId, label: 'Uses' });
+                        let targetId;
+                        if (privacyType.key === 'hosting') {
+                            // For hosting, link to any existing hosting node or create one
+                            const existingHosting = nodes.get({ filter: n => n.type === 'hosting' })[0];
+                            if (existingHosting) {
+                                targetId = existingHosting.id;
+                            } else {
+                                targetId = nextId++;
+                                nodes.add({
+                                    id: targetId,
+                                    type: privacyType.key,
+                                    label: privacyType.label,
+                                    title: `${privacyType.label}`,
+                                    color: { background: privacyType.color }
+                                    // Note: Not storing IP value for hosting to make it a generic node
+                                });
                             }
                         } else {
-                            // If node exists, just ensure the edge exists
-                            if (!edges.get({ filter: e => e.from === ipNodeId && e.to === existingPrivacy.id && e.label === 'Uses' }).length) {
-                                edges.add({ from: ipNodeId, to: existingPrivacy.id, label: 'Uses' });
+                            // For other privacy types, check for existing node with same type and IP
+                            const existingPrivacy = nodes.get({ 
+                                filter: n => n.type === privacyType.key && n.value === ip 
+                            })[0];
+                            targetId = existingPrivacy ? existingPrivacy.id : nextId++;
+                            if (!existingPrivacy) {
+                                nodes.add({
+                                    id: targetId,
+                                    type: privacyType.key,
+                                    label: privacyType.label,
+                                    title: `${privacyType.label} for IP: ${ip}`,
+                                    color: { background: privacyType.color },
+                                    value: ip
+                                });
                             }
+                        }
+                        
+                        if (!edges.get({ filter: e => e.from === ipNodeId && e.to === targetId && e.label === 'Uses' }).length) {
+                            edges.add({ from: ipNodeId, to: targetId, label: 'Uses' });
                         }
                     }
                 });
@@ -1430,9 +1444,9 @@
                             nodeData.color.background = '#f97316';
                             nodeData.city = node.city;
                         } else if (node.type === 'vpn' || node.type === 'proxy' || node.type === 'tor' || node.type === 'relay' || node.type === 'hosting') {
-                            if (!node.value) return;
+                            if (!node.value && node.type !== 'hosting') return;
                             nodeData.label = node.type.charAt(0).toUpperCase() + node.type.slice(1);
-                            nodeData.title = `${nodeData.label} for IP: ${node.value}`;
+                            nodeData.title = node.value ? `${nodeData.label} for IP: ${node.value}` : `${nodeData.label}`;
                             nodeData.color.background = {
                                 vpn: '#9333ea',
                                 proxy: '#f43f5e',
@@ -1440,7 +1454,7 @@
                                 relay: '#eab308',
                                 hosting: '#14b8a6'
                             }[node.type];
-                            nodeData.value = node.value;
+                            if (node.value) nodeData.value = node.value;
                         }
 
                         if (!nodes.get({ filter: n => n.type === nodeData.type && (
