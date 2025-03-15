@@ -10,3 +10,6 @@ Runs locally but uses an external js library.
 Made using GROK3 and ChatGPT
 
 Very Alpha - use at own risk!
+
+
+https://buymeacoffee.com/mrr3b00t
