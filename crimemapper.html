@@ -59,7 +59,7 @@
             flex-wrap: wrap;
             border-bottom: 1px solid #d1d5db;
             transition: border-color 0.3s;
-            padding-top: 40px;
+            padding-top: 70px;
         }
         .dark-mode .tab-buttons {
             border-bottom: 1px solid #4b5563;
@@ -177,6 +177,28 @@
             font-size: 12px;
             cursor: pointer;
         }
+        #pause-toggle {
+            position: absolute;
+            top: 40px;
+            right: 10px;
+            padding: 6px 12px;
+            background-color: #6b7280;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .light-mode #pause-toggle {
+            background-color: #6b7280;
+        }
+        .dark-mode #pause-toggle {
+            background-color: #9ca3af;
+        }
+        #pause-toggle.paused {
+            background-color: #ef4444;
+        }
         #footer {
             text-align: center;
             padding: 10px;
@@ -242,6 +264,7 @@
 <body class="dark-mode">
     <div id="controls">
         <button id="mode-toggle" onclick="toggleMode()">Switch to Light Mode</button>
+        <button id="pause-toggle" onclick="togglePhysics()">Pause Physics</button>
         <div class="tab-buttons">
             <button class="tab-button active" onclick="showTab('object-management')">Object Management</button>
             <button class="tab-button" onclick="showTab('link-management')">Link Management</button>
@@ -394,6 +417,13 @@
         let nextId = 1;
         let isDarkMode = true;
         let ipinfoApiKey = '';
+        let isPhysicsPaused = false;
+
+        // IP validation regex (IPv4 and IPv6)
+        const ipRegex = {
+            ipv4: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/,
+            ipv6: /^([0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}$/
+        };
 
         let container = document.getElementById('myNetwork');
         let data = { nodes: nodes, edges: edges };
@@ -591,6 +621,21 @@
             updateTheme();
         }
 
+        function togglePhysics() {
+            isPhysicsPaused = !isPhysicsPaused;
+            const pauseButton = document.getElementById('pause-toggle');
+            options.physics.enabled = !isPhysicsPaused;
+            network.setOptions(options);
+            
+            if (isPhysicsPaused) {
+                pauseButton.textContent = 'Resume Physics';
+                pauseButton.classList.add('paused');
+            } else {
+                pauseButton.textContent = 'Pause Physics';
+                pauseButton.classList.remove('paused');
+            }
+        }
+
         updateTheme();
 
         function showTab(tabId) {
@@ -636,8 +681,11 @@
                 nodeData.name = name;
                 nodeData.email = email;
             } else if (type === 'ip') {
-                let ip = document.getElementById('ipInput').value;
+                let ip = document.getElementById('ipInput').value.trim();
                 if (!ip) return alert('Please enter an IP address');
+                if (!ipRegex.ipv4.test(ip) && !ipRegex.ipv6.test(ip)) {
+                    return alert('Please enter a valid IPv4 or IPv6 address');
+                }
                 if (nodes.get({ filter: n => n.type === 'ip' && n.ip === ip }).length > 0) return alert('IP exists');
                 nodeData.label = ip;
                 nodeData.title = `IP Address: ${ip}`;
@@ -795,8 +843,11 @@
                 updatedData.name = name;
                 updatedData.email = email;
             } else if (node.type === 'ip') {
-                let ip = document.getElementById('editIpInput').value;
+                let ip = document.getElementById('editIpInput').value.trim();
                 if (!ip) return alert('Please enter an IP address');
+                if (!ipRegex.ipv4.test(ip) && !ipRegex.ipv6.test(ip)) {
+                    return alert('Please enter a valid IPv4 or IPv6 address');
+                }
                 if (nodes.get({ filter: n => n.type === 'ip' && n.ip === ip && n.id !== parseInt(nodeId) }).length > 0) return alert('IP exists');
                 updatedData.label = ip;
                 updatedData.title = `IP Address: ${ip}`;
