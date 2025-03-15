@@ -65,7 +65,7 @@
             border-bottom: 1px solid #4b5563;
         }
         .tab-button {
-            flex: 1 0 16.66%; /* Adjusted for 6 tabs */
+            flex: 1 0 16.66%;
             padding: 10px;
             text-align: center;
             border: none;
@@ -469,12 +469,30 @@
         let ipinfoApiKey = '';
         let shodanApiKey = '';
         let isPhysicsPaused = false;
+        let lastRequestTime = 0;
+        const RATE_LIMIT_MS = 500;
 
         const ipRegex = {
             ipv4: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/,
             ipv6: /^([0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}$/
         };
         const domainRegex = /^(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,}$/;
+
+        function throttleRequest(fn) {
+            return async function(...args) {
+                const now = Date.now();
+                const timeSinceLast = now - lastRequestTime;
+                
+                if (timeSinceLast < RATE_LIMIT_MS) {
+                    await new Promise(resolve => 
+                        setTimeout(resolve, RATE_LIMIT_MS - timeSinceLast)
+                    );
+                }
+                
+                lastRequestTime = Date.now();
+                return fn(...args);
+            };
+        }
 
         let container = document.getElementById('myNetwork');
         let data = { nodes: nodes, edges: edges };
@@ -523,6 +541,7 @@
                 document.getElementById('shodanApiKey').value = storedShodanKey;
                 document.getElementById('storeShodanKey').checked = true;
             }
+            updateTheme();
         };
 
         network.on('oncontext', function(params) {
@@ -539,8 +558,8 @@
         function showContextMenu(x, y, ip, nodeId) {
             const menu = document.getElementById('contextMenu');
             menu.innerHTML = `
-                <button onclick="enrichIP('${ip}', ${nodeId})">Enrich via IPINFO</button>
-                <button onclick="enrichShodan('${ip}', ${nodeId})">Enrich via Shodan</button>
+                <button onclick="throttledEnrichIP('${ip}', ${nodeId})">Enrich via IPINFO</button>
+                <button onclick="throttledEnrichShodan('${ip}', ${nodeId})">Enrich via Shodan</button>
             `;
             menu.style.left = `${x}px`;
             menu.style.top = `${y}px`;
@@ -555,7 +574,7 @@
             document.removeEventListener('click', hideContextMenu);
         }
 
-        async function enrichIP(ip, ipNodeId) {
+        const throttledEnrichIP = throttleRequest(async function enrichIP(ip, ipNodeId, isBulk = false) {
             if (!ipinfoApiKey) {
                 alert('Please set your IPinfo API key in the "API Keys" tab first.');
                 return;
@@ -606,9 +625,13 @@
 
                 privacyTypes.forEach(privacyType => {
                     if (privacy[privacyType.key]) {
-                        const existingPrivacy = nodes.get({ filter: n => n.type === privacyType.key && n.value === ip })[0];
-                        const privacyId = existingPrivacy ? existingPrivacy.id : nextId++;
+                        // Check for existing node with same type AND IP value
+                        const existingPrivacy = nodes.get({ 
+                            filter: n => n.type === privacyType.key && n.value === ip 
+                        })[0];
+                        
                         if (!existingPrivacy) {
+                            const privacyId = nextId++;
                             nodes.add({
                                 id: privacyId,
                                 type: privacyType.key,
@@ -617,9 +640,14 @@
                                 color: { background: privacyType.color },
                                 value: ip
                             });
-                        }
-                        if (!edges.get({ filter: e => e.from === ipNodeId && e.to === privacyId && e.label === 'Uses' }).length) {
-                            edges.add({ from: ipNodeId, to: privacyId, label: 'Uses' });
+                            if (!edges.get({ filter: e => e.from === ipNodeId && e.to === privacyId && e.label === 'Uses' }).length) {
+                                edges.add({ from: ipNodeId, to: privacyId, label: 'Uses' });
+                            }
+                        } else {
+                            // If node exists, just ensure the edge exists
+                            if (!edges.get({ filter: e => e.from === ipNodeId && e.to === existingPrivacy.id && e.label === 'Uses' }).length) {
+                                edges.add({ from: ipNodeId, to: existingPrivacy.id, label: 'Uses' });
+                            }
                         }
                     }
                 });
@@ -628,13 +656,15 @@
                 updateSelectOptions();
                 updateEdgeSelectOptions();
                 network.fit();
+                if (!isBulk) {
+                    alert(`IP ${ip} enrichment completed using IPinfo`);
+                }
             } catch (error) {
                 console.error(`Error enriching IP ${ip}: ${error.message}`);
-                alert(`Error enriching IP ${ip}: ${error.message}`);
             }
-        }
+        });
 
-        async function enrichShodan(ip, ipNodeId) {
+        const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ipNodeId, isBulk = false) {
             if (!shodanApiKey) {
                 alert('Please set your Shodan API key in the "API Keys" tab first.');
                 return;
@@ -683,11 +713,13 @@
                 updateSelectOptions();
                 updateEdgeSelectOptions();
                 network.fit();
+                if (!isBulk) {
+                    alert(`IP ${ip} enrichment completed using Shodan`);
+                }
             } catch (error) {
                 console.error(`Error enriching IP ${ip} with Shodan: ${error.message}`);
-                alert(`Error enriching IP ${ip} with Shodan: ${error.message}`);
             }
-        }
+        });
 
         async function enrichAllIpinfo() {
             if (!ipinfoApiKey) {
@@ -696,9 +728,10 @@
             }
             const ipNodes = nodes.get({ filter: n => n.type === 'ip' });
             for (const node of ipNodes) {
-                await enrichIP(node.ip, node.id);
+                await throttledEnrichIP(node.ip, node.id, true);
             }
             network.fit();
+            alert('Bulk IPinfo enrichment completed');
         }
 
         async function enrichAllShodan() {
@@ -708,9 +741,10 @@
             }
             const ipNodes = nodes.get({ filter: n => n.type === 'ip' });
             for (const node of ipNodes) {
-                await enrichShodan(node.ip, node.id);
+                await throttledEnrichShodan(node.ip, node.id, true);
             }
             network.fit();
+            alert('Bulk Shodan enrichment completed');
         }
 
         function importIOCsFromText() {
@@ -739,7 +773,6 @@
         }
 
         function processIOCs(text) {
-            // Extract IPs
             const ipMatches = text.match(/(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)|(?:[0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}/g) || [];
             ipMatches.forEach(ip => {
                 if ((ipRegex.ipv4.test(ip) || ipRegex.ipv6.test(ip)) && 
@@ -756,7 +789,6 @@
                 }
             });
 
-            // Extract domains
             const domainMatches = text.match(/(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,}/g) || [];
             domainMatches.forEach(domain => {
                 if (domainRegex.test(domain) && 
@@ -875,8 +907,6 @@
                 setTimeout(() => togglePhysics(), 1000);
             }
         }
-
-        updateTheme();
 
         function showTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
@@ -1459,7 +1489,17 @@
         }
 
         document.addEventListener('keypress', event => {
-            if (event.key === 'Enter') addNode();
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                const activeElement = document.activeElement;
+                if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
+                    const start = activeElement.selectionStart;
+                    const end = activeElement.selectionEnd;
+                    const value = activeElement.value;
+                    activeElement.value = value.substring(0, start) + '\r\n' + value.substring(end);
+                    activeElement.selectionStart = activeElement.selectionEnd = start + 2;
+                }
+            }
         });
     </script>
 </body>
