@@ -56,6 +56,7 @@
         }
         .tab-buttons {
             display: flex;
+            flex-wrap: wrap;
             border-bottom: 1px solid #d1d5db;
             transition: border-color 0.3s;
             padding-top: 40px;
@@ -64,13 +65,13 @@
             border-bottom: 1px solid #4b5563;
         }
         .tab-button {
-            flex: 1;
+            flex: 1 0 25%;
             padding: 10px;
             text-align: center;
             border: none;
             cursor: pointer;
             transition: background-color 0.3s, color 0.3s;
-            font-size: 12px;
+            font-size: 10px;
         }
         .light-mode .tab-button {
             background-color: #f9fafb;
@@ -189,6 +190,52 @@
         .dark-mode #footer {
             color: #94a3b8;
         }
+        #contextMenu {
+            position: absolute;
+            background-color: #fff;
+            border: 1px solid #ccc;
+            box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            padding: 5px 0;
+        }
+        #contextMenu button {
+            display: block;
+            width: 100%;
+            text-align: left;
+            padding: 5px 10px;
+            background: none;
+            border: none;
+            cursor: pointer;
+        }
+        #contextMenu button:hover {
+            background-color: #f0f0f0;
+        }
+        .dark-mode #contextMenu {
+            background-color: #2d3748;
+            border: 1px solid #4b5563;
+        }
+        .dark-mode #contextMenu button {
+            color: #e2e8f0;
+        }
+        .dark-mode #contextMenu button:hover {
+            background-color: #4b5563;
+        }
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            margin: 4px 0;
+            font-size: 12px;
+        }
+        .light-mode .checkbox-label {
+            color: #1f2a44;
+        }
+        .dark-mode .checkbox-label {
+            color: #e2e8f0;
+        }
+        input[type="checkbox"] {
+            margin-right: 8px;
+            width: auto;
+        }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/dist/vis-network.min.js"></script>
 </head>
@@ -199,6 +246,7 @@
             <button class="tab-button active" onclick="showTab('object-management')">Object Management</button>
             <button class="tab-button" onclick="showTab('link-management')">Link Management</button>
             <button class="tab-button" onclick="showTab('import-export')">Import/Export</button>
+            <button class="tab-button" onclick="showTab('api-keys')">API Keys</button>
         </div>
         <div id="object-management" class="tab-content active">
             <div class="input-group">
@@ -323,17 +371,29 @@
                 <button onclick="clearGraph()">Clear Graph</button>
             </div>
         </div>
+        <div id="api-keys" class="tab-content">
+            <div class="input-group">
+                <h3>API Keys</h3>
+                <input type="text" id="ipinfoApiKey" placeholder="Enter IPinfo API Key">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="storeApiKey"> Store in local storage
+                </label>
+                <button onclick="saveApiKey()">Save API Key</button>
+            </div>
+        </div>
         <div id="footer">
             © Xservus Limited - v0.1
         </div>
     </div>
     <div id="myNetwork"></div>
+    <div id="contextMenu" style="display: none;"></div>
 
     <script>
         let nodes = new vis.DataSet([]);
         let edges = new vis.DataSet([]);
         let nextId = 1;
         let isDarkMode = true;
+        let ipinfoApiKey = '';
 
         let container = document.getElementById('myNetwork');
         let data = { nodes: nodes, edges: edges };
@@ -368,6 +428,162 @@
             }
         };
         let network = new vis.Network(container, data, options);
+
+        // Load API key from localStorage on page load
+        window.onload = function() {
+            const storedKey = localStorage.getItem('ipinfoApiKey');
+            if (storedKey) {
+                ipinfoApiKey = storedKey;
+                document.getElementById('ipinfoApiKey').value = storedKey;
+                document.getElementById('storeApiKey').checked = true;
+            }
+        };
+
+        network.on('oncontext', function(params) {
+            params.event.preventDefault();
+            const nodeId = this.getNodeAt(params.pointer.DOM);
+            if (nodeId) {
+                const node = nodes.get(nodeId);
+                if (node.type === 'ip') {
+                    showContextMenu(params.pointer.DOM.x, params.pointer.DOM.y, node.ip, nodeId);
+                }
+            }
+        });
+
+        function showContextMenu(x, y, ip, nodeId) {
+            const menu = document.getElementById('contextMenu');
+            menu.innerHTML = `<button onclick="enrichIP('${ip}', ${nodeId})">Enrich via IPINFO</button>`;
+            menu.style.left = `${x}px`;
+            menu.style.top = `${y}px`;
+            menu.style.display = 'block';
+
+            document.addEventListener('click', hideContextMenu);
+        }
+
+        function hideContextMenu() {
+            const menu = document.getElementById('contextMenu');
+            menu.style.display = 'none';
+            document.removeEventListener('click', hideContextMenu);
+        }
+
+        async function enrichIP(ip, ipNodeId) {
+            if (!ipinfoApiKey) {
+                alert('Please set your IPinfo API key in the "API Keys" tab first.');
+                return;
+            }
+            try {
+                const response = await fetch(`https://ipinfo.io/${ip}/json?token=${ipinfoApiKey}`);
+                if (!response.ok) throw new Error('Failed to fetch IP info');
+                const data = await response.json();
+                console.log('IPinfo response:', data);
+
+                const asn = data.asn?.asn || 'Unknown ASN';
+                const city = data.city || 'Unknown City';
+                const companyName = data.company?.name || 'Unknown Company';
+                const country = data.country || 'Unknown Country';
+                const privacy = data.privacy || { vpn: false, proxy: false, tor: false, relay: false, hosting: false };
+
+                if (!nodes.get({ filter: n => n.type === 'asn' && n.asn === asn }).length) {
+                    const asnNode = {
+                        id: nextId++,
+                        type: 'asn',
+                        label: asn,
+                        title: `ASN: ${asn}`,
+                        color: { background: '#a3e635' },
+                        asn: asn
+                    };
+                    nodes.add(asnNode);
+                    edges.add({ from: ipNodeId, to: asnNode.id, label: 'Assigned to' });
+                }
+
+                if (!nodes.get({ filter: n => n.type === 'city' && n.city === city }).length) {
+                    const cityNode = {
+                        id: nextId++,
+                        type: 'city',
+                        label: city,
+                        title: `City: ${city}`,
+                        color: { background: '#f97316' },
+                        city: city
+                    };
+                    nodes.add(cityNode);
+                    edges.add({ from: ipNodeId, to: cityNode.id, label: 'Located in' });
+                }
+
+                if (!nodes.get({ filter: n => n.type === 'organization' && n.organization === companyName }).length) {
+                    const companyNode = {
+                        id: nextId++,
+                        type: 'organization',
+                        label: companyName,
+                        title: `Company: ${companyName}`,
+                        color: { background: '#facc15' },
+                        organization: companyName
+                    };
+                    nodes.add(companyNode);
+                    edges.add({ from: ipNodeId, to: companyNode.id, label: 'Belongs to' });
+                }
+
+                if (!nodes.get({ filter: n => n.type === 'country' && n.country === country }).length) {
+                    const countryNode = {
+                        id: nextId++,
+                        type: 'country',
+                        label: country,
+                        title: `Country: ${country}`,
+                        color: { background: '#34d399' },
+                        country: country
+                    };
+                    nodes.add(countryNode);
+                    edges.add({ from: ipNodeId, to: countryNode.id, label: 'Located in' });
+                }
+
+                const privacyTypes = [
+                    { key: 'vpn', label: 'VPN', color: '#9333ea' },
+                    { key: 'proxy', label: 'Proxy', color: '#f43f5e' },
+                    { key: 'tor', label: 'Tor', color: '#64748b' },
+                    { key: 'relay', label: 'Relay', color: '#eab308' },
+                    { key: 'hosting', label: 'Hosting', color: '#14b8a6' }
+                ];
+
+                privacyTypes.forEach(privacyType => {
+                    if (privacy[privacyType.key] && !nodes.get({ filter: n => n.type === privacyType.key && n.value === ip }).length) {
+                        const privacyNode = {
+                            id: nextId++,
+                            type: privacyType.key,
+                            label: privacyType.label,
+                            title: `${privacyType.label} for IP: ${ip}`,
+                            color: { background: privacyType.color },
+                            value: ip
+                        };
+                        nodes.add(privacyNode);
+                        edges.add({ from: ipNodeId, to: privacyNode.id, label: 'Uses' });
+                    }
+                });
+
+                updateNodeSizes();
+                updateSelectOptions();
+                updateEdgeSelectOptions();
+                network.fit();
+            } catch (error) {
+                console.error(`Error enriching IP ${ip}: ${error.message}`);
+                alert(`Error enriching IP ${ip}: ${error.message}`);
+            }
+            hideContextMenu();
+        }
+
+        function saveApiKey() {
+            ipinfoApiKey = document.getElementById('ipinfoApiKey').value.trim();
+            const storeKey = document.getElementById('storeApiKey').checked;
+            if (ipinfoApiKey) {
+                if (storeKey) {
+                    localStorage.setItem('ipinfoApiKey', ipinfoApiKey);
+                } else {
+                    localStorage.removeItem('ipinfoApiKey');
+                }
+                alert('IPinfo API key saved successfully!');
+            } else {
+                localStorage.removeItem('ipinfoApiKey');
+                alert('Please enter a valid IPinfo API key.');
+            }
+        }
 
         function updateTheme() {
             if (isDarkMode) {
@@ -791,7 +1007,8 @@
                     portNumber: node.portNumber, address: node.address, accountNumber: node.accountNumber,
                     sortCode: node.sortCode, techName: node.techName, techVersion: node.techVersion,
                     deviceCategory: node.deviceCategory, deviceName: node.deviceName, 
-                    malwareName: node.malwareName, malwareType: node.malwareType
+                    malwareName: node.malwareName, malwareType: node.malwareType,
+                    country: node.country, asn: node.asn, city: node.city, value: node.value
                 })),
                 edges: edges.get().map(edge => ({ id: edge.id, from: edge.from, to: edge.to, label: edge.label }))
             };
@@ -833,28 +1050,24 @@
                             nodeData.color.background = '#4ade80';
                             nodeData.name = node.name;
                             nodeData.email = node.email;
-                            if (nodes.get({ filter: n => n.type === 'contact' && n.name === node.name && n.email === node.email }).length > 0) return;
                         } else if (node.type === 'ip') {
                             if (!node.ip) return;
                             nodeData.label = node.ip;
                             nodeData.title = `IP Address: ${node.ip}`;
                             nodeData.color.background = '#f87171';
                             nodeData.ip = node.ip;
-                            if (nodes.get({ filter: n => n.type === 'ip' && n.ip === node.ip }).length > 0) return;
                         } else if (node.type === 'domain') {
                             if (!node.domain) return;
                             nodeData.label = node.domain;
                             nodeData.title = `Domain: ${node.domain}`;
                             nodeData.color.background = '#60a5fa';
                             nodeData.domain = node.domain;
-                            if (nodes.get({ filter: n => n.type === 'domain' && n.domain === node.domain }).length > 0) return;
                         } else if (node.type === 'organization') {
                             if (!node.organization) return;
                             nodeData.label = node.organization;
                             nodeData.title = `Organization: ${node.organization}`;
                             nodeData.color.background = '#facc15';
                             nodeData.organization = node.organization;
-                            if (nodes.get({ filter: n => n.type === 'organization' && n.organization === node.organization }).length > 0) return;
                         } else if (node.type === 'port') {
                             if (!node.portNumber || !node.portType) return;
                             nodeData.label = `${node.portType}/${node.portNumber}`;
@@ -862,14 +1075,12 @@
                             nodeData.color.background = '#a78bfa';
                             nodeData.portType = node.portType;
                             nodeData.portNumber = node.portNumber;
-                            if (nodes.get({ filter: n => n.type === 'port' && n.portNumber === node.portNumber && n.portType === node.portType }).length > 0) return;
                         } else if (node.type === 'wallet') {
                             if (!node.address) return;
                             nodeData.label = node.address;
                             nodeData.title = `Wallet\nAddress: ${node.address}`;
                             nodeData.color.background = '#fb923c';
                             nodeData.address = node.address;
-                            if (nodes.get({ filter: n => n.type === 'wallet' && n.address === node.address }).length > 0) return;
                         } else if (node.type === 'bank') {
                             if (!node.accountNumber || !node.sortCode) return;
                             nodeData.label = `${node.accountNumber}\n${node.sortCode}`;
@@ -877,7 +1088,6 @@
                             nodeData.color.background = '#10b981';
                             nodeData.accountNumber = node.accountNumber;
                             nodeData.sortCode = node.sortCode;
-                            if (nodes.get({ filter: n => n.type === 'bank' && n.accountNumber === node.accountNumber && n.sortCode === node.sortCode }).length > 0) return;
                         } else if (node.type === 'technology') {
                             if (!node.techName || !node.techVersion) return;
                             nodeData.label = `${node.techName}\n${node.techVersion}`;
@@ -885,7 +1095,6 @@
                             nodeData.color.background = '#ec4899';
                             nodeData.techName = node.techName;
                             nodeData.techVersion = node.techVersion;
-                            if (nodes.get({ filter: n => n.type === 'technology' && n.techName === node.techName && n.techVersion === node.techVersion }).length > 0) return;
                         } else if (node.type === 'device') {
                             if (!node.deviceCategory || !node.deviceName) return;
                             nodeData.label = `${node.deviceName}\n${node.deviceCategory}`;
@@ -893,7 +1102,6 @@
                             nodeData.color.background = '#14b8a6';
                             nodeData.deviceCategory = node.deviceCategory;
                             nodeData.deviceName = node.deviceName;
-                            if (nodes.get({ filter: n => n.type === 'device' && n.deviceCategory === node.deviceCategory && n.deviceName === node.deviceName }).length > 0) return;
                         } else if (node.type === 'malware') {
                             if (!node.malwareName || !node.malwareType) return;
                             nodeData.label = `${node.malwareName}\n${node.malwareType}`;
@@ -901,10 +1109,56 @@
                             nodeData.color.background = '#ef4444';
                             nodeData.malwareName = node.malwareName;
                             nodeData.malwareType = node.malwareType;
-                            if (nodes.get({ filter: n => n.type === 'malware' && n.malwareName === node.malwareName && n.malwareType === node.malwareType }).length > 0) return;
+                        } else if (node.type === 'country') {
+                            if (!node.country) return;
+                            nodeData.label = node.country;
+                            nodeData.title = `Country: ${node.country}`;
+                            nodeData.color.background = '#34d399';
+                            nodeData.country = node.country;
+                        } else if (node.type === 'asn') {
+                            if (!node.asn) return;
+                            nodeData.label = node.asn;
+                            nodeData.title = `ASN: ${node.asn}`;
+                            nodeData.color.background = '#a3e635';
+                            nodeData.asn = node.asn;
+                        } else if (node.type === 'city') {
+                            if (!node.city) return;
+                            nodeData.label = node.city;
+                            nodeData.title = `City: ${node.city}`;
+                            nodeData.color.background = '#f97316';
+                            nodeData.city = node.city;
+                        } else if (node.type === 'vpn' || node.type === 'proxy' || node.type === 'tor' || node.type === 'relay' || node.type === 'hosting') {
+                            if (!node.value) return;
+                            nodeData.label = node.type.charAt(0).toUpperCase() + node.type.slice(1);
+                            nodeData.title = `${nodeData.label} for IP: ${node.value}`;
+                            nodeData.color.background = {
+                                vpn: '#9333ea',
+                                proxy: '#f43f5e',
+                                tor: '#64748b',
+                                relay: '#eab308',
+                                hosting: '#14b8a6'
+                            }[node.type];
+                            nodeData.value = node.value;
                         }
 
-                        nodes.add(nodeData);
+                        if (!nodes.get({ filter: n => n.type === nodeData.type && (
+                            (nodeData.ip && n.ip === nodeData.ip) ||
+                            (nodeData.domain && n.domain === nodeData.domain) ||
+                            (nodeData.organization && n.organization === nodeData.organization) ||
+                            (nodeData.country && n.country === nodeData.country) ||
+                            (nodeData.asn && n.asn === nodeData.asn) ||
+                            (nodeData.city && n.city === nodeData.city) ||
+                            (nodeData.value && n.value === nodeData.value) ||
+                            (nodeData.name && nodeData.email && n.name === nodeData.name && n.email === nodeData.email) ||
+                            (nodeData.portNumber && nodeData.portType && n.portNumber === nodeData.portNumber && n.portType === nodeData.portType) ||
+                            (nodeData.address && n.address === nodeData.address) ||
+                            (nodeData.accountNumber && nodeData.sortCode && n.accountNumber === nodeData.accountNumber && n.sortCode === nodeData.sortCode) ||
+                            (nodeData.techName && nodeData.techVersion && n.techName === nodeData.techName && n.techVersion === nodeData.techVersion) ||
+                            (nodeData.deviceCategory && nodeData.deviceName && n.deviceCategory === nodeData.deviceCategory && n.deviceName === nodeData.deviceName) ||
+                            (nodeData.malwareName && nodeData.malwareType && n.malwareName === nodeData.malwareName && n.malwareType === nodeData.malwareType)
+                        ) }).length) {
+                            nodes.add(nodeData);
+                        }
                     });
 
                     importedData.edges.forEach(edge => {
@@ -925,6 +1179,7 @@
                     fileInput.value = '';
                     network.fit();
                 } catch (e) {
+                    console.error('Error importing JSON:', e);
                     alert('Error importing JSON: ' + e.message);
                 }
             };
