@@ -30,6 +30,8 @@
             flex-shrink: 0;
             transition: background-color 0.3s;
             position: relative;
+            display: flex;
+            flex-direction: column;
         }
         .light-mode #controls {
             background-color: #fff;
@@ -98,6 +100,7 @@
         .tab-content {
             padding: 15px;
             display: none;
+            flex-grow: 1; /* Allows content to take available space */
         }
         .tab-content.active {
             display: block;
@@ -200,6 +203,19 @@
         #mode-toggle:hover {
             background-color: #4b5563;
         }
+        #footer {
+            text-align: center;
+            padding: 10px;
+            font-size: 10px;
+            margin-top: auto; /* Pushes footer to the bottom */
+            transition: color 0.3s;
+        }
+        .light-mode #footer {
+            color: #6b7280;
+        }
+        .dark-mode #footer {
+            color: #94a3b8;
+        }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
 </head>
@@ -283,6 +299,9 @@
                 <input type="file" id="importFile" accept=".json">
                 <button onclick="importGraph()">Import from JSON</button>
             </div>
+        </div>
+        <div id="footer">
+            &copy; Xservus Limited - v0.1
         </div>
     </div>
     <div id="myNetwork"></div>
@@ -498,7 +517,7 @@
                 }
                 nodeData.label = `${accountNumber}\n${sortCode}`;
                 nodeData.title = `Bank Account\nAccount Number: ${accountNumber}\nSort Code: ${sortCode}`;
-                nodeData.color = { background: '#10b981' }; // Emerald green for bank accounts
+                nodeData.color = { background: '#10b981' };
                 nodeData.accountNumber = accountNumber;
                 nodeData.sortCode = sortCode;
             }
