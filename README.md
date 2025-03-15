@@ -14,6 +14,8 @@ Very Alpha - use at own risk!
 
 https://buymeacoffee.com/mrr3b00t
 
+Copyright (c) Xservus Limited
+
 # Other tools that might be useful:
 https://gephi.org/features/
 
