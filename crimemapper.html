@@ -238,6 +238,8 @@
                     <option value="port">Port</option>
                     <option value="wallet">Wallet</option>
                     <option value="bank">Bank Account</option>
+                    <option value="technology">Technology</option>
+                    <option value="device">Device</option>
                 </select>
                 <input type="text" id="nameInput" placeholder="Name">
                 <input type="email" id="emailInput" placeholder="Email">
@@ -252,6 +254,20 @@
                 <input type="text" id="walletAddressInput" placeholder="Wallet Address" style="display: none;">
                 <input type="text" id="accountNumberInput" placeholder="Account Number" style="display: none;">
                 <input type="text" id="sortCodeInput" placeholder="Sort Code" style="display: none;">
+                <input type="text" id="techNameInput" placeholder="Technology Name" style="display: none;">
+                <input type="text" id="techVersionInput" placeholder="Version" style="display: none;">
+                <select id="deviceCategory" style="display: none;">
+                    <option value="Server">Server</option>
+                    <option value="PC">PC</option>
+                    <option value="Laptop">Laptop</option>
+                    <option value="MAC">MAC</option>
+                    <option value="SmartPhone">SmartPhone</option>
+                    <option value="IOT">IOT</option>
+                    <option value="Router">Router</option>
+                    <option value="Switch">Switch</option>
+                    <option value="Wireless Access Point">Wireless Access Point</option>
+                    <option value="Other">Other</option>
+                </select>
                 <button onclick="addNode()">Add Entity</button>
             </div>
             <div class="input-group">
@@ -270,6 +286,20 @@
                 <input type="text" id="editWalletAddressInput" placeholder="Wallet Address" style="display: none;">
                 <input type="text" id="editAccountNumberInput" placeholder="Account Number" style="display: none;">
                 <input type="text" id="editSortCodeInput" placeholder="Sort Code" style="display: none;">
+                <input type="text" id="editTechNameInput" placeholder="Technology Name" style="display: none;">
+                <input type="text" id="editTechVersionInput" placeholder="Version" style="display: none;">
+                <select id="editDeviceCategory" style="display: none;">
+                    <option value="Server">Server</option>
+                    <option value="PC">PC</option>
+                    <option value="Laptop">Laptop</option>
+                    <option value="MAC">MAC</option>
+                    <option value="SmartPhone">SmartPhone</option>
+                    <option value="IOT">IOT</option>
+                    <option value="Router">Router</option>
+                    <option value="Switch">Switch</option>
+                    <option value="Wireless Access Point">Wireless Access Point</option>
+                    <option value="Other">Other</option>
+                </select>
                 <button onclick="saveNodeEdit()">Save Changes</button>
             </div>
             <div class="input-group">
@@ -407,6 +437,9 @@
             document.getElementById('walletAddressInput').style.display = type === 'wallet' ? 'block' : 'none';
             document.getElementById('accountNumberInput').style.display = type === 'bank' ? 'block' : 'none';
             document.getElementById('sortCodeInput').style.display = type === 'bank' ? 'block' : 'none';
+            document.getElementById('techNameInput').style.display = type === 'technology' ? 'block' : 'none';
+            document.getElementById('techVersionInput').style.display = type === 'technology' ? 'block' : 'none';
+            document.getElementById('deviceCategory').style.display = type === 'device' ? 'block' : 'none';
         });
 
         function addNode() {
@@ -521,6 +554,36 @@
                 nodeData.color = { background: '#10b981' };
                 nodeData.accountNumber = accountNumber;
                 nodeData.sortCode = sortCode;
+            } else if (type === 'technology') {
+                let techName = document.getElementById('techNameInput').value;
+                let techVersion = document.getElementById('techVersionInput').value;
+                if (!techName || !techVersion) {
+                    alert('Please enter both name and version for technology');
+                    return;
+                }
+                if (nodes.get({ filter: node => node.type === 'technology' && node.techName === techName && node.techVersion === techVersion }).length > 0) {
+                    alert('This technology (name and version) already exists');
+                    return;
+                }
+                nodeData.label = `${techName}\n${techVersion}`;
+                nodeData.title = `Technology\nName: ${techName}\nVersion: ${techVersion}`;
+                nodeData.color = { background: '#ec4899' }; // Pink for technology
+                nodeData.techName = techName;
+                nodeData.techVersion = techVersion;
+            } else if (type === 'device') {
+                let deviceCategory = document.getElementById('deviceCategory').value;
+                if (!deviceCategory) {
+                    alert('Please select a device category');
+                    return;
+                }
+                if (nodes.get({ filter: node => node.type === 'device' && node.deviceCategory === deviceCategory }).length > 0) {
+                    alert('This device category already exists');
+                    return;
+                }
+                nodeData.label = deviceCategory;
+                nodeData.title = `Device\nCategory: ${deviceCategory}`;
+                nodeData.color = { background: '#14b8a6' }; // Teal for devices
+                nodeData.deviceCategory = deviceCategory;
             }
 
             nodes.add(nodeData);
@@ -547,6 +610,9 @@
             document.getElementById('editWalletAddressInput').style.display = 'none';
             document.getElementById('editAccountNumberInput').style.display = 'none';
             document.getElementById('editSortCodeInput').style.display = 'none';
+            document.getElementById('editTechNameInput').style.display = 'none';
+            document.getElementById('editTechVersionInput').style.display = 'none';
+            document.getElementById('editDeviceCategory').style.display = 'none';
 
             if (node.type === 'contact') {
                 document.getElementById('editNameInput').value = node.name || '';
@@ -575,6 +641,14 @@
                 document.getElementById('editSortCodeInput').value = node.sortCode || '';
                 document.getElementById('editAccountNumberInput').style.display = 'block';
                 document.getElementById('editSortCodeInput').style.display = 'block';
+            } else if (node.type === 'technology') {
+                document.getElementById('editTechNameInput').value = node.techName || '';
+                document.getElementById('editTechVersionInput').value = node.techVersion || '';
+                document.getElementById('editTechNameInput').style.display = 'block';
+                document.getElementById('editTechVersionInput').style.display = 'block';
+            } else if (node.type === 'device') {
+                document.getElementById('editDeviceCategory').value = node.deviceCategory || 'Server';
+                document.getElementById('editDeviceCategory').style.display = 'block';
             }
         }
 
@@ -692,6 +766,36 @@
                 updatedData.color = { background: '#10b981' };
                 updatedData.accountNumber = accountNumber;
                 updatedData.sortCode = sortCode;
+            } else if (node.type === 'technology') {
+                let techName = document.getElementById('editTechNameInput').value;
+                let techVersion = document.getElementById('editTechVersionInput').value;
+                if (!techName || !techVersion) {
+                    alert('Please enter both name and version for technology');
+                    return;
+                }
+                if (nodes.get({ filter: n => n.type === 'technology' && n.techName === techName && n.techVersion === techVersion && n.id !== parseInt(nodeId) }).length > 0) {
+                    alert('This technology (name and version) already exists');
+                    return;
+                }
+                updatedData.label = `${techName}\n${techVersion}`;
+                updatedData.title = `Technology\nName: ${techName}\nVersion: ${techVersion}`;
+                updatedData.color = { background: '#ec4899' };
+                updatedData.techName = techName;
+                updatedData.techVersion = techVersion;
+            } else if (node.type === 'device') {
+                let deviceCategory = document.getElementById('editDeviceCategory').value;
+                if (!deviceCategory) {
+                    alert('Please select a device category');
+                    return;
+                }
+                if (nodes.get({ filter: n => n.type === 'device' && n.deviceCategory === deviceCategory && n.id !== parseInt(nodeId) }).length > 0) {
+                    alert('This device category already exists');
+                    return;
+                }
+                updatedData.label = deviceCategory;
+                updatedData.title = `Device\nCategory: ${deviceCategory}`;
+                updatedData.color = { background: '#14b8a6' };
+                updatedData.deviceCategory = deviceCategory;
             }
 
             nodes.update(updatedData);
@@ -710,6 +814,9 @@
             document.getElementById('editWalletAddressInput').value = '';
             document.getElementById('editAccountNumberInput').value = '';
             document.getElementById('editSortCodeInput').value = '';
+            document.getElementById('editTechNameInput').value = '';
+            document.getElementById('editTechVersionInput').value = '';
+            document.getElementById('editDeviceCategory').value = 'Server';
             document.getElementById('editNode').value = '';
             document.getElementById('editNameInput').style.display = 'none';
             document.getElementById('editEmailInput').style.display = 'none';
@@ -721,6 +828,9 @@
             document.getElementById('editWalletAddressInput').style.display = 'none';
             document.getElementById('editAccountNumberInput').style.display = 'none';
             document.getElementById('editSortCodeInput').style.display = 'none';
+            document.getElementById('editTechNameInput').style.display = 'none';
+            document.getElementById('editTechVersionInput').style.display = 'none';
+            document.getElementById('editDeviceCategory').style.display = 'none';
         }
 
         function addEdge() {
@@ -778,7 +888,7 @@
             if (confirm('Are you sure you want to clear the graph? This will remove all nodes and edges.')) {
                 nodes.clear();
                 edges.clear();
-                nextId = 1; // Reset ID counter
+                nextId = 1;
                 updateNodeSizes();
                 updateSelectOptions();
                 updateEdgeSelectOptions();
@@ -846,6 +956,9 @@
             document.getElementById('walletAddressInput').value = '';
             document.getElementById('accountNumberInput').value = '';
             document.getElementById('sortCodeInput').value = '';
+            document.getElementById('techNameInput').value = '';
+            document.getElementById('techVersionInput').value = '';
+            document.getElementById('deviceCategory').value = 'Server';
         }
 
         function exportGraph() {
@@ -862,7 +975,10 @@
                     portNumber: node.portNumber,
                     address: node.address,
                     accountNumber: node.accountNumber,
-                    sortCode: node.sortCode
+                    sortCode: node.sortCode,
+                    techName: node.techName,
+                    techVersion: node.techVersion,
+                    deviceCategory: node.deviceCategory
                 })),
                 edges: edges.get().map(edge => ({
                     id: edge.id,
@@ -945,6 +1061,17 @@
                             nodeData.color = { background: '#10b981' };
                             nodeData.accountNumber = node.accountNumber;
                             nodeData.sortCode = node.sortCode;
+                        } else if (node.type === 'technology') {
+                            nodeData.label = `${node.techName}\n${node.techVersion}`;
+                            nodeData.title = `Technology\nName: ${node.techName}\nVersion: ${node.techVersion}`;
+                            nodeData.color = { background: '#ec4899' };
+                            nodeData.techName = node.techName;
+                            nodeData.techVersion = node.techVersion;
+                        } else if (node.type === 'device') {
+                            nodeData.label = node.deviceCategory;
+                            nodeData.title = `Device\nCategory: ${node.deviceCategory}`;
+                            nodeData.color = { background: '#14b8a6' };
+                            nodeData.deviceCategory = node.deviceCategory;
                         }
 
                         let isDuplicate = false;
@@ -962,6 +1089,10 @@
                             isDuplicate = nodes.get({ filter: n => n.type === 'wallet' && n.address === nodeData.address }).length > 0;
                         } else if (node.type === 'bank') {
                             isDuplicate = nodes.get({ filter: n => n.type === 'bank' && n.accountNumber === nodeData.accountNumber && n.sortCode === nodeData.sortCode }).length > 0;
+                        } else if (node.type === 'technology') {
+                            isDuplicate = nodes.get({ filter: n => n.type === 'technology' && n.techName === nodeData.techName && n.techVersion === nodeData.techVersion }).length > 0;
+                        } else if (node.type === 'device') {
+                            isDuplicate = nodes.get({ filter: n => n.type === 'device' && n.deviceCategory === nodeData.deviceCategory }).length > 0;
                         }
 
                         if (!isDuplicate) {
