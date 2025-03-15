@@ -100,7 +100,7 @@
         .tab-content {
             padding: 15px;
             display: none;
-            flex-grow: 1; /* Allows content to take available space */
+            flex-grow: 1;
         }
         .tab-content.active {
             display: block;
@@ -207,7 +207,7 @@
             text-align: center;
             padding: 10px;
             font-size: 10px;
-            margin-top: auto; /* Pushes footer to the bottom */
+            margin-top: auto;
             transition: color 0.3s;
         }
         .light-mode #footer {
@@ -298,10 +298,11 @@
                 <button onclick="exportGraph()">Export to JSON</button>
                 <input type="file" id="importFile" accept=".json">
                 <button onclick="importGraph()">Import from JSON</button>
+                <button onclick="clearGraph()">Clear Graph</button>
             </div>
         </div>
         <div id="footer">
-            &copy; Xservus Limited - v0.1
+            © Xservus Limited - v0.1
         </div>
     </div>
     <div id="myNetwork"></div>
@@ -770,6 +771,19 @@
                 document.getElementById('removeEdge').selectedIndex = 0;
             } else {
                 alert('Please select an edge to remove');
+            }
+        }
+
+        function clearGraph() {
+            if (confirm('Are you sure you want to clear the graph? This will remove all nodes and edges.')) {
+                nodes.clear();
+                edges.clear();
+                nextId = 1; // Reset ID counter
+                updateNodeSizes();
+                updateSelectOptions();
+                updateEdgeSelectOptions();
+                network.setData({ nodes: nodes, edges: edges });
+                clearInputs();
             }
         }
 
