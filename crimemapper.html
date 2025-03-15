@@ -65,7 +65,7 @@
             border-bottom: 1px solid #4b5563;
         }
         .tab-button {
-            flex: 1 0 25%;
+            flex: 1 0 16.66%; /* Adjusted for 6 tabs */
             padding: 10px;
             text-align: center;
             border: none;
@@ -128,7 +128,7 @@
         .dark-mode .input-group h3 {
             color: #e2e8f0;
         }
-        input, select {
+        input, select, textarea {
             margin: 4px 0;
             padding: 6px 10px;
             border-radius: 4px;
@@ -137,15 +137,19 @@
             width: 100%;
             box-sizing: border-box;
         }
-        .light-mode input, .light-mode select {
+        .light-mode input, .light-mode select, .light-mode textarea {
             border: 1px solid #d1d5db;
             background-color: #fff;
             color: #1f2a44;
         }
-        .dark-mode input, .dark-mode select {
+        .dark-mode input, .dark-mode select, .dark-mode textarea {
             border: 1px solid #4b5563;
             background-color: #4b5563;
             color: #e2e8f0;
+        }
+        textarea {
+            height: 100px;
+            resize: vertical;
         }
         button {
             padding: 6px 12px;
@@ -290,6 +294,8 @@
             <button class="tab-button" onclick="showTab('link-management')">Link Management</button>
             <button class="tab-button" onclick="showTab('import-export')">Import/Export</button>
             <button class="tab-button" onclick="showTab('api-keys')">API Keys</button>
+            <button class="tab-button" onclick="showTab('enrichment')">Enrichment</button>
+            <button class="tab-button" onclick="showTab('import-iocs')">Import IOCs</button>
         </div>
         <div id="object-management" class="tab-content active">
             <div class="input-group">
@@ -432,6 +438,22 @@
                 <button onclick="saveShodanApiKey()">Save Shodan API Key</button>
             </div>
         </div>
+        <div id="enrichment" class="tab-content">
+            <div class="input-group">
+                <h3>Bulk Enrichment</h3>
+                <button onclick="enrichAllIpinfo()">Enrich All IPs with IPinfo</button>
+                <button onclick="enrichAllShodan()">Enrich All IPs with Shodan</button>
+            </div>
+        </div>
+        <div id="import-iocs" class="tab-content">
+            <div class="input-group">
+                <h3>Import IOCs</h3>
+                <textarea id="iocText" placeholder="Paste IOC text here (IPs, domains)"></textarea>
+                <button onclick="importIOCsFromText()">Import from Text</button>
+                <input type="file" id="iocFile" accept=".txt">
+                <button onclick="importIOCsFromFile()">Import from File</button>
+            </div>
+        </div>
         <div id="footer">
             © Xservus Limited - v0.1
         </div>
@@ -452,6 +474,7 @@
             ipv4: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/,
             ipv6: /^([0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}$/
         };
+        const domainRegex = /^(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,}$/;
 
         let container = document.getElementById('myNetwork');
         let data = { nodes: nodes, edges: edges };
@@ -609,7 +632,6 @@
                 console.error(`Error enriching IP ${ip}: ${error.message}`);
                 alert(`Error enriching IP ${ip}: ${error.message}`);
             }
-            hideContextMenu();
         }
 
         async function enrichShodan(ip, ipNodeId) {
@@ -665,7 +687,96 @@
                 console.error(`Error enriching IP ${ip} with Shodan: ${error.message}`);
                 alert(`Error enriching IP ${ip} with Shodan: ${error.message}`);
             }
-            hideContextMenu();
+        }
+
+        async function enrichAllIpinfo() {
+            if (!ipinfoApiKey) {
+                alert('Please set your IPinfo API key in the "API Keys" tab first.');
+                return;
+            }
+            const ipNodes = nodes.get({ filter: n => n.type === 'ip' });
+            for (const node of ipNodes) {
+                await enrichIP(node.ip, node.id);
+            }
+            network.fit();
+        }
+
+        async function enrichAllShodan() {
+            if (!shodanApiKey) {
+                alert('Please set your Shodan API key in the "API Keys" tab first.');
+                return;
+            }
+            const ipNodes = nodes.get({ filter: n => n.type === 'ip' });
+            for (const node of ipNodes) {
+                await enrichShodan(node.ip, node.id);
+            }
+            network.fit();
+        }
+
+        function importIOCsFromText() {
+            const text = document.getElementById('iocText').value.trim();
+            if (!text) {
+                alert('Please enter some text containing IOCs');
+                return;
+            }
+            processIOCs(text);
+            document.getElementById('iocText').value = '';
+        }
+
+        function importIOCsFromFile() {
+            const fileInput = document.getElementById('iocFile');
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('Please select a text file containing IOCs');
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                processIOCs(event.target.result);
+                fileInput.value = '';
+            };
+            reader.readAsText(file);
+        }
+
+        function processIOCs(text) {
+            // Extract IPs
+            const ipMatches = text.match(/(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)|(?:[0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}/g) || [];
+            ipMatches.forEach(ip => {
+                if ((ipRegex.ipv4.test(ip) || ipRegex.ipv6.test(ip)) && 
+                    !nodes.get({ filter: n => n.type === 'ip' && n.ip === ip }).length) {
+                    nodes.add({
+                        id: nextId++,
+                        type: 'ip',
+                        label: ip,
+                        title: `IP Address: ${ip}`,
+                        color: { background: '#f87171' },
+                        ip: ip,
+                        size: 20
+                    });
+                }
+            });
+
+            // Extract domains
+            const domainMatches = text.match(/(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,}/g) || [];
+            domainMatches.forEach(domain => {
+                if (domainRegex.test(domain) && 
+                    !nodes.get({ filter: n => n.type === 'domain' && n.domain === domain }).length) {
+                    nodes.add({
+                        id: nextId++,
+                        type: 'domain',
+                        label: domain,
+                        title: `Domain: ${domain}`,
+                        color: { background: '#60a5fa' },
+                        domain: domain,
+                        size: 20
+                    });
+                }
+            });
+
+            updateNodeSizes();
+            updateSelectOptions();
+            updateEdgeSelectOptions();
+            network.fit();
         }
 
         function saveIpinfoApiKey() {
