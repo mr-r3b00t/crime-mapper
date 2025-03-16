@@ -24,18 +24,37 @@
     z-index: 1000;
 }
 
+/* Controls container */
+#controls {
+    transition: width var(--transition);
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100vh;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto; /* Allow scrolling if content overflows */
+}
+
 #controls.collapsed {
-    width: 50px; /* Collapsed width just showing the menu button */
+    width: 50px;
 }
 
 #controls:not(.collapsed) {
-    width: 300px; /* Expanded width */
+    width: 300px;
 }
 
+/* Header area for buttons */
+#controls-header {
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px; /* Space between buttons */
+}
+
+/* Menu toggle button */
 #menu-toggle {
-    position: absolute;
-    top: 10px;
-    left: 10px;
     width: 30px;
     height: 30px;
     font-size: 18px;
@@ -50,6 +69,60 @@
     cursor: pointer;
 }
 
+/* Top buttons - no absolute positioning */
+#mode-toggle, #pause-toggle, #reset-layout {
+    padding: 6px 12px;
+    background-color: #6b7280;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background-color var(--transition);
+}
+
+.light-mode #pause-toggle, .light-mode #reset-layout {
+    background-color: #6b7280;
+}
+
+.dark-mode #pause-toggle, .dark-mode #reset-layout {
+    background-color: #9ca3af;
+}
+
+#pause-toggle.paused {
+    background-color: #ef4444;
+}
+
+/* Hide buttons when collapsed, except menu toggle */
+#controls.collapsed #mode-toggle,
+#controls.collapsed #pause-toggle,
+#controls.collapsed #reset-layout,
+#controls.collapsed .tab-buttons,
+#controls.collapsed .tab-content,
+#controls.collapsed #footer {
+    display: none;
+}
+
+/* Tab buttons and content */
+.tab-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--border-light);
+    transition: border-color var(--transition);
+    margin-top: 10px; /* Small margin after header */
+}
+
+.tab-content {
+    padding: 15px;
+    display: none;
+    flex-grow: 1;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* Network margin */
 #myNetwork {
     transition: margin-left var(--transition);
 }
@@ -61,6 +134,24 @@
 #controls:not(.collapsed) ~ #myNetwork {
     margin-left: 300px;
 }
+
+/* Media query for mobile */
+@media (max-width: 768px) {
+    #controls:not(.collapsed) {
+        width: 100%;
+    }
+    
+    #controls:not(.collapsed) ~ #myNetwork {
+        margin-left: 0;
+        display: none;
+    }
+    
+    #controls.collapsed ~ #myNetwork {
+        margin-left: 50px;
+        display: block;
+    }
+}
+
 
 /* Hide content when collapsed except for toggle button */
 #controls.collapsed > *:not(#menu-toggle) {
