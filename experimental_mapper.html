@@ -15,9 +15,87 @@
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; display: flex; height: 100vh; font-size: 12px; transition: background-color var(--transition), color var(--transition); }
         body.light-mode { background-color: #f0f2f5; color: #1f2a44; }
         body.dark-mode { background-color: #1e293b; color: #e2e8f0; }
-        #controls { width: 300px; border-radius: 8px 0 0 8px; box-shadow: var(--shadow-light); overflow-y: auto; flex-shrink: 0; transition: background-color var(--transition); position: relative; display: flex; flex-direction: column; }
-        .light-mode #controls { background-color: #fff; }
-        .dark-mode #controls { background-color: #2d3748; box-shadow: var(--shadow-dark); }
+        #controls {
+    transition: width var(--transition);
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100vh;
+    z-index: 1000;
+}
+
+#controls.collapsed {
+    width: 50px; /* Collapsed width just showing the menu button */
+}
+
+#controls:not(.collapsed) {
+    width: 300px; /* Expanded width */
+}
+
+#menu-toggle {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    width: 30px;
+    height: 30px;
+    font-size: 18px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #6b7280;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+#myNetwork {
+    transition: margin-left var(--transition);
+}
+
+#controls.collapsed ~ #myNetwork {
+    margin-left: 50px;
+}
+
+#controls:not(.collapsed) ~ #myNetwork {
+    margin-left: 300px;
+}
+
+/* Hide content when collapsed except for toggle button */
+#controls.collapsed > *:not(#menu-toggle) {
+    display: none;
+}
+
+/* Adjust button positions when expanded */
+#controls:not(.collapsed) #mode-toggle {
+    top: 50px;
+}
+
+#controls:not(.collapsed) #pause-toggle {
+    top: 80px;
+}
+
+#controls:not(.collapsed) #reset-layout {
+    top: 110px;
+}
+
+/* Media query for mobile */
+@media (max-width: 768px) {
+    #controls:not(.collapsed) {
+        width: 100%;
+    }
+    
+    #controls:not(.collapsed) ~ #myNetwork {
+        margin-left: 0;
+        display: none; /* Hide graph when menu is expanded on mobile */
+    }
+    
+    #controls.collapsed ~ #myNetwork {
+        margin-left: 50px;
+        display: block;
+    }
+}
         #myNetwork { flex-grow: 1; height: 100%; border-radius: 0 8px 8px 0; box-shadow: var(--shadow-light); transition: background-color var(--transition); }
         .light-mode #myNetwork { background-color: #fff; }
         .dark-mode #myNetwork { background-color: #334155; box-shadow: var(--shadow-dark); }
@@ -80,7 +158,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastify-js/1.12.0/toastify.min.css">
 </head>
 <body class="dark-mode">
-    <div id="controls">
+    <div id="controls" class="collapsed">
+        <button id="menu-toggle" onclick="toggleMenu()">☰</button>
         <button id="mode-toggle" onclick="toggleMode()">Switch to Light Mode</button>
         <button id="pause-toggle" onclick="togglePhysics()">Pause Physics</button>
         <button id="reset-layout" onclick="resetLayout()">Reset Layout</button>
@@ -294,6 +373,44 @@
         const ipRegex = { ipv4: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/, ipv6: /^([0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}$/ };
         const domainRegex = /^(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,}$/;
 
+        function toggleMenu() {
+    const controls = document.getElementById('controls');
+    controls.classList.toggle('collapsed');
+    
+    // Adjust network canvas size after animation
+    setTimeout(() => {
+        network.fit({
+            animation: {
+                duration: 300,
+                easingFunction: 'easeInOutQuad'
+            }
+        });
+    }, 300); // Match this timing with your --transition variable
+}
+
+// Modify the existing window.onload to start collapsed on mobile
+window.onload = function() {
+    const storedIpinfoKey = localStorage.getItem('ipinfoApiKey');
+    if (storedIpinfoKey) { 
+        ipinfoApiKey = storedIpinfoKey; 
+        document.getElementById('ipinfoApiKey').value = storedIpinfoKey; 
+        document.getElementById('storeIpinfoKey').checked = true; 
+    }
+    const storedShodanKey = localStorage.getItem('shodanApiKey');
+    if (storedShodanKey) { 
+        shodanApiKey = storedShodanKey; 
+        document.getElementById('shodanApiKey').value = storedShodanKey; 
+        document.getElementById('storeShodanKey').checked = true; 
+    }
+    updateTheme();
+    updateSelectOptions();
+    ensureInteractionSettings();
+    
+    // Start collapsed on mobile
+    if (window.innerWidth <= 768) {
+        document.getElementById('controls').classList.add('collapsed');
+    }
+};
         function showToast(message, type = 'info') {
             const toastOptions = {
                 text: message,
@@ -427,12 +544,11 @@ function stabilizeNetwork() {
                     iterations: 200,
                     updateInterval: 50
                 },
-                // Add constraints to keep nodes in view
                 barnesHut: {
                     gravitationalConstant: -8000,
-                    centralGravity: 0.3,  // Increase to pull nodes toward center
-                    springLength: 150,    // Reduce to keep nodes closer
-                    avoidOverlap: 1.0     // Increase to prevent overlap
+                    centralGravity: 0.3,
+                    springLength: 150,
+                    avoidOverlap: 1.0
                 }
             }
         });
@@ -450,34 +566,37 @@ function stabilizeNetwork() {
                         springLength: 150,
                         avoidOverlap: 1.0
                     },
-                    // Add bounds to prevent off-screen movement
                     minVelocity: 0.1,
-                    maxVelocity: 25  // Reduce max velocity
+                    maxVelocity: 25
                 }
             });
-            
-            // Fit the view to all nodes
+
+            // Fit the view to all nodes first to ensure bounding box is valid
             network.fit({
                 animation: {
                     duration: 500,
                     easingFunction: 'easeInOutQuad'
                 }
             });
-            
-            // Force nodes to stay within bounds
-            nodes.forEach(node => {
-                const { x, y } = network.getPositions([node.id])[node.id];
+
+            // Wait for the fit animation to complete before adjusting positions
+            setTimeout(() => {
                 const boundingBox = network.getBoundingBox();
-                const margin = 50;
-                
-                nodes.update({
-                    id: node.id,
-                    x: Math.max(boundingBox.left + margin, Math.min(boundingBox.right - margin, x)),
-                    y: Math.max(boundingBox.top + margin, Math.min(boundingBox.bottom - margin, y))
-                });
-            });
-            
-            setTimeout(resolve, 100);
+                if (boundingBox && nodes.length > 0) {
+                    const margin = 50;
+                    nodes.forEach(node => {
+                        const { x, y } = network.getPositions([node.id])[node.id] || { x: 0, y: 0 };
+                        nodes.update({
+                            id: node.id,
+                            x: Math.max(boundingBox.left + margin, Math.min(boundingBox.right - margin, x)),
+                            y: Math.max(boundingBox.top + margin, Math.min(boundingBox.bottom - margin, y))
+                        });
+                    });
+                } else {
+                    console.warn('Bounding box unavailable or no nodes present, skipping position constraints');
+                }
+                resolve();
+            }, 550); // Slightly longer than the fit animation duration
         });
     });
 }
@@ -651,30 +770,80 @@ function showContextMenu(x, y, value, nodeId, type) {
         });
 
         async function enrichAllIpinfo() {
-            if (!ipinfoApiKey) { showToast('Please set your IPinfo API key in the "API Keys" tab first.', 'error'); return; }
-            network.setOptions({ physics: { enabled: false } });
-            const ipNodes = nodes.get({ filter: n => n.type === 'ip' });
-            for (const node of ipNodes) await throttledEnrichIP(node.ip, node.id, true);
-            await stabilizeNetwork();
-            showToast('Bulk IPinfo enrichment completed', 'success');
+    if (!ipinfoApiKey) { 
+        showToast('Please set your IPinfo API key in the "API Keys" tab first.', 'error'); 
+        return; 
+    }
+    
+    network.setOptions({ physics: { enabled: false } });
+    const ipNodes = nodes.get({ filter: n => n.type === 'ip' && n.ip });
+    let successfulEnrichments = 0;
+    
+    console.log(`Found ${ipNodes.length} IP nodes to enrich`); // Debug log
+    
+    for (const node of ipNodes) {
+        try {
+            console.log(`Enriching IP: ${node.ip}`); // Debug log
+            await throttledEnrichIP(node.ip, node.id, true);
+            successfulEnrichments++;
+        } catch (error) {
+            console.error(`Failed to enrich IP ${node.ip}: ${error.message}`);
+            showToast(`Failed to enrich IP ${node.ip}: ${error.message}`, 'error');
         }
+    }
+    
+    await stabilizeNetwork();
+    showToast(`IPinfo enrichment completed: ${successfulEnrichments}/${ipNodes.length} IPs enriched`, 'success');
+}
 
-        async function enrichAllShodan() {
-            if (!shodanApiKey) { showToast('Please set your Shodan API key in the "API Keys" tab first.', 'error'); return; }
-            network.setOptions({ physics: { enabled: false } });
-            const ipNodes = nodes.get({ filter: n => n.type === 'ip' });
-            for (const node of ipNodes) await throttledEnrichShodan(node.ip, node.id, true);
-            await stabilizeNetwork();
-            showToast('Bulk Shodan enrichment completed', 'success');
+async function enrichAllShodan() {
+    if (!shodanApiKey) { 
+        showToast('Please set your Shodan API key in the "API Keys" tab first.', 'error'); 
+        return; 
+    }
+    
+    network.setOptions({ physics: { enabled: false } });
+    const ipNodes = nodes.get({ filter: n => n.type === 'ip' && n.ip });
+    let successfulEnrichments = 0;
+    
+    console.log(`Found ${ipNodes.length} IP nodes to enrich`); // Debug log
+    
+    for (const node of ipNodes) {
+        try {
+            console.log(`Enriching IP: ${node.ip}`); // Debug log
+            await throttledEnrichShodan(node.ip, node.id, true);
+            successfulEnrichments++;
+        } catch (error) {
+            console.error(`Failed to enrich IP ${node.ip}: ${error.message}`);
+            showToast(`Failed to enrich IP ${node.ip}: ${error.message}`, 'error');
         }
+    }
+    
+    await stabilizeNetwork();
+    showToast(`Shodan enrichment completed: ${successfulEnrichments}/${ipNodes.length} IPs enriched`, 'success');
+}
 
-        async function enrichAllGoogleDNS() {
-            network.setOptions({ physics: { enabled: false } });
-            const domainNodes = nodes.get({ filter: n => n.type === 'domain' });
-            for (const node of domainNodes) await throttledEnrichGoogleDNS(node.domain, node.id, true);
-            await stabilizeNetwork();
-            showToast('Bulk Google DNS enrichment completed', 'success');
+async function enrichAllGoogleDNS() {
+    network.setOptions({ physics: { enabled: false } });
+    const domainNodes = nodes.get({ filter: n => n.type === 'domain' && n.domain });
+    let successfulEnrichments = 0;
+    
+    console.log(`Found ${domainNodes.length} domain nodes to enrich`); // Debug log
+    
+    for (const node of domainNodes) {
+        try {
+            console.log(`Enriching domain: ${node.domain}`); // Debug log
+            await throttledEnrichGoogleDNS(node.domain, node.id, true);
+            successfulEnrichments++;
+        } catch (error) {
+            console.error(`Failed to enrich domain ${node.domain}: ${error.message}`);
+            showToast(`Failed to enrich domain ${node.domain}: ${error.message}`, 'error');
         }
+    }
+    
+    await stabilizeNetwork();
+    showToast(`Google DNS enrichment completed: ${successfulEnrichments}/${domainNodes.length} domains enriched`, 'success');
+}
 
         function importIOCsFromText() {
             const text = document.getElementById('iocText').value.trim();
