@@ -5,18 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Network Graph</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; display: flex; height: 100vh; font-size: 12px; transition: background-color 0.3s, color 0.3s; }
+        :root {
+            --transition: 0.3s;
+            --shadow-light: 0 2px 10px rgba(0, 0, 0, 0.1);
+            --shadow-dark: 0 2px 10px rgba(0, 0, 0, 0.3);
+            --border-light: #d1d5db;
+            --border-dark: #4b5563;
+        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; display: flex; height: 100vh; font-size: 12px; transition: background-color var(--transition), color var(--transition); }
         body.light-mode { background-color: #f0f2f5; color: #1f2a44; }
         body.dark-mode { background-color: #1e293b; color: #e2e8f0; }
-        #controls { width: 300px; border-radius: 8px 0 0 8px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); overflow-y: auto; flex-shrink: 0; transition: background-color 0.3s; position: relative; display: flex; flex-direction: column; }
+        #controls { width: 300px; border-radius: 8px 0 0 8px; box-shadow: var(--shadow-light); overflow-y: auto; flex-shrink: 0; transition: background-color var(--transition); position: relative; display: flex; flex-direction: column; }
         .light-mode #controls { background-color: #fff; }
-        .dark-mode #controls { background-color: #2d3748; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3); }
-        #myNetwork { flex-grow: 1; height: 100%; border-radius: 0 8px 8px 0; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); transition: background-color 0.3s; }
+        .dark-mode #controls { background-color: #2d3748; box-shadow: var(--shadow-dark); }
+        #myNetwork { flex-grow: 1; height: 100%; border-radius: 0 8px 8px 0; box-shadow: var(--shadow-light); transition: background-color var(--transition); }
         .light-mode #myNetwork { background-color: #fff; }
-        .dark-mode #myNetwork { background-color: #334155; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3); }
-        .tab-buttons { display: flex; flex-wrap: wrap; border-bottom: 1px solid #d1d5db; transition: border-color 0.3s; padding-top: 100px; }
-        .dark-mode .tab-buttons { border-bottom: 1px solid #4b5563; }
-        .tab-button { flex: 1 0 14.28%; padding: 10px; text-align: center; border: none; cursor: pointer; transition: background-color 0.3s, color 0.3s; font-size: 10px; }
+        .dark-mode #myNetwork { background-color: #334155; box-shadow: var(--shadow-dark); }
+        .tab-buttons { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--border-light); transition: border-color var(--transition); padding-top: 100px; }
+        .dark-mode .tab-buttons { border-bottom: 1px solid var(--border-dark); }
+        .tab-button { flex: 1 0 14.28%; padding: 10px; text-align: center; border: none; cursor: pointer; transition: background-color var(--transition), color var(--transition); font-size: 10px; }
         .light-mode .tab-button { background-color: #f9fafb; color: #1f2a44; }
         .dark-mode .tab-button { background-color: #374151; color: #e2e8f0; }
         .tab-button.active { font-weight: bold; }
@@ -26,40 +33,42 @@
         .dark-mode .tab-button:hover:not(.active) { background-color: #4b5563; }
         .tab-content { padding: 15px; display: none; flex-grow: 1; }
         .tab-content.active { display: block; }
-        .input-group { margin: 15px 0; padding: 10px; border-radius: 6px; transition: background-color 0.3s; }
+        .input-group { margin: 15px 0; padding: 10px; border-radius: 6px; transition: background-color var(--transition); }
         .light-mode .input-group { background-color: #f9fafb; }
         .dark-mode .input-group { background-color: #374151; }
         .input-group h3 { margin: 0 0 8px 0; font-size: 14px; }
         .light-mode .input-group h3 { color: #1f2a44; }
         .dark-mode .input-group h3 { color: #e2e8f0; }
-        input, select, textarea { margin: 4px 0; padding: 6px 10px; border-radius: 4px; font-size: 12px; transition: border-color 0.3s, background-color 0.3s, color 0.3s; width: 100%; box-sizing: border-box; }
-        .light-mode input, .light-mode select, .light-mode textarea { border: 1px solid #d1d5db; background-color: #fff; color: #1f2a44; }
-        .dark-mode input, .dark-mode select, .dark-mode textarea { border: 1px solid #4b5563; background-color: #4b5563; color: #e2e8f0; }
+        input, select, textarea { margin: 4px 0; padding: 6px 10px; border-radius: 4px; font-size: 12px; transition: border-color var(--transition), background-color var(--transition), color var(--transition); width: 100%; box-sizing: border-box; }
+        .light-mode input, .light-mode select, .light-mode textarea { border: 1px solid var(--border-light); background-color: #fff; color: #1f2a44; }
+        .dark-mode input, .dark-mode select, .dark-mode textarea { border: 1px solid var(--border-dark); background-color: #4b5563; color: #e2e8f0; }
         textarea { height: 100px; resize: vertical; }
-        button { padding: 6px 12px; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; transition: background-color 0.3s, color 0.3s; width: 100%; margin: 4px 0; }
+        button { padding: 6px 12px; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; transition: background-color var(--transition), color var(--transition); width: 100%; margin: 4px 0; }
         .light-mode button { background-color: #3b82f6; color: white; }
         .dark-mode button { background-color: #60a5fa; color: #1e293b; }
         #mode-toggle { position: absolute; top: 10px; right: 10px; padding: 6px 12px; background-color: #6b7280; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; }
-        #pause-toggle { position: absolute; top: 40px; right: 10px; padding: 6px 12px; background-color: #6b7280; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; transition: background-color 0.3s; }
+        #pause-toggle { position: absolute; top: 40px; right: 10px; padding: 6px 12px; background-color: #6b7280; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; transition: background-color var(--transition); }
         .light-mode #pause-toggle { background-color: #6b7280; }
         .dark-mode #pause-toggle { background-color: #9ca3af; }
         #pause-toggle.paused { background-color: #ef4444; }
-        #reset-layout { position: absolute; top: 70px; right: 10px; padding: 6px 12px; background-color: #6b7280; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; transition: background-color 0.3s; }
+        #reset-layout { position: absolute; top: 70px; right: 10px; padding: 6px 12px; background-color: #6b7280; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; transition: background-color var(--transition); }
         .light-mode #reset-layout { background-color: #6b7280; }
         .dark-mode #reset-layout { background-color: #9ca3af; }
-        #footer { text-align: center; padding: 10px; font-size: 10px; margin-top: auto; transition: color 0.3s; }
+        #footer { text-align: center; padding: 10px; font-size: 10px; margin-top: auto; transition: color var(--transition); }
         .light-mode #footer { color: #6b7280; }
         .dark-mode #footer { color: #94a3b8; }
         #contextMenu { position: absolute; background-color: #fff; border: 1px solid #ccc; box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2); z-index: 1000; padding: 5px 0; }
         #contextMenu button { display: block; width: 100%; text-align: left; padding: 5px 10px; background: none; border: none; cursor: pointer; }
         #contextMenu button:hover { background-color: #f0f0f0; }
-        .dark-mode #contextMenu { background-color: #2d3748; border: 1px solid #4b5563; }
+        .dark-mode #contextMenu { background-color: #2d3748; border: 1px solid var(--border-dark); }
         .dark-mode #contextMenu button { color: #e2e8f0; }
         .dark-mode #contextMenu button:hover { background-color: #4b5563; }
         .checkbox-label { display: flex; align-items: center; margin: 4px 0; font-size: 12px; }
         .light-mode .checkbox-label { color: #1f2a44; }
         .dark-mode .checkbox-label { color: #e2e8f0; }
         input[type="checkbox"] { margin-right: 8px; width: auto; }
+        #notification { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background-color: rgba(0, 0, 0, 0.8); color: white; padding: 10px 20px; border-radius: 4px; z-index: 1000; opacity: 0; transition: opacity 0.5s ease-in-out; }
+        #notification.visible { opacity: 1; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/dist/vis-network.min.js"></script>
 </head>
@@ -250,6 +259,7 @@
     </div>
     <div id="myNetwork"></div>
     <div id="contextMenu" style="display: none;"></div>
+    <div id="notification"></div>
 
     <script>
         let nodes = new vis.DataSet([]);
@@ -264,6 +274,15 @@
 
         const ipRegex = { ipv4: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/, ipv6: /^([0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}$/ };
         const domainRegex = /^(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,}$/;
+
+        function showNotification(message) {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.classList.add('visible');
+            setTimeout(() => {
+                notification.classList.remove('visible');
+            }, 6500); // Changed from 3000 to 6500 milliseconds (6.5 seconds)
+        }
 
         function throttleRequest(fn) {
             return async function(...args) {
@@ -317,7 +336,7 @@
         }
 
         const throttledEnrichIP = throttleRequest(async function enrichIP(ip, ipNodeId, isBulk = false) {
-            if (!ipinfoApiKey) { alert('Please set your IPinfo API key in the "API Keys" tab first.'); return; }
+            if (!ipinfoApiKey) { showNotification('Please set your IPinfo API key in the "API Keys" tab first.'); return; }
             try {
                 const response = await fetch(`https://ipinfo.io/${ip}/json?token=${ipinfoApiKey}`);
                 if (!response.ok) throw new Error('Failed to fetch IP info');
@@ -363,15 +382,19 @@
                 updateNodeSizes();
                 updateSelectOptions();
                 updateEdgeSelectOptions();
-                network.fit();
-                if (!isBulk) alert(`IP ${ip} enrichment completed using IPinfo`);
+                resetLayout(); // Reset layout after enrichment
+                if (!isPhysicsPaused) togglePhysics(); // Pause physics if not already paused
+                if (!isBulk) showNotification(`IP ${ip} enrichment completed using IPinfo`);
             } catch (error) {
                 console.error(`Error enriching IP ${ip}: ${error.message}`);
+                showNotification(`Error enriching IP ${ip}: ${error.message}`);
+                resetLayout(); // Reset layout even on error
+                if (!isPhysicsPaused) togglePhysics(); // Pause physics if not already paused
             }
         });
 
         const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ipNodeId, isBulk = false) {
-            if (!shodanApiKey) { alert('Please set your Shodan API key in the "API Keys" tab first.'); return; }
+            if (!shodanApiKey) { showNotification('Please set your Shodan API key in the "API Keys" tab first.'); return; }
             try {
                 const response = await fetch(`https://api.shodan.io/shodan/host/${ip}?key=${shodanApiKey}`);
                 if (!response.ok) throw new Error('Failed to fetch Shodan data');
@@ -390,32 +413,38 @@
                 updateNodeSizes();
                 updateSelectOptions();
                 updateEdgeSelectOptions();
-                network.fit();
-                if (!isBulk) alert(`IP ${ip} enrichment completed using Shodan`);
+                resetLayout(); // Reset layout after enrichment
+                if (!isPhysicsPaused) togglePhysics(); // Pause physics if not already paused
+                if (!isBulk) showNotification(`IP ${ip} enrichment completed using Shodan`);
             } catch (error) {
                 console.error(`Error enriching IP ${ip} with Shodan: ${error.message}`);
+                showNotification(`Error enriching IP ${ip} with Shodan: ${error.message}`);
+                resetLayout(); // Reset layout even on error
+                if (!isPhysicsPaused) togglePhysics(); // Pause physics if not already paused
             }
         });
 
         async function enrichAllIpinfo() {
-            if (!ipinfoApiKey) { alert('Please set your IPinfo API key in the "API Keys" tab first.'); return; }
+            if (!ipinfoApiKey) { showNotification('Please set your IPinfo API key in the "API Keys" tab first.'); return; }
             const ipNodes = nodes.get({ filter: n => n.type === 'ip' });
             for (const node of ipNodes) await throttledEnrichIP(node.ip, node.id, true);
-            network.fit();
-            alert('Bulk IPinfo enrichment completed');
+            resetLayout(); // Reset layout after bulk enrichment
+            if (!isPhysicsPaused) togglePhysics(); // Pause physics if not already paused
+            showNotification('Bulk IPinfo enrichment completed');
         }
 
         async function enrichAllShodan() {
-            if (!shodanApiKey) { alert('Please set your Shodan API key in the "API Keys" tab first.'); return; }
+            if (!shodanApiKey) { showNotification('Please set your Shodan API key in the "API Keys" tab first.'); return; }
             const ipNodes = nodes.get({ filter: n => n.type === 'ip' });
             for (const node of ipNodes) await throttledEnrichShodan(node.ip, node.id, true);
-            network.fit();
-            alert('Bulk Shodan enrichment completed');
+            resetLayout(); // Reset layout after bulk enrichment
+            if (!isPhysicsPaused) togglePhysics(); // Pause physics if not already paused
+            showNotification('Bulk Shodan enrichment completed');
         }
 
         function importIOCsFromText() {
             const text = document.getElementById('iocText').value.trim();
-            if (!text) { alert('Please enter some text containing IOCs'); return; }
+            if (!text) { showNotification('Please enter some text containing IOCs'); return; }
             processIOCs(text);
             document.getElementById('iocText').value = '';
         }
@@ -423,7 +452,7 @@
         function importIOCsFromFile() {
             const fileInput = document.getElementById('iocFile');
             const file = fileInput.files[0];
-            if (!file) { alert('Please select a text file containing IOCs'); return; }
+            if (!file) { showNotification('Please select a text file containing IOCs'); return; }
             const reader = new FileReader();
             reader.onload = function(event) { processIOCs(event.target.result); fileInput.value = ''; };
             reader.readAsText(file);
@@ -453,10 +482,10 @@
             const storeKey = document.getElementById('storeIpinfoKey').checked;
             if (ipinfoApiKey) {
                 if (storeKey) localStorage.setItem('ipinfoApiKey', ipinfoApiKey); else localStorage.removeItem('ipinfoApiKey');
-                alert('IPinfo API key saved successfully!');
+                showNotification('IPinfo API key saved successfully!');
             } else {
                 localStorage.removeItem('ipinfoApiKey');
-                alert('Please enter a valid IPinfo API key.');
+                showNotification('Please enter a valid IPinfo API key.');
             }
         }
 
@@ -465,10 +494,10 @@
             const storeKey = document.getElementById('storeShodanKey').checked;
             if (shodanApiKey) {
                 if (storeKey) localStorage.setItem('shodanApiKey', shodanApiKey); else localStorage.removeItem('shodanApiKey');
-                alert('Shodan API key saved successfully!');
+                showNotification('Shodan API key saved successfully!');
             } else {
                 localStorage.removeItem('shodanApiKey');
-                alert('Please enter a valid Shodan API key.');
+                showNotification('Please enter a valid Shodan API key.');
             }
         }
 
@@ -500,7 +529,7 @@
             options.physics.enabled = !isPhysicsPaused;
             network.setOptions(options);
             pauseButton.textContent = isPhysicsPaused ? 'Resume Physics' : 'Pause Physics';
-            if (isPhysicsPaused) pauseButton.classList.add('paused'); else pauseButton.classList.remove('paused');
+            pauseButton.classList.toggle('paused', isPhysicsPaused);
         }
 
         function resetLayout() {
@@ -571,66 +600,49 @@
             document.getElementById('malwareType').style.display = type === 'malware' ? 'block' : 'none';
         });
 
+        function createNodeData(type, values) {
+            const nodeData = { id: nextId++, size: 20, type };
+            const configs = {
+                contact: { fields: ['name', 'email'], color: '#4ade80', label: v => `${v.name}\n${v.email}`, title: v => `Contact\nName: ${v.name}\nEmail: ${v.email}` },
+                ip: { fields: ['ip'], color: '#f87171', label: v => v.ip, title: v => `IP Address: ${v.ip}`, validate: v => ipRegex.ipv4.test(v.ip) || ipRegex.ipv6.test(v.ip) },
+                domain: { fields: ['domain'], color: '#60a5fa', label: v => v.domain, title: v => `Domain: ${v.domain}` },
+                organization: { fields: ['organization'], color: '#facc15', label: v => v.organization, title: v => `Organization: ${v.organization}` },
+                port: { fields: ['portNumber', 'portType'], color: '#a78bfa', label: v => `${v.portType}/${v.portNumber}`, title: v => `Port\nType: ${v.portType}\nNumber: ${v.portNumber}` },
+                wallet: { fields: ['address'], color: '#fb923c', label: v => v.address, title: v => `Wallet\nAddress: ${v.address}` },
+                bank: { fields: ['accountNumber', 'sortCode'], color: '#10b981', label: v => `${v.accountNumber}\n${v.sortCode}`, title: v => `Bank Account\nAccount Number: ${v.accountNumber}\nSort Code: ${v.sortCode}` },
+                technology: { fields: ['techName', 'techVersion'], color: '#ec4899', label: v => `${v.techName}\n${v.techVersion}`, title: v => `Technology\nName: ${v.techName}\nVersion: ${v.techVersion}` },
+                device: { fields: ['deviceCategory', 'deviceName'], color: '#14b8a6', label: v => `${v.deviceName}\n${v.deviceCategory}`, title: v => `Device\nName: ${v.deviceName}\nCategory: ${v.deviceCategory}` },
+                malware: { fields: ['malwareName', 'malwareType'], color: '#ef4444', label: v => `${v.malwareName}\n${v.malwareType}`, title: v => `Malware\nName: ${v.malwareName}\nType: ${v.malwareType}` }
+            };
+            const config = configs[type];
+            if (!config || config.fields.some(f => !values[f])) { showNotification(`Please enter all required fields for ${type}`); return null; }
+            if (config.validate && !config.validate(values)) { showNotification(`Invalid ${type} format`); return null; }
+            if (nodes.get({ filter: n => n.type === type && config.fields.every(f => n[f] === values[f]) }).length) { showNotification(`${type} exists`); return null; }
+            Object.assign(nodeData, { label: config.label(values), title: config.title(values), color: { background: config.color }, ...values });
+            return nodeData;
+        }
+
         function addNode() {
-            let type = document.getElementById('entityType').value;
-            let nodeData = { id: nextId, size: 20, type: type };
-            if (type === 'contact') {
-                let name = document.getElementById('nameInput').value; let email = document.getElementById('emailInput').value;
-                if (!name || !email) return alert('Please enter both name and email for contacts');
-                if (nodes.get({ filter: n => n.type === 'contact' && n.name === name && n.email === email }).length > 0) return alert('Contact exists');
-                nodeData.label = `${name}\n${email}`; nodeData.title = `Contact\nName: ${name}\nEmail: ${email}`; nodeData.color = { background: '#4ade80' }; nodeData.name = name; nodeData.email = email;
-            } else if (type === 'ip') {
-                let ip = document.getElementById('ipInput').value.trim();
-                if (!ip) return alert('Please enter an IP address');
-                if (!ipRegex.ipv4.test(ip) && !ipRegex.ipv6.test(ip)) return alert('Please enter a valid IPv4 or IPv6 address');
-                if (nodes.get({ filter: n => n.type === 'ip' && n.ip === ip }).length > 0) return alert('IP exists');
-                nodeData.label = ip; nodeData.title = `IP Address: ${ip}`; nodeData.color = { background: '#f87171' }; nodeData.ip = ip;
-            } else if (type === 'domain') {
-                let domain = document.getElementById('domainInput').value;
-                if (!domain) return alert('Please enter a domain');
-                if (nodes.get({ filter: n => n.type === 'domain' && n.domain === domain }).length > 0) return alert('Domain exists');
-                nodeData.label = domain; nodeData.title = `Domain: ${domain}`; nodeData.color = { background: '#60a5fa' }; nodeData.domain = domain;
-            } else if (type === 'organization') {
-                let org = document.getElementById('orgInput').value;
-                if (!org) return alert('Please enter an organization name');
-                if (nodes.get({ filter: n => n.type === 'organization' && n.organization === org }).length > 0) return alert('Organization exists');
-                nodeData.label = org; nodeData.title = `Organization: ${org}`; nodeData.color = { background: '#facc15' }; nodeData.organization = org;
-            } else if (type === 'port') {
-                let portNum = document.getElementById('portNumInput').value; let portType = document.getElementById('portType').value;
-                if (!portNum) return alert('Please enter a port number');
-                if (nodes.get({ filter: n => n.type === 'port' && n.portNumber === portNum && n.portType === portType }).length > 0) return alert('Port exists');
-                nodeData.label = `${portType}/${portNum}`; nodeData.title = `Port\nType: ${portType}\nNumber: ${portNum}`; nodeData.color = { background: '#a78bfa' }; nodeData.portType = portType; nodeData.portNumber = portNum;
-            } else if (type === 'wallet') {
-                let address = document.getElementById('walletAddressInput').value;
-                if (!address) return alert('Please enter a wallet address');
-                if (nodes.get({ filter: n => n.type === 'wallet' && n.address === address }).length > 0) return alert('Wallet exists');
-                nodeData.label = address; nodeData.title = `Wallet\nAddress: ${address}`; nodeData.color = { background: '#fb923c' }; nodeData.address = address;
-            } else if (type === 'bank') {
-                let accountNumber = document.getElementById('accountNumberInput').value; let sortCode = document.getElementById('sortCodeInput').value;
-                if (!accountNumber || !sortCode) return alert('Please enter both account number and sort code');
-                if (nodes.get({ filter: n => n.type === 'bank' && n.accountNumber === accountNumber && n.sortCode === sortCode }).length > 0) return alert('Bank account exists');
-                nodeData.label = `${accountNumber}\n${sortCode}`; nodeData.title = `Bank Account\nAccount Number: ${accountNumber}\nSort Code: ${sortCode}`; nodeData.color = { background: '#10b981' }; nodeData.accountNumber = accountNumber; nodeData.sortCode = sortCode;
-            } else if (type === 'technology') {
-                let techName = document.getElementById('techNameInput').value; let techVersion = document.getElementById('techVersionInput').value;
-                if (!techName || !techVersion) return alert('Please enter both name and version');
-                if (nodes.get({ filter: n => n.type === 'technology' && n.techName === techName && n.techVersion === techVersion }).length > 0) return alert('Technology exists');
-                nodeData.label = `${techName}\n${techVersion}`; nodeData.title = `Technology\nName: ${techName}\nVersion: ${techVersion}`; nodeData.color = { background: '#ec4899' }; nodeData.techName = techName; nodeData.techVersion = techVersion;
-            } else if (type === 'device') {
-                let deviceCategory = document.getElementById('deviceCategory').value; let deviceName = document.getElementById('deviceNameInput').value;
-                if (!deviceCategory || !deviceName) return alert('Please enter both category and name');
-                if (nodes.get({ filter: n => n.type === 'device' && n.deviceCategory === deviceCategory && n.deviceName === deviceName }).length > 0) return alert('Device exists');
-                nodeData.label = `${deviceName}\n${deviceCategory}`; nodeData.title = `Device\nName: ${deviceName}\nCategory: ${deviceCategory}`; nodeData.color = { background: '#14b8a6' }; nodeData.deviceCategory = deviceCategory; nodeData.deviceName = deviceName;
-            } else if (type === 'malware') {
-                let malwareName = document.getElementById('malwareNameInput').value; let malwareType = document.getElementById('malwareType').value;
-                if (!malwareName || !malwareType) return alert('Please enter both malware name and type');
-                if (nodes.get({ filter: n => n.type === 'malware' && n.malwareName === malwareName && n.malwareType === malwareType }).length > 0) return alert('Malware exists');
-                nodeData.label = `${malwareName}\n${malwareType}`; nodeData.title = `Malware\nName: ${malwareName}\nType: ${malwareType}`; nodeData.color = { background: '#ef4444' }; nodeData.malwareName = malwareName; nodeData.malwareType = malwareType;
+            const type = document.getElementById('entityType').value;
+            const inputs = {
+                contact: { name: document.getElementById('nameInput').value, email: document.getElementById('emailInput').value },
+                ip: { ip: document.getElementById('ipInput').value.trim() },
+                domain: { domain: document.getElementById('domainInput').value },
+                organization: { organization: document.getElementById('orgInput').value },
+                port: { portNumber: document.getElementById('portNumInput').value, portType: document.getElementById('portType').value },
+                wallet: { address: document.getElementById('walletAddressInput').value },
+                bank: { accountNumber: document.getElementById('accountNumberInput').value, sortCode: document.getElementById('sortCodeInput').value },
+                technology: { techName: document.getElementById('techNameInput').value, techVersion: document.getElementById('techVersionInput').value },
+                device: { deviceCategory: document.getElementById('deviceCategory').value, deviceName: document.getElementById('deviceNameInput').value },
+                malware: { malwareName: document.getElementById('malwareNameInput').value, malwareType: document.getElementById('malwareType').value }
+            };
+            const nodeData = createNodeData(type, inputs[type]);
+            if (nodeData) {
+                nodes.add(nodeData);
+                updateSelectOptions();
+                clearInputs();
+                network.fit();
             }
-            nodes.add(nodeData);
-            updateSelectOptions();
-            clearInputs();
-            nextId++;
-            network.fit();
         }
 
         function loadNodeData() {
@@ -665,59 +677,59 @@
 
         function saveNodeEdit() {
             let nodeId = document.getElementById('editNode').value;
-            if (!nodeId) return alert('Please select a node to edit');
+            if (!nodeId) return showNotification('Please select a node to edit');
             let node = nodes.get(parseInt(nodeId));
             let updatedData = { id: parseInt(nodeId), type: node.type };
             if (node.type === 'contact') {
                 let name = document.getElementById('editNameInput').value; let email = document.getElementById('editEmailInput').value;
-                if (!name || !email) return alert('Please enter both name and email');
-                if (nodes.get({ filter: n => n.type === 'contact' && n.name === name && n.email === email && n.id !== parseInt(nodeId) }).length > 0) return alert('Contact exists');
+                if (!name || !email) return showNotification('Please enter both name and email');
+                if (nodes.get({ filter: n => n.type === 'contact' && n.name === name && n.email === email && n.id !== parseInt(nodeId) }).length > 0) return showNotification('Contact exists');
                 updatedData.label = `${name}\n${email}`; updatedData.title = `Contact\nName: ${name}\nEmail: ${email}`; updatedData.color = { background: '#4ade80' }; updatedData.name = name; updatedData.email = email;
             } else if (node.type === 'ip') {
                 let ip = document.getElementById('editIpInput').value.trim();
-                if (!ip) return alert('Please enter an IP address');
-                if (!ipRegex.ipv4.test(ip) && !ipRegex.ipv6.test(ip)) return alert('Please enter a valid IPv4 or IPv6 address');
-                if (nodes.get({ filter: n => n.type === 'ip' && n.ip === ip && n.id !== parseInt(nodeId) }).length > 0) return alert('IP exists');
+                if (!ip) return showNotification('Please enter an IP address');
+                if (!ipRegex.ipv4.test(ip) && !ipRegex.ipv6.test(ip)) return showNotification('Please enter a valid IPv4 or IPv6 address');
+                if (nodes.get({ filter: n => n.type === 'ip' && n.ip === ip && n.id !== parseInt(nodeId) }).length > 0) return showNotification('IP exists');
                 updatedData.label = ip; updatedData.title = `IP Address: ${ip}`; updatedData.color = { background: '#f87171' }; updatedData.ip = ip;
             } else if (node.type === 'domain') {
                 let domain = document.getElementById('editDomainInput').value;
-                if (!domain) return alert('Please enter a domain');
-                if (nodes.get({ filter: n => n.type === 'domain' && n.domain === domain && n.id !== parseInt(nodeId) }).length > 0) return alert('Domain exists');
+                if (!domain) return showNotification('Please enter a domain');
+                if (nodes.get({ filter: n => n.type === 'domain' && n.domain === domain && n.id !== parseInt(nodeId) }).length > 0) return showNotification('Domain exists');
                 updatedData.label = domain; updatedData.title = `Domain: ${domain}`; updatedData.color = { background: '#60a5fa' }; updatedData.domain = domain;
             } else if (node.type === 'organization') {
                 let org = document.getElementById('editOrgInput').value;
-                if (!org) return alert('Please enter an organization name');
-                if (nodes.get({ filter: n => n.type === 'organization' && n.organization === org && n.id !== parseInt(nodeId) }).length > 0) return alert('Organization exists');
+                if (!org) return showNotification('Please enter an organization name');
+                if (nodes.get({ filter: n => n.type === 'organization' && n.organization === org && n.id !== parseInt(nodeId) }).length > 0) return showNotification('Organization exists');
                 updatedData.label = org; updatedData.title = `Organization: ${org}`; updatedData.color = { background: '#facc15' }; updatedData.organization = org;
             } else if (node.type === 'port') {
                 let portNum = document.getElementById('editPortNumInput').value; let portType = document.getElementById('editPortType').value;
-                if (!portNum) return alert('Please enter a port number');
-                if (nodes.get({ filter: n => n.type === 'port' && n.portNumber === portNum && n.portType === portType && n.id !== parseInt(nodeId) }).length > 0) return alert('Port exists');
+                if (!portNum) return showNotification('Please enter a port number');
+                if (nodes.get({ filter: n => n.type === 'port' && n.portNumber === portNum && n.portType === portType && n.id !== parseInt(nodeId) }).length > 0) return showNotification('Port exists');
                 updatedData.label = `${portType}/${portNum}`; updatedData.title = `Port\nType: ${portType}\nNumber: ${portNum}`; updatedData.color = { background: '#a78bfa' }; updatedData.portType = portType; updatedData.portNumber = portNum;
             } else if (node.type === 'wallet') {
                 let address = document.getElementById('editWalletAddressInput').value;
-                if (!address) return alert('Please enter a wallet address');
-                if (nodes.get({ filter: n => n.type === 'wallet' && n.address === address && n.id !== parseInt(nodeId) }).length > 0) return alert('Wallet exists');
+                if (!address) return showNotification('Please enter a wallet address');
+                if (nodes.get({ filter: n => n.type === 'wallet' && n.address === address && n.id !== parseInt(nodeId) }).length > 0) return showNotification('Wallet exists');
                 updatedData.label = address; updatedData.title = `Wallet\nAddress: ${address}`; updatedData.color = { background: '#fb923c' }; updatedData.address = address;
             } else if (node.type === 'bank') {
                 let accountNumber = document.getElementById('editAccountNumberInput').value; let sortCode = document.getElementById('editSortCodeInput').value;
-                if (!accountNumber || !sortCode) return alert('Please enter both account number and sort code');
-                if (nodes.get({ filter: n => n.type === 'bank' && n.accountNumber === accountNumber && n.sortCode === sortCode && n.id !== parseInt(nodeId) }).length > 0) return alert('Bank account exists');
+                if (!accountNumber || !sortCode) return showNotification('Please enter both account number and sort code');
+                if (nodes.get({ filter: n => n.type === 'bank' && n.accountNumber === accountNumber && n.sortCode === sortCode && n.id !== parseInt(nodeId) }).length > 0) return showNotification('Bank account exists');
                 updatedData.label = `${accountNumber}\n${sortCode}`; updatedData.title = `Bank Account\nAccount Number: ${accountNumber}\nSort Code: ${sortCode}`; updatedData.color = { background: '#10b981' }; updatedData.accountNumber = accountNumber; updatedData.sortCode = sortCode;
             } else if (node.type === 'technology') {
                 let techName = document.getElementById('editTechNameInput').value; let techVersion = document.getElementById('editTechVersionInput').value;
-                if (!techName || !techVersion) return alert('Please enter both name and version');
-                if (nodes.get({ filter: n => n.type === 'technology' && n.techName === techName && n.techVersion === techVersion && n.id !== parseInt(nodeId) }).length > 0) return alert('Technology exists');
+                if (!techName || !techVersion) return showNotification('Please enter both name and version');
+                if (nodes.get({ filter: n => n.type === 'technology' && n.techName === techName && n.techVersion === techVersion && n.id !== parseInt(nodeId) }).length > 0) return showNotification('Technology exists');
                 updatedData.label = `${techName}\n${techVersion}`; updatedData.title = `Technology\nName: ${techName}\nVersion: ${techVersion}`; updatedData.color = { background: '#ec4899' }; updatedData.techName = techName; updatedData.techVersion = techVersion;
             } else if (node.type === 'device') {
                 let deviceCategory = document.getElementById('editDeviceCategory').value; let deviceName = document.getElementById('editDeviceNameInput').value;
-                if (!deviceCategory || !deviceName) return alert('Please enter both category and name');
-                if (nodes.get({ filter: n => n.type === 'device' && n.deviceCategory === deviceCategory && n.deviceName === deviceName && n.id !== parseInt(nodeId) }).length > 0) return alert('Device exists');
+                if (!deviceCategory || !deviceName) return showNotification('Please enter both category and name');
+                if (nodes.get({ filter: n => n.type === 'device' && n.deviceCategory === deviceCategory && n.deviceName === deviceName && n.id !== parseInt(nodeId) }).length > 0) return showNotification('Device exists');
                 updatedData.label = `${deviceName}\n${deviceCategory}`; updatedData.title = `Device\nName: ${deviceName}\nCategory: ${deviceCategory}`; updatedData.color = { background: '#14b8a6' }; updatedData.deviceCategory = deviceCategory; updatedData.deviceName = deviceName;
             } else if (node.type === 'malware') {
                 let malwareName = document.getElementById('editMalwareNameInput').value; let malwareType = document.getElementById('editMalwareType').value;
-                if (!malwareName || !malwareType) return alert('Please enter both malware name and type');
-                if (nodes.get({ filter: n => n.type === 'malware' && n.malwareName === malwareName && n.malwareType === malwareType && n.id !== parseInt(nodeId) }).length > 0) return alert('Malware exists');
+                if (!malwareName || !malwareType) return showNotification('Please enter both malware name and type');
+                if (nodes.get({ filter: n => n.type === 'malware' && n.malwareName === malwareName && n.malwareType === malwareType && n.id !== parseInt(nodeId) }).length > 0) return showNotification('Malware exists');
                 updatedData.label = `${malwareName}\n${malwareType}`; updatedData.title = `Malware\nName: ${malwareName}\nType: ${malwareType}`; updatedData.color = { background: '#ef4444' }; updatedData.malwareName = malwareName; updatedData.malwareType = malwareType;
             }
             nodes.update(updatedData);
@@ -736,14 +748,14 @@
 
         function addEdge() {
             let from = document.getElementById('fromNode').value; let to = document.getElementById('toNode').value; let label = document.getElementById('edgeLabel').value;
-            if (!from || !to || from === to) return alert('Please select different nodes');
+            if (!from || !to || from === to) return showNotification('Please select different nodes');
             edges.add({ id: `edge_${from}_${to}_${Date.now()}`, from: parseInt(from), to: parseInt(to), label: label || undefined });
             updateNodeSizes(); updateEdgeSelectOptions(); document.getElementById('edgeLabel').value = ''; network.fit();
         }
 
         function removeNode() {
             let nodeId = document.getElementById('removeNode').value;
-            if (!nodeId) return alert('Please select a node');
+            if (!nodeId) return showNotification('Please select a node');
             edges.remove(edges.get({ filter: edge => edge.from === parseInt(nodeId) || edge.to === parseInt(nodeId) }));
             nodes.remove({ id: parseInt(nodeId) });
             updateNodeSizes(); updateSelectOptions(); updateEdgeSelectOptions(); network.fit();
@@ -751,7 +763,7 @@
 
         function removeEdge() {
             let edgeId = document.getElementById('removeEdge').value;
-            if (!edgeId) return alert('Please select an edge');
+            if (!edgeId) return showNotification('Please select an edge');
             edges.remove({ id: edgeId });
             updateNodeSizes(); updateEdgeSelectOptions(); document.getElementById('removeEdge').value = ''; network.fit();
         }
@@ -803,7 +815,7 @@
         function importGraph() {
             let fileInput = document.getElementById('importFile');
             let file = fileInput.files[0];
-            if (!file) return alert('Please select a JSON file');
+            if (!file) return showNotification('Please select a JSON file');
             let reader = new FileReader();
             reader.onload = function(event) {
                 try {
@@ -861,7 +873,7 @@
                         if (edge.from && edge.to) edges.add({ id: edge.id || `edge_${edge.from}_${edge.to}_${Date.now()}`, from: edge.from, to: edge.to, label: edge.label || undefined }); 
                     });
                     updateNodeSizes(); updateSelectOptions(); updateEdgeSelectOptions(); nextId = Math.max(...importedData.nodes.map(n => n.id)) + 1 || 1; fileInput.value = ''; network.fit();
-                } catch (e) { console.error('Error importing JSON:', e); alert('Error importing JSON: ' + e.message); }
+                } catch (e) { console.error('Error importing JSON:', e); showNotification('Error importing JSON: ' + e.message); }
             };
             reader.readAsText(file);
         }
