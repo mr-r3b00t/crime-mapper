@@ -89,7 +89,7 @@
         <div id="object-management" class="tab-content active">
             <div class="input-group">
                 <h3>Add Entity</h3>
-                <select id="entityType">
+                <select id="addEntityType">
                     <option value="contact">Contact</option>
                     <option value="ip">IP Address</option>
                     <option value="domain">Domain</option>
@@ -101,22 +101,22 @@
                     <option value="device">Device</option>
                     <option value="malware">Malware</option>
                 </select>
-                <input type="text" id="nameInput" placeholder="Name">
-                <input type="email" id="emailInput" placeholder="Email (optional)">
-                <input type="text" id="ipInput" placeholder="IP Address" style="display: none;">
-                <input type="text" id="domainInput" placeholder="Domain" style="display: none;">
-                <input type="text" id="orgInput" placeholder="Organization Name" style="display: none;">
-                <input type="text" id="portNumInput" placeholder="Port Number" style="display: none;">
-                <select id="portType" style="display: none;">
+                <input type="text" id="addNameInput" placeholder="Name">
+                <input type="email" id="addEmailInput" placeholder="Email (optional)">
+                <input type="text" id="addIpInput" placeholder="IP Address" style="display: none;">
+                <input type="text" id="addDomainInput" placeholder="Domain" style="display: none;">
+                <input type="text" id="addOrgInput" placeholder="Organization Name" style="display: none;">
+                <input type="text" id="addPortNumInput" placeholder="Port Number" style="display: none;">
+                <select id="addPortType" style="display: none;">
                     <option value="TCP">TCP</option>
                     <option value="UDP">UDP</option>
                 </select>
-                <input type="text" id="walletAddressInput" placeholder="Wallet Address" style="display: none;">
-                <input type="text" id="accountNumberInput" placeholder="Account Number" style="display: none;">
-                <input type="text" id="sortCodeInput" placeholder="Sort Code" style="display: none;">
-                <input type="text" id="techNameInput" placeholder="Technology Name" style="display: none;">
-                <input type="text" id="techVersionInput" placeholder="Version" style="display: none;">
-                <select id="deviceCategory" style="display: none;">
+                <input type="text" id="addWalletAddressInput" placeholder="Wallet Address" style="display: none;">
+                <input type="text" id="addAccountNumberInput" placeholder="Account Number" style="display: none;">
+                <input type="text" id="addSortCodeInput" placeholder="Sort Code" style="display: none;">
+                <input type="text" id="addTechNameInput" placeholder="Technology Name" style="display: none;">
+                <input type="text" id="addTechVersionInput" placeholder="Version" style="display: none;">
+                <select id="addDeviceCategory" style="display: none;">
                     <option value="Server">Server</option>
                     <option value="PC">PC</option>
                     <option value="Laptop">Laptop</option>
@@ -128,9 +128,9 @@
                     <option value="Wireless Access Point">Wireless Access Point</option>
                     <option value="Other">Other</option>
                 </select>
-                <input type="text" id="deviceNameInput" placeholder="Device Name" style="display: none;">
-                <input type="text" id="malwareNameInput" placeholder="Malware Name" style="display: none;">
-                <select id="malwareType" style="display: none;">
+                <input type="text" id="addDeviceNameInput" placeholder="Device Name" style="display: none;">
+                <input type="text" id="addMalwareNameInput" placeholder="Malware Name" style="display: none;">
+                <select id="addMalwareType" style="display: none;">
                     <option value="Wiper">Wiper</option>
                     <option value="RAT">RAT</option>
                     <option value="Encryptor">Encryptor</option>
@@ -138,6 +138,59 @@
                     <option value="Other">Other</option>
                 </select>
                 <button onclick="addNode()">Add Entity</button>
+            </div>
+            <div class="input-group">
+                <h3>Edit Entity</h3>
+                <select id="editNodeSelect" onchange="loadNodeForEdit()"></select>
+                <select id="editEntityType" disabled>
+                    <option value="contact">Contact</option>
+                    <option value="ip">IP Address</option>
+                    <option value="domain">Domain</option>
+                    <option value="organization">Organization</option>
+                    <option value="port">Port</option>
+                    <option value="wallet">Wallet</option>
+                    <option value="bank">Bank Account</option>
+                    <option value="technology">Technology</option>
+                    <option value="device">Device</option>
+                    <option value="malware">Malware</option>
+                </select>
+                <input type="text" id="editNameInput" placeholder="Name">
+                <input type="email" id="editEmailInput" placeholder="Email (optional)">
+                <input type="text" id="editIpInput" placeholder="IP Address" style="display: none;">
+                <input type="text" id="editDomainInput" placeholder="Domain" style="display: none;">
+                <input type="text" id="editOrgInput" placeholder="Organization Name" style="display: none;">
+                <input type="text" id="editPortNumInput" placeholder="Port Number" style="display: none;">
+                <select id="editPortType" style="display: none;">
+                    <option value="TCP">TCP</option>
+                    <option value="UDP">UDP</option>
+                </select>
+                <input type="text" id="editWalletAddressInput" placeholder="Wallet Address" style="display: none;">
+                <input type="text" id="editAccountNumberInput" placeholder="Account Number" style="display: none;">
+                <input type="text" id="editSortCodeInput" placeholder="Sort Code" style="display: none;">
+                <input type="text" id="editTechNameInput" placeholder="Technology Name" style="display: none;">
+                <input type="text" id="editTechVersionInput" placeholder="Version" style="display: none;">
+                <select id="editDeviceCategory" style="display: none;">
+                    <option value="Server">Server</option>
+                    <option value="PC">PC</option>
+                    <option value="Laptop">Laptop</option>
+                    <option value="MAC">MAC</option>
+                    <option value="SmartPhone">SmartPhone</option>
+                    <option value="IOT">IOT</option>
+                    <option value="Router">Router</option>
+                    <option value="Switch">Switch</option>
+                    <option value="Wireless Access Point">Wireless Access Point</option>
+                    <option value="Other">Other</option>
+                </select>
+                <input type="text" id="editDeviceNameInput" placeholder="Device Name" style="display: none;">
+                <input type="text" id="editMalwareNameInput" placeholder="Malware Name" style="display: none;">
+                <select id="editMalwareType" style="display: none;">
+                    <option value="Wiper">Wiper</option>
+                    <option value="RAT">RAT</option>
+                    <option value="Encryptor">Encryptor</option>
+                    <option value="Stealer">Stealer</option>
+                    <option value="Other">Other</option>
+                </select>
+                <button onclick="editNode()">Save Changes</button>
             </div>
             <div class="input-group">
                 <h3>Remove Entity</h3>
@@ -253,18 +306,10 @@
                     zIndex: 1000
                 }
             };
-
             switch (type) {
-                case 'success':
-                    toastOptions.style.background = isDarkMode ? '#166534' : '#22c55e';
-                    toastOptions.style.color = '#fff';
-                    break;
-                case 'error':
-                    toastOptions.style.background = isDarkMode ? '#991b1b' : '#ef4444';
-                    toastOptions.style.color = '#fff';
-                    break;
+                case 'success': toastOptions.style.background = isDarkMode ? '#166534' : '#22c55e'; toastOptions.style.color = '#fff'; break;
+                case 'error': toastOptions.style.background = isDarkMode ? '#991b1b' : '#ef4444'; toastOptions.style.color = '#fff'; break;
             }
-
             Toastify(toastOptions).showToast();
         }
 
@@ -281,15 +326,36 @@
         let container = document.getElementById('myNetwork');
         let data = { nodes: nodes, edges: edges };
         let options = {
-            nodes: { shape: 'circle', size: 20, font: { size: 12, color: '#e2e8f0' } },
-            edges: { arrows: { to: { enabled: true } }, font: { size: 16, color: '#e2e8f0', background: 'rgba(255, 255, 255, 0.8)', strokeWidth: 1, strokeColor: '#000000' }, color: { color: '#94a3b8', highlight: '#60a5fa' } },
-            physics: { enabled: true, barnesHut: { gravitationalConstant: -3000, centralGravity: 0.3, springLength: 150, springConstant: 0.05, damping: 0.09, avoidOverlap: 1 }, minVelocity: 0.75 },
-            interaction: {
+            nodes: { 
+                shape: 'circle', 
+                size: 20, 
+                font: { size: 12, color: '#e2e8f0' } 
+            },
+            edges: { 
+                arrows: { to: { enabled: true } }, 
+                font: { size: 16, color: '#e2e8f0', background: 'rgba(255, 255, 255, 0.8)', strokeWidth: 1, strokeColor: '#000000' }, 
+                color: { color: '#94a3b8', highlight: '#60a5fa' } 
+            },
+            physics: { 
+                enabled: true, 
+                barnesHut: { 
+                    gravitationalConstant: -3000, 
+                    centralGravity: 0.3, 
+                    springLength: 150, 
+                    springConstant: 0.05, 
+                    damping: 0.09, 
+                    avoidOverlap: 1 
+                }, 
+                minVelocity: 0.75 
+            },
+            interaction: { 
                 zoomView: true,
                 dragView: true,
                 dragNodes: true,
                 zoomSpeed: 0.5,
-                navigationButtons: false
+                navigationButtons: false,
+                multiselect: false,
+                hover: true
             }
         };
         let network = new vis.Network(container, data, options);
@@ -300,6 +366,7 @@
             const storedShodanKey = localStorage.getItem('shodanApiKey');
             if (storedShodanKey) { shodanApiKey = storedShodanKey; document.getElementById('shodanApiKey').value = storedShodanKey; document.getElementById('storeShodanKey').checked = true; }
             updateTheme();
+            updateSelectOptions();
         };
 
         network.on('oncontext', function(params) {
@@ -307,21 +374,27 @@
             const nodeId = this.getNodeAt(params.pointer.DOM);
             if (nodeId) {
                 const node = nodes.get(nodeId);
-                if (node.type === 'ip') {
-                    showContextMenu(params.pointer.DOM.x, params.pointer.DOM.y, node.ip, nodeId, 'ip');
-                } else if (node.type === 'domain') {
-                    showContextMenu(params.pointer.DOM.x, params.pointer.DOM.y, node.domain, nodeId, 'domain');
-                }
+                if (node.type === 'ip') showContextMenu(params.pointer.DOM.x, params.pointer.DOM.y, node.ip, nodeId, 'ip');
+                else if (node.type === 'domain') showContextMenu(params.pointer.DOM.x, params.pointer.DOM.y, node.domain, nodeId, 'domain');
             }
+        });
+
+        network.on('init', function() {
+            container.addEventListener('wheel', function(event) {
+                event.preventDefault();
+                const scale = event.deltaY > 0 ? 0.9 : 1.1;
+                const currentScale = network.getScale();
+                network.moveTo({
+                    scale: currentScale * scale,
+                    animation: true
+                });
+            });
         });
 
         function showContextMenu(x, y, value, nodeId, type) {
             const menu = document.getElementById('contextMenu');
-            if (type === 'ip') {
-                menu.innerHTML = `<button onclick="throttledEnrichIP('${value}', ${nodeId})">Enrich via IPINFO</button><button onclick="throttledEnrichShodan('${value}', ${nodeId})">Enrich via Shodan</button>`;
-            } else if (type === 'domain') {
-                menu.innerHTML = `<button onclick="throttledEnrichGoogleDNS('${value}', ${nodeId})">Enrich via Google DNS</button>`;
-            }
+            if (type === 'ip') menu.innerHTML = `<button onclick="throttledEnrichIP('${value}', ${nodeId})">Enrich via IPINFO</button><button onclick="throttledEnrichShodan('${value}', ${nodeId})">Enrich via Shodan</button>`;
+            else if (type === 'domain') menu.innerHTML = `<button onclick="throttledEnrichGoogleDNS('${value}', ${nodeId})">Enrich via Google DNS</button>`;
             menu.style.left = `${x}px`;
             menu.style.top = `${y}px`;
             menu.style.display = 'block';
@@ -329,8 +402,7 @@
         }
 
         function hideContextMenu() {
-            const menu = document.getElementById('contextMenu');
-            menu.style.display = 'none';
+            document.getElementById('contextMenu').style.display = 'none';
             document.removeEventListener('click', hideContextMenu);
         }
 
@@ -340,8 +412,6 @@
                 const response = await fetch(`https://ipinfo.io/${ip}/json?token=${ipinfoApiKey}`);
                 if (!response.ok) throw new Error('Failed to fetch IP info');
                 const data = await response.json();
-                console.log('IPinfo response:', data);
-
                 const asn = data.asn?.asn || 'Unknown ASN';
                 const city = data.city || 'Unknown City';
                 const companyName = data.company?.name || 'Unknown Company';
@@ -351,19 +421,10 @@
                 function linkOrCreateNode(type, key, value, label, title, color, edgeLabel) {
                     const existingNode = nodes.get({ filter: n => n.type === type && n[key] === value })[0];
                     const targetId = existingNode ? existingNode.id : nextId++;
-                    
-                    if (!existingNode) {
-                        nodes.add({ id: targetId, type: type, label: label, title: title, color: { background: color }, [key]: value });
-                    }
-                    
+                    if (!existingNode) nodes.add({ id: targetId, type: type, label: label, title: title, color: { background: color }, [key]: value });
                     const edgeId = `${ipNodeId}-${targetId}-${edgeLabel}`;
                     if (!edges.get(edgeId) && !edges.get({ filter: e => e.from === ipNodeId && e.to === targetId && e.label === edgeLabel }).length) {
-                        edges.add({ 
-                            id: edgeId, 
-                            from: ipNodeId, 
-                            to: targetId, 
-                            label: edgeLabel 
-                        });
+                        edges.add({ id: edgeId, from: ipNodeId, to: targetId, label: edgeLabel });
                     }
                 }
 
@@ -379,46 +440,34 @@
                     { key: 'relay', label: 'Relay', color: '#eab308' },
                     { key: 'hosting', label: 'Hosting', color: '#14b8a6' }
                 ];
-
                 privacyTypes.forEach(privacyType => {
                     if (privacy[privacyType.key]) {
-                        const privacyNodeId = `${privacyType.key}-${ip}`;
-                        const existingPrivacy = nodes.get(privacyNodeId);
-                        
+                        const existingPrivacy = nodes.get({ filter: n => n.type === privacyType.key })[0];
+                        const privacyNodeId = existingPrivacy ? existingPrivacy.id : nextId++;
                         if (!existingPrivacy) {
                             nodes.add({ 
                                 id: privacyNodeId, 
                                 type: privacyType.key, 
                                 label: privacyType.label, 
-                                title: `${privacyType.label} for IP: ${ip}`, 
-                                color: { background: privacyType.color }, 
-                                value: ip 
+                                title: `${privacyType.label}`,
+                                color: { background: privacyType.color }
                             });
                         }
-                        
                         const edgeId = `${ipNodeId}-${privacyNodeId}-Uses`;
                         if (!edges.get(edgeId) && !edges.get({ filter: e => e.from === ipNodeId && e.to === privacyNodeId && e.label === 'Uses' }).length) {
-                            edges.add({ 
-                                id: edgeId, 
-                                from: ipNodeId, 
-                                to: privacyNodeId, 
-                                label: 'Uses' 
-                            });
+                            edges.add({ id: edgeId, from: ipNodeId, to: privacyNodeId, label: 'Uses' });
                         }
                     }
                 });
 
                 updateNodeSizes();
                 updateSelectOptions();
-                updateEdgeSelectOptions();
                 resetLayout();
-                if (!isPhysicsPaused) togglePhysics();
                 if (!isBulk) showToast(`IP ${ip} enrichment completed using IPinfo`, 'success');
             } catch (error) {
                 console.error(`Error enriching IP ${ip}: ${error.message}`);
                 showToast(`Error enriching IP ${ip}: ${error.message}`, 'error');
                 resetLayout();
-                if (!isPhysicsPaused) togglePhysics();
             }
         });
 
@@ -428,40 +477,25 @@
                 const response = await fetch(`https://api.shodan.io/shodan/host/${ip}?key=${shodanApiKey}`);
                 if (!response.ok) throw new Error('Failed to fetch Shodan data');
                 const data = await response.json();
-                console.log('Shodan response:', data);
-
                 if (data.ports && data.ports.length > 0) {
                     data.ports.forEach(port => {
                         const existingPort = nodes.get({ filter: n => n.type === 'port' && n.portNumber === port.toString() && n.portType === 'TCP' })[0];
                         const portId = existingPort ? existingPort.id : nextId++;
-                        
-                        if (!existingPort) {
-                            nodes.add({ id: portId, type: 'port', label: `TCP/${port}`, title: `Port\nType: TCP\nNumber: ${port}`, color: { background: '#a78bfa' }, portType: 'TCP', portNumber: port.toString() });
-                        }
-                        
+                        if (!existingPort) nodes.add({ id: portId, type: 'port', label: `TCP/${port}`, title: `Port\nType: TCP\nNumber: ${port}`, color: { background: '#a78bfa' }, portType: 'TCP', portNumber: port.toString() });
                         const edgeId = `${ipNodeId}-${portId}-Exposes`;
                         if (!edges.get(edgeId) && !edges.get({ filter: e => e.from === ipNodeId && e.to === portId && e.label === 'Exposes' }).length) {
-                            edges.add({ 
-                                id: edgeId, 
-                                from: ipNodeId, 
-                                to: portId, 
-                                label: 'Exposes' 
-                            });
+                            edges.add({ id: edgeId, from: ipNodeId, to: portId, label: 'Exposes' });
                         }
                     });
                 }
-
                 updateNodeSizes();
                 updateSelectOptions();
-                updateEdgeSelectOptions();
                 resetLayout();
-                if (!isPhysicsPaused) togglePhysics();
                 if (!isBulk) showToast(`IP ${ip} enrichment completed using Shodan`, 'success');
             } catch (error) {
                 console.error(`Error enriching IP ${ip} with Shodan: ${error.message}`);
                 showToast(`Error enriching IP ${ip} with Shodan: ${error.message}`, 'error');
                 resetLayout();
-                if (!isPhysicsPaused) togglePhysics();
             }
         });
 
@@ -470,51 +504,28 @@
                 const response = await fetch(`https://dns.google/resolve?name=${domain}`);
                 if (!response.ok) throw new Error('Failed to fetch DNS data');
                 const data = await response.json();
-                console.log('Google DNS response:', data);
-
                 if (data.Answer) {
                     data.Answer.forEach(answer => {
                         if (answer.type === 1) { // Type 1 is A record (IPv4)
                             const ip = answer.data;
                             const existingIP = nodes.get({ filter: n => n.type === 'ip' && n.ip === ip })[0];
                             const ipId = existingIP ? existingIP.id : nextId++;
-
-                            if (!existingIP) {
-                                nodes.add({ 
-                                    id: ipId, 
-                                    type: 'ip', 
-                                    label: ip, 
-                                    title: `IP Address: ${ip}`, 
-                                    color: { background: '#f87171' }, 
-                                    ip: ip, 
-                                    size: 20 
-                                });
-                            }
-
+                            if (!existingIP) nodes.add({ id: ipId, type: 'ip', label: ip, title: `IP Address: ${ip}`, color: { background: '#f87171' }, ip: ip, size: 20 });
                             const edgeId = `${domainNodeId}-${ipId}-ResolvesTo`;
                             if (!edges.get(edgeId) && !edges.get({ filter: e => e.from === domainNodeId && e.to === ipId && e.label === 'Resolves to' }).length) {
-                                edges.add({ 
-                                    id: edgeId, 
-                                    from: domainNodeId, 
-                                    to: ipId, 
-                                    label: 'Resolves to' 
-                                });
+                                edges.add({ id: edgeId, from: domainNodeId, to: ipId, label: 'Resolves to' });
                             }
                         }
                     });
                 }
-
                 updateNodeSizes();
                 updateSelectOptions();
-                updateEdgeSelectOptions();
                 resetLayout();
-                if (!isPhysicsPaused) togglePhysics();
                 if (!isBulk) showToast(`Domain ${domain} enrichment completed using Google DNS`, 'success');
             } catch (error) {
                 console.error(`Error enriching domain ${domain} with Google DNS: ${error.message}`);
                 showToast(`Error enriching domain ${domain} with Google DNS: ${error.message}`, 'error');
                 resetLayout();
-                if (!isPhysicsPaused) togglePhysics();
             }
         });
 
@@ -523,7 +534,6 @@
             const ipNodes = nodes.get({ filter: n => n.type === 'ip' });
             for (const node of ipNodes) await throttledEnrichIP(node.ip, node.id, true);
             resetLayout();
-            if (!isPhysicsPaused) togglePhysics();
             showToast('Bulk IPinfo enrichment completed', 'success');
         }
 
@@ -532,7 +542,6 @@
             const ipNodes = nodes.get({ filter: n => n.type === 'ip' });
             for (const node of ipNodes) await throttledEnrichShodan(node.ip, node.id, true);
             resetLayout();
-            if (!isPhysicsPaused) togglePhysics();
             showToast('Bulk Shodan enrichment completed', 'success');
         }
 
@@ -540,7 +549,6 @@
             const domainNodes = nodes.get({ filter: n => n.type === 'domain' });
             for (const node of domainNodes) await throttledEnrichGoogleDNS(node.domain, node.id, true);
             resetLayout();
-            if (!isPhysicsPaused) togglePhysics();
             showToast('Bulk Google DNS enrichment completed', 'success');
         }
 
@@ -566,17 +574,14 @@
                 if ((ipRegex.ipv4.test(ip) || ipRegex.ipv6.test(ip)) && !nodes.get({ filter: n => n.type === 'ip' && n.ip === ip }).length) 
                     nodes.add({ id: nextId++, type: 'ip', label: ip, title: `IP Address: ${ip}`, color: { background: '#f87171' }, ip: ip, size: 20 });
             });
-
             const domainMatches = text.match(/(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,}/g) || [];
             domainMatches.forEach(domain => {
                 if (domainRegex.test(domain) && !nodes.get({ filter: n => n.type === 'domain' && n.domain === domain }).length) 
                     nodes.add({ id: nextId++, type: 'domain', label: domain, title: `Domain: ${domain}`, color: { background: '#60a5fa' }, domain: domain, size: 20 });
             });
-
             updateNodeSizes();
             updateSelectOptions();
-            updateEdgeSelectOptions();
-            network.fit();
+            resetLayout();
         }
 
         function saveIpinfoApiKey() {
@@ -638,43 +643,114 @@
         }
 
         function resetLayout() {
-            if (!isPhysicsPaused) togglePhysics();
-            nodes.forEach(node => nodes.update({ id: node.id, x: 0, y: 0 }));
-            network.fit({ animation: { duration: 1000, easingFunction: 'easeInOutQuad' } });
-            if (isPhysicsPaused) setTimeout(() => togglePhysics(), 1000);
+    nodes.forEach(node => nodes.update({ id: node.id, x: undefined, y: undefined }));
+    network.fit({ animation: { duration: 1000, easingFunction: 'easeInOutQuad' } });
+    network.setOptions({
+        interaction: { 
+            zoomView: true,
+            dragView: true,
+            dragNodes: true,
+            zoomSpeed: 0.5,
+            navigationButtons: false,
+            multiselect: false,
+            hover: true
         }
+    });
+}
 
         function setOrganicLayout() {
-            network.setOptions({ physics: { enabled: true, barnesHut: { gravitationalConstant: -3000, centralGravity: 0.3, springLength: 150, springConstant: 0.05, damping: 0.09, avoidOverlap: 1 }, minVelocity: 0.75 }, layout: { hierarchical: false } });
+            network.setOptions({ 
+                physics: { 
+                    enabled: true, 
+                    barnesHut: { 
+                        gravitationalConstant: -3000, 
+                        centralGravity: 0.3, 
+                        springLength: 150, 
+                        springConstant: 0.05, 
+                        damping: 0.09, 
+                        avoidOverlap: 1 
+                    }, 
+                    minVelocity: 0.75 
+                },
+                interaction: { zoomView: true }
+            });
             network.fit();
         }
 
         function setCircularLayout() {
-            network.setOptions({ physics: false, layout: { hierarchical: false } });
+            network.setOptions({ 
+                physics: false, 
+                layout: { hierarchical: false },
+                interaction: { zoomView: true }
+            });
             const radius = Math.min(container.clientWidth, container.clientHeight) / 2 - 50;
             const nodeCount = nodes.length;
             let angleStep = (2 * Math.PI) / nodeCount;
             let i = 0;
-            nodes.forEach(node => { nodes.update({ id: node.id, x: radius * Math.cos(angleStep * i), y: radius * Math.sin(angleStep * i) }); i++; });
+            nodes.forEach(node => { 
+                nodes.update({ 
+                    id: node.id, 
+                    x: radius * Math.cos(angleStep * i), 
+                    y: radius * Math.sin(angleStep * i) 
+                }); 
+                i++; 
+            });
             network.fit();
         }
 
         function setOrthogonalLayout() {
-            network.setOptions({ physics: false, layout: { hierarchical: false } });
+            network.setOptions({ 
+                physics: false, 
+                layout: { hierarchical: false },
+                interaction: { zoomView: true }
+            });
             const gridSize = Math.ceil(Math.sqrt(nodes.length));
             const step = 100;
             let i = 0;
-            nodes.forEach(node => { nodes.update({ id: node.id, x: (i % gridSize) * step, y: Math.floor(i / gridSize) * step }); i++; });
+            nodes.forEach(node => { 
+                nodes.update({ 
+                    id: node.id, 
+                    x: (i % gridSize) * step, 
+                    y: Math.floor(i / gridSize) * step 
+                }); 
+                i++; 
+            });
             network.fit();
         }
 
         function setTreeLayout() {
-            network.setOptions({ physics: false, layout: { hierarchical: { enabled: true, levelSeparation: 150, nodeSpacing: 100, treeSpacing: 200, direction: 'UD', sortMethod: 'hubsize' } } });
+            network.setOptions({ 
+                physics: false, 
+                layout: { 
+                    hierarchical: { 
+                        enabled: true, 
+                        levelSeparation: 150, 
+                        nodeSpacing: 100, 
+                        treeSpacing: 200, 
+                        direction: 'UD', 
+                        sortMethod: 'hubsize' 
+                    } 
+                },
+                interaction: { zoomView: true }
+            });
             network.fit();
         }
 
         function setHierarchicalLayout() {
-            network.setOptions({ physics: false, layout: { hierarchical: { enabled: true, levelSeparation: 150, nodeSpacing: 100, treeSpacing: 200, direction: 'UD', sortMethod: 'directed' } } });
+            network.setOptions({ 
+                physics: false, 
+                layout: { 
+                    hierarchical: { 
+                        enabled: true, 
+                        levelSeparation: 150, 
+                        nodeSpacing: 100, 
+                        treeSpacing: 200, 
+                        direction: 'UD', 
+                        sortMethod: 'directed' 
+                    } 
+                },
+                interaction: { zoomView: true }
+            });
             network.fit();
         }
 
@@ -685,36 +761,30 @@
             document.querySelector(`.tab-button[onclick="showTab('${tabId}')"]`).classList.add('active');
         }
 
-        document.getElementById('entityType').addEventListener('change', function() {
+        document.getElementById('addEntityType').addEventListener('change', function() {
             let type = this.value;
-            document.getElementById('nameInput').style.display = type === 'contact' ? 'block' : 'none';
-            document.getElementById('emailInput').style.display = type === 'contact' ? 'block' : 'none';
-            document.getElementById('ipInput').style.display = type === 'ip' ? 'block' : 'none';
-            document.getElementById('domainInput').style.display = type === 'domain' ? 'block' : 'none';
-            document.getElementById('orgInput').style.display = type === 'organization' ? 'block' : 'none';
-            document.getElementById('portNumInput').style.display = type === 'port' ? 'block' : 'none';
-            document.getElementById('portType').style.display = type === 'port' ? 'block' : 'none';
-            document.getElementById('walletAddressInput').style.display = type === 'wallet' ? 'block' : 'none';
-            document.getElementById('accountNumberInput').style.display = type === 'bank' ? 'block' : 'none';
-            document.getElementById('sortCodeInput').style.display = type === 'bank' ? 'block' : 'none';
-            document.getElementById('techNameInput').style.display = type === 'technology' ? 'block' : 'none';
-            document.getElementById('techVersionInput').style.display = type === 'technology' ? 'block' : 'none';
-            document.getElementById('deviceCategory').style.display = type === 'device' ? 'block' : 'none';
-            document.getElementById('deviceNameInput').style.display = type === 'device' ? 'block' : 'none';
-            document.getElementById('malwareNameInput').style.display = type === 'malware' ? 'block' : 'none';
-            document.getElementById('malwareType').style.display = type === 'malware' ? 'block' : 'none';
+            document.getElementById('addNameInput').style.display = type === 'contact' ? 'block' : 'none';
+            document.getElementById('addEmailInput').style.display = type === 'contact' ? 'block' : 'none';
+            document.getElementById('addIpInput').style.display = type === 'ip' ? 'block' : 'none';
+            document.getElementById('addDomainInput').style.display = type === 'domain' ? 'block' : 'none';
+            document.getElementById('addOrgInput').style.display = type === 'organization' ? 'block' : 'none';
+            document.getElementById('addPortNumInput').style.display = type === 'port' ? 'block' : 'none';
+            document.getElementById('addPortType').style.display = type === 'port' ? 'block' : 'none';
+            document.getElementById('addWalletAddressInput').style.display = type === 'wallet' ? 'block' : 'none';
+            document.getElementById('addAccountNumberInput').style.display = type === 'bank' ? 'block' : 'none';
+            document.getElementById('addSortCodeInput').style.display = type === 'bank' ? 'block' : 'none';
+            document.getElementById('addTechNameInput').style.display = type === 'technology' ? 'block' : 'none';
+            document.getElementById('addTechVersionInput').style.display = type === 'technology' ? 'block' : 'none';
+            document.getElementById('addDeviceCategory').style.display = type === 'device' ? 'block' : 'none';
+            document.getElementById('addDeviceNameInput').style.display = type === 'device' ? 'block' : 'none';
+            document.getElementById('addMalwareNameInput').style.display = type === 'malware' ? 'block' : 'none';
+            document.getElementById('addMalwareType').style.display = type === 'malware' ? 'block' : 'none';
         });
 
         function createNodeData(type, values) {
             const nodeData = { id: nextId++, size: 20, type };
             const configs = {
-                contact: { 
-                    fields: ['name'],
-                    optionalFields: ['email'],
-                    color: '#4ade80', 
-                    label: v => v.email ? `${v.name}\n${v.email}` : v.name,
-                    title: v => v.email ? `Contact\nName: ${v.name}\nEmail: ${v.email}` : `Contact\nName: ${v.name}`
-                },
+                contact: { fields: ['name'], optionalFields: ['email'], color: '#4ade80', label: v => v.email ? `${v.name}\n${v.email}` : v.name, title: v => v.email ? `Contact\nName: ${v.name}\nEmail: ${v.email}` : `Contact\nName: ${v.name}` },
                 ip: { fields: ['ip'], color: '#f87171', label: v => v.ip, title: v => `IP Address: ${v.ip}`, validate: v => ipRegex.ipv4.test(v.ip) || ipRegex.ipv6.test(v.ip) },
                 domain: { fields: ['domain'], color: '#60a5fa', label: v => v.domain, title: v => `Domain: ${v.domain}` },
                 organization: { fields: ['organization'], color: '#facc15', label: v => v.organization, title: v => `Organization: ${v.organization}` },
@@ -726,60 +796,155 @@
                 malware: { fields: ['malwareName', 'malwareType'], color: '#ef4444', label: v => `${v.malwareName}\n${v.malwareType}`, title: v => `Malware\nName: ${v.malwareName}\nType: ${v.malwareType}` }
             };
             const config = configs[type];
-            
-            if (!config || config.fields.some(f => !values[f])) { 
-                showToast(`Please enter all required fields for ${type}`, 'error'); 
-                return null; 
-            }
-            
-            if (config.validate && !config.validate(values)) { 
-                showToast(`Invalid ${type} format`, 'error'); 
-                return null; 
-            }
-            
-            const filterCondition = n => n.type === type && config.fields.every(f => n[f] === values[f]);
-            if (nodes.get({ filter: filterCondition }).length) { 
-                showToast(`${type} exists`, 'error'); 
-                return null; 
-            }
-            
+            if (!config || config.fields.some(f => !values[f])) { showToast(`Please enter all required fields for ${type}`, 'error'); return null; }
+            if (config.validate && !config.validate(values)) { showToast(`Invalid ${type} format`, 'error'); return null; }
             const allValues = { ...values };
-            if (config.optionalFields) {
-                config.optionalFields.forEach(f => {
-                    if (values[f]) allValues[f] = values[f];
-                });
-            }
-            
-            Object.assign(nodeData, { 
-                label: config.label(allValues), 
-                title: config.title(allValues), 
-                color: { background: config.color }, 
-                ...allValues 
-            });
+            if (config.optionalFields) config.optionalFields.forEach(f => { if (values[f]) allValues[f] = values[f]; });
+            Object.assign(nodeData, { label: config.label(allValues), title: config.title(allValues), color: { background: config.color }, ...allValues });
             return nodeData;
         }
 
         function addNode() {
-            const type = document.getElementById('entityType').value;
+            const type = document.getElementById('addEntityType').value;
             const inputs = {
-                contact: { name: document.getElementById('nameInput').value, email: document.getElementById('emailInput').value },
-                ip: { ip: document.getElementById('ipInput').value.trim() },
-                domain: { domain: document.getElementById('domainInput').value },
-                organization: { organization: document.getElementById('orgInput').value },
-                port: { portNumber: document.getElementById('portNumInput').value, portType: document.getElementById('portType').value },
-                wallet: { address: document.getElementById('walletAddressInput').value },
-                bank: { accountNumber: document.getElementById('accountNumberInput').value, sortCode: document.getElementById('sortCodeInput').value },
-                technology: { techName: document.getElementById('techNameInput').value, techVersion: document.getElementById('techVersionInput').value },
-                device: { deviceCategory: document.getElementById('deviceCategory').value, deviceName: document.getElementById('deviceNameInput').value },
-                malware: { malwareName: document.getElementById('malwareNameInput').value, malwareType: document.getElementById('malwareType').value }
+                contact: { name: document.getElementById('addNameInput').value, email: document.getElementById('addEmailInput').value },
+                ip: { ip: document.getElementById('addIpInput').value.trim() },
+                domain: { domain: document.getElementById('addDomainInput').value },
+                organization: { organization: document.getElementById('addOrgInput').value },
+                port: { portNumber: document.getElementById('addPortNumInput').value, portType: document.getElementById('addPortType').value },
+                wallet: { address: document.getElementById('addWalletAddressInput').value },
+                bank: { accountNumber: document.getElementById('addAccountNumberInput').value, sortCode: document.getElementById('addSortCodeInput').value },
+                technology: { techName: document.getElementById('addTechNameInput').value, techVersion: document.getElementById('addTechVersionInput').value },
+                device: { deviceCategory: document.getElementById('addDeviceCategory').value, deviceName: document.getElementById('addDeviceNameInput').value },
+                malware: { malwareName: document.getElementById('addMalwareNameInput').value, malwareType: document.getElementById('addMalwareType').value }
             };
             const nodeData = createNodeData(type, inputs[type]);
             if (nodeData) {
+                const existingNodes = nodes.get({
+                    filter: n => n.type === type && 
+                                Object.keys(inputs[type]).every(key => 
+                                    inputs[type][key] === "" || inputs[type][key] === undefined || n[key] === inputs[type][key]
+                                )
+                });
+                if (existingNodes.length > 0) {
+                    showToast(`${type} already exists`, 'error');
+                    return;
+                }
                 nodes.add(nodeData);
                 updateSelectOptions();
-                clearInputs();
-                network.fit();
+                clearAddInputs();
+                resetLayout();
             }
+        }
+
+        function editNode() {
+            const nodeId = document.getElementById('editNodeSelect').value;
+            if (!nodeId) { showToast('Please select a node to edit', 'error'); return; }
+            const node = nodes.get(parseInt(nodeId));
+            if (!node) { showToast('Selected node not found', 'error'); return; }
+
+            const type = node.type;
+            const inputs = {
+                contact: { name: document.getElementById('editNameInput').value, email: document.getElementById('editEmailInput').value },
+                ip: { ip: document.getElementById('editIpInput').value.trim() },
+                domain: { domain: document.getElementById('editDomainInput').value },
+                organization: { organization: document.getElementById('editOrgInput').value },
+                port: { portNumber: document.getElementById('editPortNumInput').value, portType: document.getElementById('editPortType').value },
+                wallet: { address: document.getElementById('editWalletAddressInput').value },
+                bank: { accountNumber: document.getElementById('editAccountNumberInput').value, sortCode: document.getElementById('editSortCodeInput').value },
+                technology: { techName: document.getElementById('editTechNameInput').value, techVersion: document.getElementById('editTechVersionInput').value },
+                device: { deviceCategory: document.getElementById('editDeviceCategory').value, deviceName: document.getElementById('editDeviceNameInput').value },
+                malware: { malwareName: document.getElementById('editMalwareNameInput').value, malwareType: document.getElementById('editMalwareType').value }
+            };
+            const updatedNodeData = createNodeData(type, inputs[type]);
+            if (updatedNodeData) {
+                const existingNode = nodes.get({ filter: n => n.id !== parseInt(nodeId) && n.type === type && Object.keys(inputs[type]).every(key => n[key] === inputs[type][key]) });
+                if (existingNode) { showToast(`Another ${type} with these values already exists`, 'error'); return; }
+                updatedNodeData.id = node.id;
+                nodes.update(updatedNodeData);
+                updateSelectOptions();
+                clearEditInputs();
+                resetLayout();
+            }
+        }
+
+        function loadNodeForEdit() {
+            const nodeId = document.getElementById('editNodeSelect').value;
+            clearEditInputs();
+            if (!nodeId) return;
+
+            const node = nodes.get(parseInt(nodeId));
+            if (!node) return;
+
+            document.getElementById('editEntityType').value = node.type;
+            switch (node.type) {
+                case 'contact':
+                    document.getElementById('editNameInput').value = node.name || '';
+                    document.getElementById('editEmailInput').value = node.email || '';
+                    break;
+                case 'ip':
+                    document.getElementById('editIpInput').value = node.ip || '';
+                    break;
+                case 'domain':
+                    document.getElementById('editDomainInput').value = node.domain || '';
+                    break;
+                case 'organization':
+                    document.getElementById('editOrgInput').value = node.organization || '';
+                    break;
+                case 'port':
+                    document.getElementById('editPortNumInput').value = node.portNumber || '';
+                    document.getElementById('editPortType').value = node.portType || 'TCP';
+                    break;
+                case 'wallet':
+                    document.getElementById('editWalletAddressInput').value = node.address || '';
+                    break;
+                case 'bank':
+                    document.getElementById('editAccountNumberInput').value = node.accountNumber || '';
+                    document.getElementById('editSortCodeInput').value = node.sortCode || '';
+                    break;
+                case 'technology':
+                    document.getElementById('editTechNameInput').value = node.techName || '';
+                    document.getElementById('editTechVersionInput').value = node.techVersion || '';
+                    break;
+                case 'device':
+                    document.getElementById('editDeviceCategory').value = node.deviceCategory || 'Server';
+                    document.getElementById('editDeviceNameInput').value = node.deviceName || '';
+                    break;
+                case 'malware':
+                    document.getElementById('editMalwareNameInput').value = node.malwareName || '';
+                    document.getElementById('editMalwareType').value = node.malwareType || 'Wiper';
+                    break;
+            }
+            document.getElementById('editNameInput').style.display = node.type === 'contact' ? 'block' : 'none';
+            document.getElementById('editEmailInput').style.display = node.type === 'contact' ? 'block' : 'none';
+            document.getElementById('editIpInput').style.display = node.type === 'ip' ? 'block' : 'none';
+            document.getElementById('editDomainInput').style.display = node.type === 'domain' ? 'block' : 'none';
+            document.getElementById('editOrgInput').style.display = node.type === 'organization' ? 'block' : 'none';
+            document.getElementById('editPortNumInput').style.display = node.type === 'port' ? 'block' : 'none';
+            document.getElementById('editPortType').style.display = node.type === 'port' ? 'block' : 'none';
+            document.getElementById('editWalletAddressInput').style.display = node.type === 'wallet' ? 'block' : 'none';
+            document.getElementById('editAccountNumberInput').style.display = node.type === 'bank' ? 'block' : 'none';
+            document.getElementById('editSortCodeInput').style.display = node.type === 'bank' ? 'block' : 'none';
+            document.getElementById('editTechNameInput').style.display = node.type === 'technology' ? 'block' : 'none';
+            document.getElementById('editTechVersionInput').style.display = node.type === 'technology' ? 'block' : 'none';
+            document.getElementById('editDeviceCategory').style.display = node.type === 'device' ? 'block' : 'none';
+            document.getElementById('editDeviceNameInput').style.display = node.type === 'device' ? 'block' : 'none';
+            document.getElementById('editMalwareNameInput').style.display = node.type === 'malware' ? 'block' : 'none';
+            document.getElementById('editMalwareType').style.display = node.type === 'malware' ? 'block' : 'none';
+        }
+
+        function clearAddInputs() {
+            document.querySelectorAll('#object-management .input-group:first-child input').forEach(input => input.value = '');
+            document.getElementById('addDeviceCategory').value = 'Server';
+            document.getElementById('addMalwareType').value = 'Wiper';
+            document.getElementById('addPortType').value = 'TCP';
+        }
+
+        function clearEditInputs() {
+            document.querySelectorAll('#object-management .input-group:nth-child(2) input').forEach(input => input.value = '');
+            document.getElementById('editDeviceCategory').value = 'Server';
+            document.getElementById('editMalwareType').value = 'Wiper';
+            document.getElementById('editPortType').value = 'TCP';
         }
 
         function addEdge() {
@@ -791,7 +956,7 @@
             updateNodeSizes(); 
             updateEdgeSelectOptions(); 
             document.getElementById('edgeLabel').value = ''; 
-            network.fit();
+            resetLayout();
         }
 
         function removeNode() {
@@ -801,8 +966,7 @@
             nodes.remove({ id: parseInt(nodeId) });
             updateNodeSizes(); 
             updateSelectOptions(); 
-            updateEdgeSelectOptions(); 
-            network.fit();
+            resetLayout();
         }
 
         function removeEdge() {
@@ -812,7 +976,7 @@
             updateNodeSizes(); 
             updateEdgeSelectOptions(); 
             document.getElementById('removeEdge').value = ''; 
-            network.fit();
+            resetLayout();
         }
 
         function clearGraph() {
@@ -822,8 +986,9 @@
             nextId = 1; 
             updateSelectOptions(); 
             updateEdgeSelectOptions(); 
-            clearInputs(); 
-            network.fit();
+            clearAddInputs(); 
+            clearEditInputs(); 
+            resetLayout();
         }
 
         function updateNodeSizes() {
@@ -834,7 +999,7 @@
         }
 
         function updateSelectOptions() {
-            ['fromNode', 'toNode', 'removeNode'].forEach(id => {
+            ['editNodeSelect', 'fromNode', 'toNode', 'removeNode'].forEach(id => {
                 let select = document.getElementById(id);
                 select.innerHTML = '<option value="">Select</option>';
                 nodes.forEach(node => { 
@@ -844,6 +1009,7 @@
                     select.appendChild(option); 
                 });
             });
+            updateEdgeSelectOptions();
         }
 
         function updateEdgeSelectOptions() {
@@ -859,12 +1025,6 @@
                     select.appendChild(option);
                 }
             });
-        }
-
-        function clearInputs() {
-            document.querySelectorAll('#object-management input').forEach(input => input.value = '');
-            document.getElementById('deviceCategory').value = 'Server';
-            document.getElementById('malwareType').value = 'Wiper';
         }
 
         function exportGraph() {
@@ -958,10 +1118,9 @@
                     });
                     updateNodeSizes(); 
                     updateSelectOptions(); 
-                    updateEdgeSelectOptions(); 
                     nextId = Math.max(...importedData.nodes.map(n => n.id)) + 1 || 1; 
                     fileInput.value = ''; 
-                    network.fit();
+                    resetLayout();
                 } catch (e) { 
                     console.error('Error importing JSON:', e); 
                     showToast('Error importing JSON: ' + e.message, 'error'); 
