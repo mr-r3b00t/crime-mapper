@@ -417,35 +417,66 @@
     });
 }
 
-        function stabilizeNetwork() {
+function stabilizeNetwork() {
     return new Promise(resolve => {
         network.setOptions({
             physics: {
                 enabled: true,
                 stabilization: {
                     enabled: true,
-                    iterations: 200, // Increased iterations
-                    updateInterval: 50 // More frequent updates
+                    iterations: 200,
+                    updateInterval: 50
+                },
+                // Add constraints to keep nodes in view
+                barnesHut: {
+                    gravitationalConstant: -8000,
+                    centralGravity: 0.3,  // Increase to pull nodes toward center
+                    springLength: 150,    // Reduce to keep nodes closer
+                    avoidOverlap: 1.0     // Increase to prevent overlap
                 }
             }
         });
-        
-        network.stabilize(200); // Match iterations with settings
+
+        network.stabilize(200);
         network.once('stabilizationIterationsDone', () => {
+            // Turn off physics if paused, or adjust settings
             network.setOptions({
                 physics: {
                     enabled: !isPhysicsPaused,
-                    stabilization: { enabled: false }
+                    stabilization: { enabled: false },
+                    barnesHut: {
+                        gravitationalConstant: -8000,
+                        centralGravity: 0.3,
+                        springLength: 150,
+                        avoidOverlap: 1.0
+                    },
+                    // Add bounds to prevent off-screen movement
+                    minVelocity: 0.1,
+                    maxVelocity: 25  // Reduce max velocity
                 }
             });
-            ensureInteractionSettings();
-            network.fit({ 
-                animation: { 
+            
+            // Fit the view to all nodes
+            network.fit({
+                animation: {
                     duration: 500,
                     easingFunction: 'easeInOutQuad'
-                } 
+                }
             });
-            // Add small delay to ensure rendering completes
+            
+            // Force nodes to stay within bounds
+            nodes.forEach(node => {
+                const { x, y } = network.getPositions([node.id])[node.id];
+                const boundingBox = network.getBoundingBox();
+                const margin = 50;
+                
+                nodes.update({
+                    id: node.id,
+                    x: Math.max(boundingBox.left + margin, Math.min(boundingBox.right - margin, x)),
+                    y: Math.max(boundingBox.top + margin, Math.min(boundingBox.bottom - margin, y))
+                });
+            });
+            
             setTimeout(resolve, 100);
         });
     });
