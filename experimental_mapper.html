@@ -637,26 +637,15 @@
             isPhysicsPaused = !isPhysicsPaused;
             const pauseButton = document.getElementById('pause-toggle');
             options.physics.enabled = !isPhysicsPaused;
-            network.setOptions(options);
+            network.setOptions({ physics: { enabled: !isPhysicsPaused } });
             pauseButton.textContent = isPhysicsPaused ? 'Resume Physics' : 'Pause Physics';
             pauseButton.classList.toggle('paused', isPhysicsPaused);
         }
 
         function resetLayout() {
-    nodes.forEach(node => nodes.update({ id: node.id, x: undefined, y: undefined }));
-    network.fit({ animation: { duration: 1000, easingFunction: 'easeInOutQuad' } });
-    network.setOptions({
-        interaction: { 
-            zoomView: true,
-            dragView: true,
-            dragNodes: true,
-            zoomSpeed: 0.5,
-            navigationButtons: false,
-            multiselect: false,
-            hover: true
+            nodes.forEach(node => nodes.update({ id: node.id, x: undefined, y: undefined }));
+            network.fit({ animation: { duration: 1000, easingFunction: 'easeInOutQuad' } });
         }
-    });
-}
 
         function setOrganicLayout() {
             network.setOptions({ 
@@ -672,16 +661,15 @@
                     }, 
                     minVelocity: 0.75 
                 },
-                interaction: { zoomView: true }
+                layout: { hierarchical: false }
             });
             network.fit();
         }
 
         function setCircularLayout() {
             network.setOptions({ 
-                physics: false, 
-                layout: { hierarchical: false },
-                interaction: { zoomView: true }
+                physics: { enabled: false },
+                layout: { hierarchical: false }
             });
             const radius = Math.min(container.clientWidth, container.clientHeight) / 2 - 50;
             const nodeCount = nodes.length;
@@ -700,9 +688,8 @@
 
         function setOrthogonalLayout() {
             network.setOptions({ 
-                physics: false, 
-                layout: { hierarchical: false },
-                interaction: { zoomView: true }
+                physics: { enabled: false },
+                layout: { hierarchical: false }
             });
             const gridSize = Math.ceil(Math.sqrt(nodes.length));
             const step = 100;
@@ -720,7 +707,7 @@
 
         function setTreeLayout() {
             network.setOptions({ 
-                physics: false, 
+                physics: { enabled: false },
                 layout: { 
                     hierarchical: { 
                         enabled: true, 
@@ -730,15 +717,14 @@
                         direction: 'UD', 
                         sortMethod: 'hubsize' 
                     } 
-                },
-                interaction: { zoomView: true }
+                }
             });
             network.fit();
         }
 
         function setHierarchicalLayout() {
             network.setOptions({ 
-                physics: false, 
+                physics: { enabled: false },
                 layout: { 
                     hierarchical: { 
                         enabled: true, 
@@ -748,8 +734,7 @@
                         direction: 'UD', 
                         sortMethod: 'directed' 
                     } 
-                },
-                interaction: { zoomView: true }
+                }
             });
             network.fit();
         }
