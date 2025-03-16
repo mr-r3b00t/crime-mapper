@@ -343,43 +343,57 @@
         let container = document.getElementById('myNetwork');
         let data = { nodes: nodes, edges: edges };
         let options = {
-            nodes: { 
-                shape: 'circle', 
-                size: 20, 
-                font: { size: 12, color: '#e2e8f0' },
-                scaling: {
-                    min: 10,
-                    max: 30
-                }
+    nodes: { 
+        shape: 'circle', 
+        size: 20, 
+        font: { 
+            size: 12, 
+            color: '#e2e8f0',
+            multi: true // Enable multi-line labels
+        },
+        scaling: {
+            min: 10,
+            max: 30
+        },
+        color: {
+            hover: {
+                border: '#60a5fa',
+                background: '#4b5563'
             },
-            edges: { 
-                arrows: { to: { enabled: true, scaleFactor: 0.5 } }, 
-                font: { size: 12, color: '#e2e8f0' },
-                smooth: true,
-                width: 1
-            },
-            physics: { 
-                enabled: true,
-                stabilization: {
-                    enabled: true,
-                    iterations: 100,
-                    updateInterval: 25
-                },
-                barnesHut: { 
-                    gravitationalConstant: -8000,
-                    centralGravity: 0.1,
-                    springLength: 200,
-                    springConstant: 0.04,
-                    damping: 0.3,
-                    avoidOverlap: 0.5
-                },
-                maxVelocity: 50,
-                minVelocity: 0.1,
-                solver: 'barnesHut'
-            },
-            interaction: { ...baseInteractionOptions },
-            layout: { improvedLayout: true }
-        };
+            highlight: { // Added for selected state
+                border: '#60a5fa',
+                background: '#4b5563'
+            }
+        }
+    },
+    edges: { 
+        arrows: { to: { enabled: true, scaleFactor: 0.5 } }, 
+        font: { size: 12, color: '#e2e8f0' },
+        smooth: true,
+        width: 1
+    },
+    physics: { 
+        enabled: true,
+        stabilization: {
+            enabled: true,
+            iterations: 100,
+            updateInterval: 25
+        },
+        barnesHut: { 
+            gravitationalConstant: -8000,
+            centralGravity: 0.1,
+            springLength: 200,
+            springConstant: 0.04,
+            damping: 0.3,
+            avoidOverlap: 0.5
+        },
+        maxVelocity: 50,
+        minVelocity: 0.1,
+        solver: 'barnesHut'
+    },
+    interaction: { ...baseInteractionOptions },
+    layout: { improvedLayout: true }
+};
         
         let network = new vis.Network(container, data, options);
 
@@ -692,23 +706,55 @@ function showContextMenu(x, y, value, nodeId, type) {
         }
 
         function updateTheme() {
-            if (isDarkMode) {
-                document.body.classList.remove('light-mode');
-                document.body.classList.add('dark-mode');
-                options.nodes.font.color = '#e2e8f0';
-                options.edges.font.color = '#e2e8f0';
-                options.edges.color = { color: '#94a3b8', highlight: '#60a5fa' };
-            } else {
-                document.body.classList.remove('dark-mode');
-                document.body.classList.add('light-mode');
-                options.nodes.font.color = '#1f2a44';
-                options.edges.font.color = '#1f2a44';
-                options.edges.color = { color: '#6b7280', highlight: '#3b82f6' };
+    if (isDarkMode) {
+        document.body.classList.remove('light-mode');
+        document.body.classList.add('dark-mode');
+        options.nodes.font = {
+            size: 12,
+            color: '#e2e8f0', // Default color
+            multi: true,
+            hover: '#1f2a44', // Dark color on hover
+            highlight: '#1f2a44' // Dark color when selected
+        };
+        options.nodes.color = {
+            hover: {
+                border: '#60a5fa',
+                background: '#4b5563'
+            },
+            highlight: {
+                border: '#60a5fa',
+                background: '#4b5563'
             }
-            document.getElementById('mode-toggle').textContent = isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode';
-            network.setOptions(options);
-            ensureInteractionSettings();
-        }
+        };
+        options.edges.font.color = '#e2e8f0';
+        options.edges.color = { color: '#94a3b8', highlight: '#60a5fa' };
+    } else {
+        document.body.classList.remove('dark-mode');
+        document.body.classList.add('light-mode');
+        options.nodes.font = {
+            size: 12,
+            color: '#1f2a44', // Default color
+            multi: true,
+            hover: undefined, // Use default in light mode
+            highlight: undefined // Use default in light mode
+        };
+        options.nodes.color = {
+            hover: {
+                border: '#3b82f6',
+                background: '#e5e7eb'
+            },
+            highlight: {
+                border: '#3b82f6',
+                background: '#e5e7eb'
+            }
+        };
+        options.edges.font.color = '#1f2a44';
+        options.edges.color = { color: '#6b7280', highlight: '#3b82f6' };
+    }
+    document.getElementById('mode-toggle').textContent = isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode';
+    network.setOptions(options);
+    ensureInteractionSettings();
+}
 
         function toggleMode() { 
             isDarkMode = !isDarkMode; 
