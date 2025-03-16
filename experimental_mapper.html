@@ -323,42 +323,79 @@
             };
         }
 
+        const baseInteractionOptions = {
+            dragView: true,
+            zoomView: true,
+            dragNodes: true,
+            zoomSpeed: 0.5,
+            navigationButtons: false,
+            multiselect: false,
+            hover: true
+        };
+
         let container = document.getElementById('myNetwork');
         let data = { nodes: nodes, edges: edges };
         let options = {
             nodes: { 
                 shape: 'circle', 
                 size: 20, 
-                font: { size: 12, color: '#e2e8f0' } 
+                font: { size: 12, color: '#e2e8f0' },
+                scaling: {
+                    min: 10,
+                    max: 30
+                }
             },
             edges: { 
-                arrows: { to: { enabled: true } }, 
-                font: { size: 16, color: '#e2e8f0', background: 'rgba(255, 255, 255, 0.8)', strokeWidth: 1, strokeColor: '#000000' }, 
-                color: { color: '#94a3b8', highlight: '#60a5fa' } 
+                arrows: { to: { enabled: true, scaleFactor: 0.5 } }, 
+                font: { size: 12, color: '#e2e8f0' },
+                smooth: true,
+                width: 1
             },
             physics: { 
-                enabled: true, 
+                enabled: true,
+                stabilization: {
+                    enabled: true,
+                    iterations: 100,
+                    updateInterval: 25
+                },
                 barnesHut: { 
-                    gravitationalConstant: -3000, 
-                    centralGravity: 0.3, 
-                    springLength: 150, 
-                    springConstant: 0.05, 
-                    damping: 0.09, 
-                    avoidOverlap: 1 
-                }, 
-                minVelocity: 0.75 
+                    gravitationalConstant: -8000,
+                    centralGravity: 0.1,
+                    springLength: 200,
+                    springConstant: 0.04,
+                    damping: 0.3,
+                    avoidOverlap: 0.5
+                },
+                maxVelocity: 50,
+                minVelocity: 0.1,
+                solver: 'barnesHut'
             },
-            interaction: { 
-                zoomView: true,
-                dragView: true,
-                dragNodes: true,
-                zoomSpeed: 0.5,
-                navigationButtons: false,
-                multiselect: false,
-                hover: true
-            }
+            interaction: { ...baseInteractionOptions },
+            layout: { improvedLayout: true }
         };
+        
         let network = new vis.Network(container, data, options);
+
+        function ensureInteractionSettings() {
+            network.setOptions({
+                interaction: { ...baseInteractionOptions },
+                physics: {
+                    enabled: !isPhysicsPaused,
+                    stabilization: { enabled: true }
+                }
+            });
+        }
+
+        function stabilizeNetwork() {
+            return new Promise(resolve => {
+                network.stabilize(100);
+                network.once('stabilizationIterationsDone', () => {
+                    ensureInteractionSettings();
+                    network.fit({ animation: { duration: 500 } });
+                    resolve();
+                });
+            });
+        }
 
         window.onload = function() {
             const storedIpinfoKey = localStorage.getItem('ipinfoApiKey');
@@ -367,7 +404,20 @@
             if (storedShodanKey) { shodanApiKey = storedShodanKey; document.getElementById('shodanApiKey').value = storedShodanKey; document.getElementById('storeShodanKey').checked = true; }
             updateTheme();
             updateSelectOptions();
+            ensureInteractionSettings();
         };
+
+        network.on('init', function() {
+            container.addEventListener('wheel', function(event) {
+                event.preventDefault();
+                const scale = event.deltaY > 0 ? 0.9 : 1.1;
+                const currentScale = network.getScale();
+                network.moveTo({
+                    scale: currentScale * scale,
+                    animation: { duration: 100 }
+                });
+            }, { passive: false });
+        });
 
         network.on('oncontext', function(params) {
             params.event.preventDefault();
@@ -377,18 +427,6 @@
                 if (node.type === 'ip') showContextMenu(params.pointer.DOM.x, params.pointer.DOM.y, node.ip, nodeId, 'ip');
                 else if (node.type === 'domain') showContextMenu(params.pointer.DOM.x, params.pointer.DOM.y, node.domain, nodeId, 'domain');
             }
-        });
-
-        network.on('init', function() {
-            container.addEventListener('wheel', function(event) {
-                event.preventDefault();
-                const scale = event.deltaY > 0 ? 0.9 : 1.1;
-                const currentScale = network.getScale();
-                network.moveTo({
-                    scale: currentScale * scale,
-                    animation: true
-                });
-            });
         });
 
         function showContextMenu(x, y, value, nodeId, type) {
@@ -408,6 +446,7 @@
 
         const throttledEnrichIP = throttleRequest(async function enrichIP(ip, ipNodeId, isBulk = false) {
             if (!ipinfoApiKey) { showToast('Please set your IPinfo API key in the "API Keys" tab first.', 'error'); return; }
+            network.setOptions({ physics: { enabled: false } });
             try {
                 const response = await fetch(`https://ipinfo.io/${ip}/json?token=${ipinfoApiKey}`);
                 if (!response.ok) throw new Error('Failed to fetch IP info');
@@ -423,9 +462,7 @@
                     const targetId = existingNode ? existingNode.id : nextId++;
                     if (!existingNode) nodes.add({ id: targetId, type: type, label: label, title: title, color: { background: color }, [key]: value });
                     const edgeId = `${ipNodeId}-${targetId}-${edgeLabel}`;
-                    if (!edges.get(edgeId) && !edges.get({ filter: e => e.from === ipNodeId && e.to === targetId && e.label === edgeLabel }).length) {
-                        edges.add({ id: edgeId, from: ipNodeId, to: targetId, label: edgeLabel });
-                    }
+                    if (!edges.get(edgeId)) edges.add({ id: edgeId, from: ipNodeId, to: targetId, label: edgeLabel });
                 }
 
                 linkOrCreateNode('asn', 'asn', asn, asn, `ASN: ${asn}`, '#a3e635', 'Assigned to');
@@ -454,25 +491,24 @@
                             });
                         }
                         const edgeId = `${ipNodeId}-${privacyNodeId}-Uses`;
-                        if (!edges.get(edgeId) && !edges.get({ filter: e => e.from === ipNodeId && e.to === privacyNodeId && e.label === 'Uses' }).length) {
-                            edges.add({ id: edgeId, from: ipNodeId, to: privacyNodeId, label: 'Uses' });
-                        }
+                        if (!edges.get(edgeId)) edges.add({ id: edgeId, from: ipNodeId, to: privacyNodeId, label: 'Uses' });
                     }
                 });
 
                 updateNodeSizes();
                 updateSelectOptions();
-                resetLayout();
+                await stabilizeNetwork();
                 if (!isBulk) showToast(`IP ${ip} enrichment completed using IPinfo`, 'success');
             } catch (error) {
                 console.error(`Error enriching IP ${ip}: ${error.message}`);
                 showToast(`Error enriching IP ${ip}: ${error.message}`, 'error');
-                resetLayout();
+                await stabilizeNetwork();
             }
         });
 
         const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ipNodeId, isBulk = false) {
             if (!shodanApiKey) { showToast('Please set your Shodan API key in the "API Keys" tab first.', 'error'); return; }
+            network.setOptions({ physics: { enabled: false } });
             try {
                 const response = await fetch(`https://api.shodan.io/shodan/host/${ip}?key=${shodanApiKey}`);
                 if (!response.ok) throw new Error('Failed to fetch Shodan data');
@@ -483,23 +519,22 @@
                         const portId = existingPort ? existingPort.id : nextId++;
                         if (!existingPort) nodes.add({ id: portId, type: 'port', label: `TCP/${port}`, title: `Port\nType: TCP\nNumber: ${port}`, color: { background: '#a78bfa' }, portType: 'TCP', portNumber: port.toString() });
                         const edgeId = `${ipNodeId}-${portId}-Exposes`;
-                        if (!edges.get(edgeId) && !edges.get({ filter: e => e.from === ipNodeId && e.to === portId && e.label === 'Exposes' }).length) {
-                            edges.add({ id: edgeId, from: ipNodeId, to: portId, label: 'Exposes' });
-                        }
+                        if (!edges.get(edgeId)) edges.add({ id: edgeId, from: ipNodeId, to: portId, label: 'Exposes' });
                     });
                 }
                 updateNodeSizes();
                 updateSelectOptions();
-                resetLayout();
+                await stabilizeNetwork();
                 if (!isBulk) showToast(`IP ${ip} enrichment completed using Shodan`, 'success');
             } catch (error) {
                 console.error(`Error enriching IP ${ip} with Shodan: ${error.message}`);
                 showToast(`Error enriching IP ${ip} with Shodan: ${error.message}`, 'error');
-                resetLayout();
+                await stabilizeNetwork();
             }
         });
 
         const throttledEnrichGoogleDNS = throttleRequest(async function enrichGoogleDNS(domain, domainNodeId, isBulk = false) {
+            network.setOptions({ physics: { enabled: false } });
             try {
                 const response = await fetch(`https://dns.google/resolve?name=${domain}`);
                 if (!response.ok) throw new Error('Failed to fetch DNS data');
@@ -512,43 +547,44 @@
                             const ipId = existingIP ? existingIP.id : nextId++;
                             if (!existingIP) nodes.add({ id: ipId, type: 'ip', label: ip, title: `IP Address: ${ip}`, color: { background: '#f87171' }, ip: ip, size: 20 });
                             const edgeId = `${domainNodeId}-${ipId}-ResolvesTo`;
-                            if (!edges.get(edgeId) && !edges.get({ filter: e => e.from === domainNodeId && e.to === ipId && e.label === 'Resolves to' }).length) {
-                                edges.add({ id: edgeId, from: domainNodeId, to: ipId, label: 'Resolves to' });
-                            }
+                            if (!edges.get(edgeId)) edges.add({ id: edgeId, from: domainNodeId, to: ipId, label: 'Resolves to' });
                         }
                     });
                 }
                 updateNodeSizes();
                 updateSelectOptions();
-                resetLayout();
+                await stabilizeNetwork();
                 if (!isBulk) showToast(`Domain ${domain} enrichment completed using Google DNS`, 'success');
             } catch (error) {
                 console.error(`Error enriching domain ${domain} with Google DNS: ${error.message}`);
                 showToast(`Error enriching domain ${domain} with Google DNS: ${error.message}`, 'error');
-                resetLayout();
+                await stabilizeNetwork();
             }
         });
 
         async function enrichAllIpinfo() {
             if (!ipinfoApiKey) { showToast('Please set your IPinfo API key in the "API Keys" tab first.', 'error'); return; }
+            network.setOptions({ physics: { enabled: false } });
             const ipNodes = nodes.get({ filter: n => n.type === 'ip' });
             for (const node of ipNodes) await throttledEnrichIP(node.ip, node.id, true);
-            resetLayout();
+            await stabilizeNetwork();
             showToast('Bulk IPinfo enrichment completed', 'success');
         }
 
         async function enrichAllShodan() {
             if (!shodanApiKey) { showToast('Please set your Shodan API key in the "API Keys" tab first.', 'error'); return; }
+            network.setOptions({ physics: { enabled: false } });
             const ipNodes = nodes.get({ filter: n => n.type === 'ip' });
             for (const node of ipNodes) await throttledEnrichShodan(node.ip, node.id, true);
-            resetLayout();
+            await stabilizeNetwork();
             showToast('Bulk Shodan enrichment completed', 'success');
         }
 
         async function enrichAllGoogleDNS() {
+            network.setOptions({ physics: { enabled: false } });
             const domainNodes = nodes.get({ filter: n => n.type === 'domain' });
             for (const node of domainNodes) await throttledEnrichGoogleDNS(node.domain, node.id, true);
-            resetLayout();
+            await stabilizeNetwork();
             showToast('Bulk Google DNS enrichment completed', 'success');
         }
 
@@ -557,6 +593,7 @@
             if (!text) { showToast('Please enter some text containing IOCs', 'error'); return; }
             processIOCs(text);
             document.getElementById('iocText').value = '';
+            stabilizeNetwork();
         }
 
         function importIOCsFromFile() {
@@ -564,7 +601,11 @@
             const file = fileInput.files[0];
             if (!file) { showToast('Please select a text file containing IOCs', 'error'); return; }
             const reader = new FileReader();
-            reader.onload = function(event) { processIOCs(event.target.result); fileInput.value = ''; };
+            reader.onload = function(event) { 
+                processIOCs(event.target.result); 
+                fileInput.value = ''; 
+                stabilizeNetwork();
+            };
             reader.readAsText(file);
         }
 
@@ -581,7 +622,6 @@
             });
             updateNodeSizes();
             updateSelectOptions();
-            resetLayout();
         }
 
         function saveIpinfoApiKey() {
@@ -614,18 +654,17 @@
                 document.body.classList.add('dark-mode');
                 options.nodes.font.color = '#e2e8f0';
                 options.edges.font.color = '#e2e8f0';
-                options.edges.font.background = 'rgba(255, 255, 255, 0.8)';
                 options.edges.color = { color: '#94a3b8', highlight: '#60a5fa' };
             } else {
                 document.body.classList.remove('dark-mode');
                 document.body.classList.add('light-mode');
                 options.nodes.font.color = '#1f2a44';
                 options.edges.font.color = '#1f2a44';
-                options.edges.font.background = 'rgba(255, 255, 255, 0.8)';
                 options.edges.color = { color: '#6b7280', highlight: '#3b82f6' };
             }
             document.getElementById('mode-toggle').textContent = isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode';
             network.setOptions(options);
+            ensureInteractionSettings();
         }
 
         function toggleMode() { 
@@ -636,40 +675,44 @@
         function togglePhysics() {
             isPhysicsPaused = !isPhysicsPaused;
             const pauseButton = document.getElementById('pause-toggle');
-            options.physics.enabled = !isPhysicsPaused;
-            network.setOptions({ physics: { enabled: !isPhysicsPaused } });
+            network.setOptions({ 
+                physics: { enabled: !isPhysicsPaused },
+                interaction: { ...baseInteractionOptions }
+            });
             pauseButton.textContent = isPhysicsPaused ? 'Resume Physics' : 'Pause Physics';
             pauseButton.classList.toggle('paused', isPhysicsPaused);
+            ensureInteractionSettings();
         }
 
         function resetLayout() {
             nodes.forEach(node => nodes.update({ id: node.id, x: undefined, y: undefined }));
-            network.fit({ animation: { duration: 1000, easingFunction: 'easeInOutQuad' } });
+            stabilizeNetwork();
         }
 
         function setOrganicLayout() {
             network.setOptions({ 
                 physics: { 
-                    enabled: true, 
+                    enabled: true,
                     barnesHut: { 
-                        gravitationalConstant: -3000, 
-                        centralGravity: 0.3, 
-                        springLength: 150, 
-                        springConstant: 0.05, 
-                        damping: 0.09, 
-                        avoidOverlap: 1 
-                    }, 
-                    minVelocity: 0.75 
+                        gravitationalConstant: -8000,
+                        centralGravity: 0.1,
+                        springLength: 200,
+                        springConstant: 0.04,
+                        damping: 0.3,
+                        avoidOverlap: 0.5
+                    }
                 },
-                layout: { hierarchical: false }
+                layout: { hierarchical: false },
+                interaction: { ...baseInteractionOptions }
             });
-            network.fit();
+            stabilizeNetwork();
         }
 
         function setCircularLayout() {
             network.setOptions({ 
                 physics: { enabled: false },
-                layout: { hierarchical: false }
+                layout: { hierarchical: false },
+                interaction: { ...baseInteractionOptions }
             });
             const radius = Math.min(container.clientWidth, container.clientHeight) / 2 - 50;
             const nodeCount = nodes.length;
@@ -683,13 +726,14 @@
                 }); 
                 i++; 
             });
-            network.fit();
+            stabilizeNetwork();
         }
 
         function setOrthogonalLayout() {
             network.setOptions({ 
                 physics: { enabled: false },
-                layout: { hierarchical: false }
+                layout: { hierarchical: false },
+                interaction: { ...baseInteractionOptions }
             });
             const gridSize = Math.ceil(Math.sqrt(nodes.length));
             const step = 100;
@@ -702,7 +746,7 @@
                 }); 
                 i++; 
             });
-            network.fit();
+            stabilizeNetwork();
         }
 
         function setTreeLayout() {
@@ -710,16 +754,17 @@
                 physics: { enabled: false },
                 layout: { 
                     hierarchical: { 
-                        enabled: true, 
-                        levelSeparation: 150, 
-                        nodeSpacing: 100, 
-                        treeSpacing: 200, 
-                        direction: 'UD', 
-                        sortMethod: 'hubsize' 
-                    } 
-                }
+                        enabled: true,
+                        levelSeparation: 150,
+                        nodeSpacing: 100,
+                        treeSpacing: 200,
+                        direction: 'UD',
+                        sortMethod: 'hubsize'
+                    }
+                },
+                interaction: { ...baseInteractionOptions }
             });
-            network.fit();
+            stabilizeNetwork();
         }
 
         function setHierarchicalLayout() {
@@ -727,16 +772,17 @@
                 physics: { enabled: false },
                 layout: { 
                     hierarchical: { 
-                        enabled: true, 
-                        levelSeparation: 150, 
-                        nodeSpacing: 100, 
-                        treeSpacing: 200, 
-                        direction: 'UD', 
-                        sortMethod: 'directed' 
-                    } 
-                }
+                        enabled: true,
+                        levelSeparation: 150,
+                        nodeSpacing: 100,
+                        treeSpacing: 200,
+                        direction: 'UD',
+                        sortMethod: 'directed'
+                    }
+                },
+                interaction: { ...baseInteractionOptions }
             });
-            network.fit();
+            stabilizeNetwork();
         }
 
         function showTab(tabId) {
@@ -818,7 +864,7 @@
                 nodes.add(nodeData);
                 updateSelectOptions();
                 clearAddInputs();
-                resetLayout();
+                stabilizeNetwork();
             }
         }
 
@@ -849,7 +895,7 @@
                 nodes.update(updatedNodeData);
                 updateSelectOptions();
                 clearEditInputs();
-                resetLayout();
+                stabilizeNetwork();
             }
         }
 
@@ -941,7 +987,7 @@
             updateNodeSizes(); 
             updateEdgeSelectOptions(); 
             document.getElementById('edgeLabel').value = ''; 
-            resetLayout();
+            stabilizeNetwork();
         }
 
         function removeNode() {
@@ -951,7 +997,7 @@
             nodes.remove({ id: parseInt(nodeId) });
             updateNodeSizes(); 
             updateSelectOptions(); 
-            resetLayout();
+            stabilizeNetwork();
         }
 
         function removeEdge() {
@@ -961,7 +1007,7 @@
             updateNodeSizes(); 
             updateEdgeSelectOptions(); 
             document.getElementById('removeEdge').value = ''; 
-            resetLayout();
+            stabilizeNetwork();
         }
 
         function clearGraph() {
@@ -973,13 +1019,13 @@
             updateEdgeSelectOptions(); 
             clearAddInputs(); 
             clearEditInputs(); 
-            resetLayout();
+            stabilizeNetwork();
         }
 
         function updateNodeSizes() {
             nodes.forEach(node => { 
                 let connections = edges.get({ filter: edge => edge.from === node.id || edge.to === node.id }).length; 
-                nodes.update({ id: node.id, size: 20 + connections * 10 }); 
+                nodes.update({ id: node.id, size: Math.min(20 + connections * 5, 50) }); 
             });
         }
 
@@ -1105,7 +1151,7 @@
                     updateSelectOptions(); 
                     nextId = Math.max(...importedData.nodes.map(n => n.id)) + 1 || 1; 
                     fileInput.value = ''; 
-                    resetLayout();
+                    stabilizeNetwork();
                 } catch (e) { 
                     console.error('Error importing JSON:', e); 
                     showToast('Error importing JSON: ' + e.message, 'error'); 
