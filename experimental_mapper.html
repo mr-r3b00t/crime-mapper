@@ -60,6 +60,13 @@
         #contextMenu { position: absolute; background-color: #fff; border: 1px solid #ccc; box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2); z-index: 1000; padding: 5px 0; }
         #contextMenu button { display: block; width: 100%; text-align: left; padding: 5px 10px; background: none; border: none; cursor: pointer; }
         #contextMenu button:hover { background-color: #f0f0f0; }
+        .light-mode #contextMenu button { 
+    color: #1f2a44 !important; 
+}
+.light-mode #contextMenu button:hover { 
+    color: #1f2a44 !important; 
+    background-color: #f0f0f0; 
+}
         .dark-mode #contextMenu { background-color: #2d3748; border: 1px solid var(--border-dark); }
         .dark-mode #contextMenu button { color: #e2e8f0; }
         .dark-mode #contextMenu button:hover { background-color: #4b5563; }
@@ -453,24 +460,27 @@
         });
 
         network.on('oncontext', function(params) {
-            params.event.preventDefault();
-            const nodeId = this.getNodeAt(params.pointer.DOM);
-            if (nodeId) {
-                const node = nodes.get(nodeId);
-                if (node.type === 'ip') showContextMenu(params.pointer.DOM.x, params.pointer.DOM.y, node.ip, nodeId, 'ip');
-                else if (node.type === 'domain') showContextMenu(params.pointer.DOM.x, params.pointer.DOM.y, node.domain, nodeId, 'domain');
-            }
-        });
+    params.event.preventDefault();
+    const nodeId = this.getNodeAt(params.pointer.DOM);
+    if (nodeId) {
+        const node = nodes.get(nodeId);
+        if (node.type === 'ip') showContextMenu(params.pointer.DOM.x, params.pointer.DOM.y, node.ip, nodeId, 'ip');
+        else if (node.type === 'domain') showContextMenu(params.pointer.DOM.x, params.pointer.DOM.y, node.domain, nodeId, 'domain');
+    }
+});
 
-        function showContextMenu(x, y, value, nodeId, type) {
-            const menu = document.getElementById('contextMenu');
-            if (type === 'ip') menu.innerHTML = `<button onclick="throttledEnrichIP('${value}', ${nodeId})">Enrich via IPINFO</button><button onclick="throttledEnrichShodan('${value}', ${nodeId})">Enrich via Shodan</button>`;
-            else if (type === 'domain') menu.innerHTML = `<button onclick="throttledEnrichGoogleDNS('${value}', ${nodeId})">Enrich via Google DNS</button>`;
-            menu.style.left = `${x}px`;
-            menu.style.top = `${y}px`;
-            menu.style.display = 'block';
-            document.addEventListener('click', hideContextMenu);
-        }
+function showContextMenu(x, y, value, nodeId, type) {
+    const menu = document.getElementById('contextMenu');
+    if (type === 'ip') menu.innerHTML = `<button onclick="throttledEnrichIP('${value}', ${nodeId})">Enrich via IPINFO</button><button onclick="throttledEnrichShodan('${value}', ${nodeId})">Enrich via Shodan</button>`;
+    else if (type === 'domain') menu.innerHTML = `<button onclick="throttledEnrichGoogleDNS('${value}', ${nodeId})">Enrich via Google DNS</button>`;
+    
+    // Adjust position to account for canvas offset
+    const canvasOffset = container.getBoundingClientRect();
+    menu.style.left = `${x + canvasOffset.left}px`;
+    menu.style.top = `${y + canvasOffset.top}px`;
+    menu.style.display = 'block';
+    document.addEventListener('click', hideContextMenu);
+}
 
         function hideContextMenu() {
             document.getElementById('contextMenu').style.display = 'none';
