@@ -1,0 +1,259 @@
+{
+  "nodes": [
+    {
+      "id": 1,
+      "type": "domain",
+      "domain": "ncsc.gov.uk"
+    },
+    {
+      "id": 2,
+      "type": "ip",
+      "ip": "13.224.222.50"
+    },
+    {
+      "id": 3,
+      "type": "ip",
+      "ip": "13.224.222.76"
+    },
+    {
+      "id": 4,
+      "type": "ip",
+      "ip": "13.224.222.59"
+    },
+    {
+      "id": 5,
+      "type": "ip",
+      "ip": "13.224.222.104"
+    },
+    {
+      "id": 6,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "80"
+    },
+    {
+      "id": 7,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "443"
+    },
+    {
+      "id": 8,
+      "type": "asn",
+      "asn": "AS16509"
+    },
+    {
+      "id": 9,
+      "type": "city",
+      "city": "London"
+    },
+    {
+      "id": 10,
+      "type": "organization",
+      "organization": "Amazon.com, Inc."
+    },
+    {
+      "id": 11,
+      "type": "country",
+      "country": "GB"
+    },
+    {
+      "id": 12,
+      "type": "hosting"
+    }
+  ],
+  "edges": [
+    {
+      "id": "1-2-ResolvesTo",
+      "from": 1,
+      "to": 2,
+      "label": "Resolves to"
+    },
+    {
+      "id": "1-3-ResolvesTo",
+      "from": 1,
+      "to": 3,
+      "label": "Resolves to"
+    },
+    {
+      "id": "1-4-ResolvesTo",
+      "from": 1,
+      "to": 4,
+      "label": "Resolves to"
+    },
+    {
+      "id": "1-5-ResolvesTo",
+      "from": 1,
+      "to": 5,
+      "label": "Resolves to"
+    },
+    {
+      "id": "2-6-Exposes",
+      "from": 2,
+      "to": 6,
+      "label": "Exposes"
+    },
+    {
+      "id": "2-7-Exposes",
+      "from": 2,
+      "to": 7,
+      "label": "Exposes"
+    },
+    {
+      "id": "3-6-Exposes",
+      "from": 3,
+      "to": 6,
+      "label": "Exposes"
+    },
+    {
+      "id": "3-7-Exposes",
+      "from": 3,
+      "to": 7,
+      "label": "Exposes"
+    },
+    {
+      "id": "4-6-Exposes",
+      "from": 4,
+      "to": 6,
+      "label": "Exposes"
+    },
+    {
+      "id": "4-7-Exposes",
+      "from": 4,
+      "to": 7,
+      "label": "Exposes"
+    },
+    {
+      "id": "5-6-Exposes",
+      "from": 5,
+      "to": 6,
+      "label": "Exposes"
+    },
+    {
+      "id": "5-7-Exposes",
+      "from": 5,
+      "to": 7,
+      "label": "Exposes"
+    },
+    {
+      "id": "2-8-Assigned to",
+      "from": 2,
+      "to": 8,
+      "label": "Assigned to"
+    },
+    {
+      "id": "2-9-Located in",
+      "from": 2,
+      "to": 9,
+      "label": "Located in"
+    },
+    {
+      "id": "2-10-Belongs to",
+      "from": 2,
+      "to": 10,
+      "label": "Belongs to"
+    },
+    {
+      "id": "2-11-Located in",
+      "from": 2,
+      "to": 11,
+      "label": "Located in"
+    },
+    {
+      "id": "2-12-Uses",
+      "from": 2,
+      "to": 12,
+      "label": "Uses"
+    },
+    {
+      "id": "3-8-Assigned to",
+      "from": 3,
+      "to": 8,
+      "label": "Assigned to"
+    },
+    {
+      "id": "3-9-Located in",
+      "from": 3,
+      "to": 9,
+      "label": "Located in"
+    },
+    {
+      "id": "3-10-Belongs to",
+      "from": 3,
+      "to": 10,
+      "label": "Belongs to"
+    },
+    {
+      "id": "3-11-Located in",
+      "from": 3,
+      "to": 11,
+      "label": "Located in"
+    },
+    {
+      "id": "3-12-Uses",
+      "from": 3,
+      "to": 12,
+      "label": "Uses"
+    },
+    {
+      "id": "4-8-Assigned to",
+      "from": 4,
+      "to": 8,
+      "label": "Assigned to"
+    },
+    {
+      "id": "4-9-Located in",
+      "from": 4,
+      "to": 9,
+      "label": "Located in"
+    },
+    {
+      "id": "4-10-Belongs to",
+      "from": 4,
+      "to": 10,
+      "label": "Belongs to"
+    },
+    {
+      "id": "4-11-Located in",
+      "from": 4,
+      "to": 11,
+      "label": "Located in"
+    },
+    {
+      "id": "4-12-Uses",
+      "from": 4,
+      "to": 12,
+      "label": "Uses"
+    },
+    {
+      "id": "5-8-Assigned to",
+      "from": 5,
+      "to": 8,
+      "label": "Assigned to"
+    },
+    {
+      "id": "5-9-Located in",
+      "from": 5,
+      "to": 9,
+      "label": "Located in"
+    },
+    {
+      "id": "5-10-Belongs to",
+      "from": 5,
+      "to": 10,
+      "label": "Belongs to"
+    },
+    {
+      "id": "5-11-Located in",
+      "from": 5,
+      "to": 11,
+      "label": "Located in"
+    },
+    {
+      "id": "5-12-Uses",
+      "from": 5,
+      "to": 12,
+      "label": "Uses"
+    }
+  ]
+}
