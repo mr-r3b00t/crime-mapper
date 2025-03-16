@@ -377,25 +377,58 @@
         let network = new vis.Network(container, data, options);
 
         function ensureInteractionSettings() {
-            network.setOptions({
-                interaction: { ...baseInteractionOptions },
-                physics: {
-                    enabled: !isPhysicsPaused,
-                    stabilization: { enabled: true }
-                }
-            });
+    network.setOptions({
+        interaction: { ...baseInteractionOptions },
+        physics: {
+            enabled: !isPhysicsPaused,
+            stabilization: { enabled: false },
+            barnesHut: {
+                gravitationalConstant: -8000,
+                centralGravity: 0.1,
+                springLength: 200,
+                springConstant: 0.04,
+                damping: 0.3,
+                avoidOverlap: 0.5
+            },
+            maxVelocity: 50,
+            minVelocity: 0.1
         }
+    });
+}
 
         function stabilizeNetwork() {
-            return new Promise(resolve => {
-                network.stabilize(100);
-                network.once('stabilizationIterationsDone', () => {
-                    ensureInteractionSettings();
-                    network.fit({ animation: { duration: 500 } });
-                    resolve();
-                });
+    return new Promise(resolve => {
+        network.setOptions({
+            physics: {
+                enabled: true,
+                stabilization: {
+                    enabled: true,
+                    iterations: 200, // Increased iterations
+                    updateInterval: 50 // More frequent updates
+                }
+            }
+        });
+        
+        network.stabilize(200); // Match iterations with settings
+        network.once('stabilizationIterationsDone', () => {
+            network.setOptions({
+                physics: {
+                    enabled: !isPhysicsPaused,
+                    stabilization: { enabled: false }
+                }
             });
-        }
+            ensureInteractionSettings();
+            network.fit({ 
+                animation: { 
+                    duration: 500,
+                    easingFunction: 'easeInOutQuad'
+                } 
+            });
+            // Add small delay to ensure rendering completes
+            setTimeout(resolve, 100);
+        });
+    });
+}
 
         window.onload = function() {
             const storedIpinfoKey = localStorage.getItem('ipinfoApiKey');
