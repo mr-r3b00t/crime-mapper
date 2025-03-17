@@ -55,19 +55,11 @@
 
 /* Menu toggle button */
 #menu-toggle {
-    width: 30px;
-    height: 30px;
-    font-size: 18px;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background-color: #6b7280;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
+  
+    transition: transform var(--transition);
 }
+
+
 
 /* Top buttons - no absolute positioning */
 #mode-toggle, #pause-toggle, #reset-layout {
@@ -250,7 +242,7 @@
 </head>
 <body class="dark-mode">
     <div id="controls" class="collapsed">
-        <button id="menu-toggle" onclick="toggleMenu()">☰</button>
+        <button id="menu-toggle" onclick="toggleMenu()">></button>
         <button id="mode-toggle" onclick="toggleMode()">Switch to Light Mode</button>
         <button id="pause-toggle" onclick="togglePhysics()">Pause Physics</button>
         <button id="reset-layout" onclick="resetLayout()">Reset Layout</button>
@@ -469,7 +461,10 @@
     const controls = document.getElementById('controls');
     controls.classList.toggle('collapsed');
     
-    // Adjust network canvas size after animation
+    // Optional: You could also dynamically change the symbol
+    const toggleButton = document.getElementById('menu-toggle');
+    toggleButton.textContent = controls.classList.contains('collapsed') ? '>' : '<';
+    
     setTimeout(() => {
         network.fit({
             animation: {
@@ -477,7 +472,7 @@
                 easingFunction: 'easeInOutQuad'
             }
         });
-    }, 300); // Match this timing with your --transition variable
+    }, 300);
 }
 
 // Modify the existing window.onload to start collapsed on mobile
