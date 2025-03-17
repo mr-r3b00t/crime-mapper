@@ -827,7 +827,7 @@ async function enrichAllInternetDB() {
     network.setOptions({ physics: { enabled: false } });
     const ipNodes = nodes.get({ filter: n => n.type === 'ip' && n.ip });
     let successfulEnrichments = 0;
-
+    
     console.log(`Found ${ipNodes.length} IP nodes to enrich with InternetDB`);
     
     for (const node of ipNodes) {
@@ -843,6 +843,19 @@ async function enrichAllInternetDB() {
     
     await stabilizeNetwork();
     showToast(`InternetDB enrichment completed: ${successfulEnrichments}/${ipNodes.length} IPs enriched`, 'success');
+    
+    // Add this: Restore mobile layout after enrichment
+    if (window.innerWidth <= 768) {
+        const controls = document.getElementById('controls');
+        controls.classList.add('collapsed');
+        document.getElementById('myNetwork').style.display = 'block';
+        network.fit({
+            animation: {
+                duration: 300,
+                easingFunction: 'easeInOutQuad'
+            }
+        });
+    }
 }
 
         const throttledEnrichIP = throttleRequest(async function enrichIP(ip, ipNodeId, isBulk = false) {
