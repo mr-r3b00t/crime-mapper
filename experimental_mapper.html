@@ -228,6 +228,54 @@
         .light-mode .checkbox-label { color: #1f2a44; }
         .dark-mode .checkbox-label { color: #e2e8f0; }
         input[type="checkbox"] { margin-right: 8px; width: auto; }
+        #edgeContextMenu {
+    position: absolute;
+    background-color: #fff;
+    border: 1px solid #ccc;
+    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    padding: 5px 0;
+}
+
+#edgeContextMenu button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 5px 10px;
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+#edgeContextMenu button:hover {
+    background-color: #f0f0f0;
+}
+
+.light-mode #edgeContextMenu {
+    background-color: #fff;
+}
+
+.light-mode #edgeContextMenu button {
+    color: #1f2a44 !important;
+}
+
+.light-mode #edgeContextMenu button:hover {
+    color: #1f2a44 !important;
+    background-color: #f0f0f0;
+}
+
+.dark-mode #edgeContextMenu {
+    background-color: #2d3748;
+    border: 1px solid var(--border-dark);
+}
+
+.dark-mode #edgeContextMenu button {
+    color: #e2e8f0;
+}
+
+.dark-mode #edgeContextMenu button:hover {
+    background-color: #4b5563;
+}
     </style>
     <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/dist/vis-network.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/toastify-js/1.12.0/toastify.min.js"></script>
@@ -460,6 +508,7 @@
     </div>
     <div id="myNetwork"></div>
     <div id="contextMenu" style="display: none;"></div>
+    <div id="edgeContextMenu" style="display: none;"></div>
 
     <script>
         let nodes = new vis.DataSet([]);
@@ -851,27 +900,91 @@ function stabilizeNetwork(skipFit = false) {
         network.on('oncontext', function(params) {
     params.event.preventDefault();
     const nodeId = this.getNodeAt(params.pointer.DOM);
+    const edgeId = this.getEdgeAt(params.pointer.DOM);
+    
     if (nodeId) {
         const node = nodes.get(nodeId);
-        // Pass the appropriate value based on node type
         let value;
         switch (node.type) {
-            case 'ip':
-                value = node.ip;
-                break;
-            case 'domain':
-                value = node.domain;
-                break;
-            default:
-                value = node.label; // Fallback for other types
+            case 'ip': value = node.ip; break;
+            case 'domain': value = node.domain; break;
+            default: value = node.label;
         }
         showContextMenu(params.pointer.DOM.x, params.pointer.DOM.y, value, nodeId, node.type);
+    } else if (edgeId) {
+        showEdgeContextMenu(params.pointer.DOM.x, params.pointer.DOM.y, edgeId);
     }
 });
 
+function showEdgeContextMenu(x, y, edgeId) {
+    const menu = document.getElementById('edgeContextMenu');
+    const edge = edges.get(edgeId);
+    if (!edge) return;
+    
+    const menuHtml = `
+        <button onclick="editEdgeLabel('${edgeId}')">Edit Label</button>
+        <button onclick="removeEdgeDirect('${edgeId}')">Delete Edge</button>
+    `;
+    
+    menu.innerHTML = menuHtml;
+    const canvasOffset = container.getBoundingClientRect();
+    menu.style.left = `${x + canvasOffset.left}px`;
+    menu.style.top = `${y + canvasOffset.top}px`;
+    menu.style.display = 'block';
+    document.addEventListener('click', hideEdgeContextMenu);
+}
+
+function hideEdgeContextMenu() {
+    document.getElementById('edgeContextMenu').style.display = 'none';
+    document.removeEventListener('click', hideEdgeContextMenu);
+}
+
+function editEdgeLabel(edgeId) {
+    const edge = edges.get(edgeId);
+    if (!edge) {
+        showToast('Edge not found', 'error');
+        return;
+    }
+    
+    const currentLabel = edge.label || '';
+    const newLabel = prompt('Enter new edge label (leave empty to remove):', currentLabel);
+    
+    if (newLabel !== null) { // null means user cancelled
+        edges.update({
+            id: edgeId,
+            label: newLabel.trim() === '' ? undefined : newLabel.trim()
+        });
+        updateEdgeSelectOptions();
+        stabilizeNetwork();
+        saveStateAfterOperation();
+        showToast('Edge label updated', 'success');
+    }
+    
+    hideEdgeContextMenu();
+}
+
+function removeEdgeDirect(edgeId) {
+    const edge = edges.get(edgeId);
+    if (!edge) {
+        showToast('Edge not found', 'error');
+        return;
+    }
+    
+    edges.remove({ id: edgeId });
+    updateNodeSizes();
+    updateEdgeSelectOptions();
+    stabilizeNetwork();
+    saveStateAfterOperation();
+    showToast('Edge removed', 'success');
+    hideEdgeContextMenu();
+}
+
 function showContextMenu(x, y, value, nodeId, type) {
     const menu = document.getElementById('contextMenu');
-    let menuHtml = `<button onclick="deleteNode(${nodeId})">Delete Node</button>`;
+    let menuHtml = `
+        <button onclick="deleteNode(${nodeId})">Delete Node</button>
+        <button onclick="startLinkCreation(${nodeId})">Create Link From Here</button>
+    `;
     
     // Add type-specific options
     if (type === 'ip') {
@@ -897,6 +1010,80 @@ function showContextMenu(x, y, value, nodeId, type) {
     menu.style.top = `${y + canvasOffset.top}px`;
     menu.style.display = 'block';
     document.addEventListener('click', hideContextMenu);
+}
+
+let linkFromNode = null;
+
+function startLinkCreation(nodeId) {
+    linkFromNode = nodeId;
+    hideContextMenu();
+    showToast('Select another node to create a link (right-click to cancel)', 'info');
+    
+    // Add temporary visual feedback
+    nodes.update({
+        id: nodeId,
+        color: { border: '#22c55e', background: nodes.get(nodeId).color.background }
+    });
+    
+    // Add one-time event listener for next node selection
+    network.once('oncontext', handleLinkDestination);
+    network.once('click', cancelLinkCreation);
+}
+
+function handleLinkDestination(params) {
+    params.event.preventDefault();
+    const nodeId = network.getNodeAt(params.pointer.DOM);
+    
+    if (!nodeId || nodeId === linkFromNode) {
+        cancelLinkCreation();
+        return;
+    }
+    
+    // Create the edge
+    const edgeId = `edge_${linkFromNode}_${nodeId}_${Date.now()}`;
+    if (!edges.get({ filter: e => e.from === linkFromNode && e.to === nodeId }).length) {
+        edges.add({
+            id: edgeId,
+            from: linkFromNode,
+            to: nodeId,
+            label: 'Connected' // Default label, could be made configurable
+        });
+        
+        updateNodeSizes();
+        updateEdgeSelectOptions();
+        stabilizeNetwork();
+        saveStateAfterOperation();
+        showToast(`Link created between nodes`, 'success');
+    } else {
+        showToast('Link already exists between these nodes', 'error');
+    }
+    
+    // Reset visual feedback
+    const originalNode = nodes.get(linkFromNode);
+    nodes.update({
+        id: linkFromNode,
+        color: { border: isDarkMode ? '#94a3b8' : '#6b7280', background: originalNode.color.background }
+    });
+    
+    linkFromNode = null;
+}
+
+function cancelLinkCreation() {
+    if (linkFromNode) {
+        // Reset visual feedback
+        const originalNode = nodes.get(linkFromNode);
+        nodes.update({
+            id: linkFromNode,
+            color: { border: isDarkMode ? '#94a3b8' : '#6b7280', background: originalNode.color.background }
+        });
+        
+        showToast('Link creation cancelled', 'info');
+        linkFromNode = null;
+        
+        // Remove temporary listeners
+        network.off('oncontext', handleLinkDestination);
+        network.off('click', cancelLinkCreation);
+    }
 }
 
 function deleteNode(nodeId) {
