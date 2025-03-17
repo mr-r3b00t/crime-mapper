@@ -870,64 +870,58 @@ function showContextMenu(x, y, value, nodeId, type) {
         }
 
         const throttledSendHttpsRequest = throttleRequest(async function sendHttpsRequest(target, type) {
-    network.setOptions({ physics: { enabled: false } });
-    let url = `https://${target}`;
-    
-    try {
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-            },
-            mode: 'cors', // Use CORS mode for cross-origin requests
-            credentials: 'omit' // Don't send cookies or credentials
-        });
+            network.setOptions({ physics: { enabled: false } });
+            // Use CORS Anywhere proxy to bypass CORS restrictions
+            let url = `https://cors-anywhere.herokuapp.com/https://${target}`;
+            
+            try {
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Origin': window.location.origin // Required by CORS Anywhere
+                    },
+                    mode: 'cors',
+                    credentials: 'omit'
+                });
 
-        // Get response details
-        const status = response.status;
-        const statusText = response.statusText;
-        const headers = {};
-        response.headers.forEach((value, key) => {
-            headers[key] = value;
-        });
+                const status = response.status;
+                const statusText = response.statusText;
+                const headers = {};
+                response.headers.forEach((value, key) => {
+                    headers[key] = value;
+                });
 
-        // Try to get the body (limited to text for simplicity)
-        let body = '';
-        const contentType = headers['content-type'] || '';
-        if (contentType.includes('text') || contentType.includes('html') || contentType.includes('json')) {
-            body = await response.text();
-            // Truncate if too long
-            if (body.length > 500) {
-                body = body.substring(0, 500) + '... (truncated)';
+                let body = '';
+                const contentType = headers['content-type'] || '';
+                if (contentType.includes('text') || contentType.includes('html') || contentType.includes('json')) {
+                    body = await response.text();
+                    if (body.length > 500) {
+                        body = body.substring(0, 500) + '... (truncated)';
+                    }
+                } else {
+                    body = '(Binary or unsupported content type)';
+                }
+
+                const message = `
+                    HTTPS Request to https://${target}
+                    Status: ${status} ${statusText}
+                    Headers: ${JSON.stringify(headers, null, 2)}
+                    Body: ${body}
+                `.trim();
+
+                showToast(message, 'success');
+            } catch (error) {
+                const errorMessage = `
+                    HTTPS Request to https://${target}
+                    Error: ${error.message}
+                    Note: Ensure CORS Anywhere proxy is active (visit https://cors-anywhere.herokuapp.com/ to request temporary access if needed)
+                `.trim();
+                showToast(errorMessage, 'error');
+            } finally {
+                await stabilizeNetwork();
             }
-        } else {
-            body = '(Binary or unsupported content type)';
-        }
-
-        // Format the response message
-        const message = `
-            HTTPS Request to ${url}
-            Status: ${status} ${statusText}
-            Headers: ${JSON.stringify(headers, null, 2)}
-            Body: ${body}
-        `.trim();
-
-        showToast(message, 'success');
-    } catch (error) {
-        // Handle errors (e.g., network failure, CORS issues)
-        const errorMessage = `
-            HTTPS Request to ${url}
-            Error: ${error.message}
-            This could be due to:
-            - Network failure
-            - CORS restrictions
-            - Invalid or unreachable target
-        `.trim();
-        showToast(errorMessage, 'error');
-    } finally {
-        await stabilizeNetwork();
-    }
-});
+        });
 
         const throttledEnrichInternetDB = throttleRequest(async function enrichInternetDB(ip, ipNodeId, isBulk = false) {
     network.setOptions({ physics: { enabled: false } });
