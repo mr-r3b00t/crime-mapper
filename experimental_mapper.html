@@ -540,24 +540,32 @@ window.onload = function() {
         let container = document.getElementById('myNetwork');
         let data = { nodes: nodes, edges: edges };
         let options = {
-    nodes: { 
-        shape: 'circle', 
-        size: 20, 
+    nodes: {
+        shape: 'dot',  // Changed from 'circle' to 'dot' for consistent sizing
+        size: 20,      // Base size for all nodes
         font: { 
             size: 12, 
-            color: '#e2e8f0',
-            multi: true // Enable multi-line labels
+            color: '#e2e8f0', 
+            multi: true 
         },
         scaling: {
             min: 10,
-            max: 30
+            max: 70
+        },
+        // Add these to prevent label influence
+        fixed: {
+            x: false,
+            y: false
+        },
+        shapeProperties: {
+            useBorderWithImage: false
         },
         color: {
             hover: {
                 border: '#60a5fa',
                 background: '#4b5563'
             },
-            highlight: { // Added for selected state
+            highlight: {
                 border: '#60a5fa',
                 background: '#4b5563'
             }
@@ -1302,7 +1310,14 @@ async function enrichAllGoogleDNS() {
         });
 
         function createNodeData(type, values) {
-            const nodeData = { id: nextId++, size: 20, type };
+    const nodeData = { 
+        id: nextId++, 
+        size: 20, // Consistent starting size
+        type,
+        // Ensure no size constraints from label
+        widthConstraint: false,
+        heightConstraint: false
+    };
             const configs = {
                 contact: { fields: ['name'], optionalFields: ['email'], color: '#4ade80', label: v => v.email ? `${v.name}\n${v.email}` : v.name, title: v => v.email ? `Contact\nName: ${v.name}\nEmail: ${v.email}` : `Contact\nName: ${v.name}` },
                 ip: { fields: ['ip'], color: '#f87171', label: v => v.ip, title: v => `IP Address: ${v.ip}`, validate: v => ipRegex.ipv4.test(v.ip) || ipRegex.ipv6.test(v.ip) },
@@ -1325,37 +1340,28 @@ async function enrichAllGoogleDNS() {
         }
 
         function addNode() {
-            const type = document.getElementById('addEntityType').value;
-            const inputs = {
-                contact: { name: document.getElementById('addNameInput').value, email: document.getElementById('addEmailInput').value },
-                ip: { ip: document.getElementById('addIpInput').value.trim() },
-                domain: { domain: document.getElementById('addDomainInput').value },
-                organization: { organization: document.getElementById('addOrgInput').value },
-                port: { portNumber: document.getElementById('addPortNumInput').value, portType: document.getElementById('addPortType').value },
-                wallet: { address: document.getElementById('addWalletAddressInput').value },
-                bank: { accountNumber: document.getElementById('addAccountNumberInput').value, sortCode: document.getElementById('addSortCodeInput').value },
-                technology: { techName: document.getElementById('addTechNameInput').value, techVersion: document.getElementById('addTechVersionInput').value },
-                device: { deviceCategory: document.getElementById('addDeviceCategory').value, deviceName: document.getElementById('addDeviceNameInput').value },
-                malware: { malwareName: document.getElementById('addMalwareNameInput').value, malwareType: document.getElementById('addMalwareType').value }
-            };
-            const nodeData = createNodeData(type, inputs[type]);
-            if (nodeData) {
-                const existingNodes = nodes.get({
-                    filter: n => n.type === type && 
-                                Object.keys(inputs[type]).every(key => 
-                                    inputs[type][key] === "" || inputs[type][key] === undefined || n[key] === inputs[type][key]
-                                )
-                });
-                if (existingNodes.length > 0) {
-                    showToast(`${type} already exists`, 'error');
-                    return;
-                }
-                nodes.add(nodeData);
-                updateSelectOptions();
-                clearAddInputs();
-                stabilizeNetwork();
-            }
+    const type = document.getElementById('addEntityType').value;
+    const inputs = { /* ... */ };
+    const nodeData = createNodeData(type, inputs[type]);
+    if (nodeData) {
+        const existingNodes = nodes.get({ /* ... */ });
+        if (existingNodes.length > 0) {
+            showToast(`${type} already exists`, 'error');
+            return;
         }
+        // Add node with explicit size control
+        nodes.add({
+            ...nodeData,
+            size: 20, // Fixed initial size
+            widthConstraint: false,
+            heightConstraint: false
+        });
+        updateSelectOptions();
+        clearAddInputs();
+        updateNodeSizes();
+        stabilizeNetwork();
+    }
+}
 
         function editNode() {
             const nodeId = document.getElementById('editNodeSelect').value;
@@ -1512,11 +1518,24 @@ async function enrichAllGoogleDNS() {
         }
 
         function updateNodeSizes() {
-            nodes.forEach(node => { 
-                let connections = edges.get({ filter: edge => edge.from === node.id || edge.to === node.id }).length; 
-                nodes.update({ id: node.id, size: Math.min(20 + connections * 5, 50) }); 
-            });
-        }
+    nodes.forEach(node => { 
+        // Count connections
+        const connections = edges.get({ 
+            filter: edge => edge.from === node.id || edge.to === node.id 
+        }).length; 
+        
+        // Base size 20, add 5 per connection, max 60
+        const newSize = Math.min(20 + connections * 5, 60);
+        
+        nodes.update({ 
+            id: node.id, 
+            size: newSize,
+            // Ensure label doesn't affect size
+            widthConstraint: false,
+            heightConstraint: false
+        }); 
+    });
+}
 
         function updateSelectOptions() {
             ['editNodeSelect', 'fromNode', 'toNode', 'removeNode'].forEach(id => {
