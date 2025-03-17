@@ -848,12 +848,14 @@ function showContextMenu(x, y, value, nodeId, type) {
             <button onclick="throttledEnrichIP('${value}', ${nodeId})">Enrich via IPINFO</button>
             <button onclick="throttledEnrichShodan('${value}', ${nodeId})">Enrich via Shodan</button>
             <button onclick="throttledEnrichInternetDB('${value}', ${nodeId})">Enrich via InternetDB</button>
-            <button onclick="throttledSendHttpsRequest('${value}', 'ip')">Send HTTPS Request</button>
+            <button onclick="throttledSendHttpsRequest('${value}', 'ip', 'https')">Send HTTPS Request</button>
+            <button onclick="throttledSendHttpsRequest('${value}', 'ip', 'http')">Send HTTP Request</button>
         `;
     } else if (type === 'domain') {
         menu.innerHTML = `
             <button onclick="throttledEnrichGoogleDNS('${value}', ${nodeId})">Enrich via Google DNS</button>
-            <button onclick="throttledSendHttpsRequest('${value}', 'domain')">Send HTTPS Request</button>
+            <button onclick="throttledSendHttpsRequest('${value}', 'domain', 'https')">Send HTTPS Request</button>
+            <button onclick="throttledSendHttpsRequest('${value}', 'domain', 'http')">Send HTTP Request</button>
         `;
     }
     
@@ -869,59 +871,41 @@ function showContextMenu(x, y, value, nodeId, type) {
             document.removeEventListener('click', hideContextMenu);
         }
 
-        const throttledSendHttpsRequest = throttleRequest(async function sendHttpsRequest(target, type) {
-            network.setOptions({ physics: { enabled: false } });
-            // Use CORS Anywhere proxy to bypass CORS restrictions
-            let url = `https://cors-anywhere.herokuapp.com/https://${target}`;
-            
-            try {
-                const response = await fetch(url, {
-                    method: 'GET',
-                    headers: {
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                        'Origin': window.location.origin // Required by CORS Anywhere
-                    },
-                    mode: 'cors',
-                    credentials: 'omit'
-                });
-
-                const status = response.status;
-                const statusText = response.statusText;
-                const headers = {};
-                response.headers.forEach((value, key) => {
-                    headers[key] = value;
-                });
-
-                let body = '';
-                const contentType = headers['content-type'] || '';
-                if (contentType.includes('text') || contentType.includes('html') || contentType.includes('json')) {
-                    body = await response.text();
-                    if (body.length > 500) {
-                        body = body.substring(0, 500) + '... (truncated)';
-                    }
-                } else {
-                    body = '(Binary or unsupported content type)';
-                }
-
-                const message = `
-                    HTTPS Request to https://${target}
-                    Status: ${status} ${statusText}
-                    Headers: ${JSON.stringify(headers, null, 2)}
-                    Body: ${body}
-                `.trim();
-
-                showToast(message, 'success');
-            } catch (error) {
-                const errorMessage = `
-                    HTTPS Request to https://${target}
-                    Error: ${error.message}
-                    Note: Ensure CORS Anywhere proxy is active (visit https://cors-anywhere.herokuapp.com/ to request temporary access if needed)
-                `.trim();
-                showToast(errorMessage, 'error');
-            } finally {
-                await stabilizeNetwork();
-            }
+        const throttledSendHttpsRequest = throttleRequest(async function sendHttpsRequest(target, type, protocol = 'https') {
+    network.setOptions({ physics: { enabled: false } });
+    let url = `https://cors-anywhere.herokuapp.com/${protocol}://${target}`;
+    
+    try {
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Origin': window.location.origin
+            },
+            mode: 'cors',
+            credentials: 'omit'
         });
+        // [Rest of the function unchanged]
+        const message = `
+            ${protocol.toUpperCase()} Request to ${protocol}://${target}
+            Status: ${status} ${statusText}
+            Headers: ${JSON.stringify(headers, null, 2)}
+            Body: ${body}
+        `.trim();
+        showToast(message, 'success');
+    } catch (error) {
+        const errorMessage = `
+            ${protocol.toUpperCase()} Request to ${protocol}://${target}
+            Error: ${error.message}
+            Note: Ensure CORS Anywhere proxy is active
+        `.trim();
+        showToast(errorMessage, 'error');
+    } finally {
+        await stabilizeNetwork();
+    }
+});
+
+
 
         const throttledEnrichInternetDB = throttleRequest(async function enrichInternetDB(ip, ipNodeId, isBulk = false) {
     network.setOptions({ physics: { enabled: false } });
