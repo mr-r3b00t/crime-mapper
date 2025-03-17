@@ -400,6 +400,14 @@
                 </label>
                 <button onclick="saveShodanApiKey()">Save Shodan API Key</button>
             </div>
+            <div class="input-group">
+                <h3>CORS Proxy URL</h3>
+                <input type="text" id="corsProxyUrl" placeholder="Enter CORS Proxy URL" value="https://cors-anywhere.herokuapp.com/">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="storeCorsProxy" checked> Store in local storage
+                </label>
+                <button onclick="saveCorsProxyUrl()">Save CORS Proxy URL</button>
+            </div>
         </div>
         <div id="enrichment" class="tab-content">
             <div class="input-group">
@@ -460,6 +468,7 @@
         let isDarkMode = true;
         let ipinfoApiKey = '';
         let shodanApiKey = '';
+        let corsProxyUrl = 'https://cors-anywhere.herokuapp.com/'; // Default value
         let isPhysicsPaused = false;
         let lastRequestTime = 0;
         const RATE_LIMIT_MS = 500;
@@ -518,7 +527,15 @@ window.onload = function() {
         document.getElementById('shodanApiKey').value = storedShodanKey;
         document.getElementById('storeShodanKey').checked = true;
     }
-
+    const storedCorsProxy = localStorage.getItem('corsProxyUrl');
+            if (storedCorsProxy) {
+                corsProxyUrl = storedCorsProxy;
+                document.getElementById('corsProxyUrl').value = storedCorsProxy;
+                document.getElementById('storeCorsProxy').checked = true;
+            } else {
+                // Set default value if not in localStorage
+                document.getElementById('corsProxyUrl').value = corsProxyUrl;
+            }
     // Load saved state
     const stateLoaded = loadState();
 
@@ -873,7 +890,7 @@ function showContextMenu(x, y, value, nodeId, type) {
 
         const throttledSendHttpsRequest = throttleRequest(async function sendHttpsRequest(target, type) {
             network.setOptions({ physics: { enabled: false } });
-            let url = `https://cors-anywhere.herokuapp.com/https://${target}`;
+            let url = `${corsProxyUrl}/https://${target}`;
             let message;
 
             try {
@@ -916,13 +933,78 @@ function showContextMenu(x, y, value, nodeId, type) {
                 message = `
                     HTTPS Request to https://${target}
                     Error: ${error.message}
-                    Note: Ensure CORS Anywhere proxy is active (visit https://cors-anywhere.herokuapp.com/ to request temporary access if needed)
+                    Note: Ensure the CORS proxy (${corsProxyUrl}) is active and correctly configured
                 `.trim();
                 showToast(message, 'error');
             } finally {
                 await stabilizeNetwork();
             }
         });
+
+        function saveCorsProxyUrl() {
+            corsProxyUrl = document.getElementById('corsProxyUrl').value.trim();
+            const storeProxy = document.getElementById('storeCorsProxy').checked;
+            if (corsProxyUrl) {
+                if (storeProxy) {
+                    localStorage.setItem('corsProxyUrl', corsProxyUrl);
+                    showToast('CORS Proxy URL saved successfully!', 'success');
+                } else {
+                    localStorage.removeItem('corsProxyUrl');
+                    showToast('CORS Proxy URL set for this session only', 'success');
+                }
+            } else {
+                corsProxyUrl = 'https://cors-anywhere.herokuapp.com/'; // Reset to default if empty
+                localStorage.removeItem('corsProxyUrl');
+                document.getElementById('corsProxyUrl').value = corsProxyUrl;
+                showToast('CORS Proxy URL reset to default', 'info');
+            }
+        }
+
+        function throttleRequest(fn) {
+            return async function(...args) {
+                const now = Date.now();
+                const timeSinceLast = now - lastRequestTime;
+                if (timeSinceLast < RATE_LIMIT_MS) await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_MS - timeSinceLast));
+                lastRequestTime = now;
+                return fn(...args);
+            };
+        }
+
+        function showToast(message, type = 'info') {
+            const toastOptions = {
+                text: message,
+                duration: 6500,
+                position: "center",
+                style: {
+                    background: isDarkMode ? '#2d3748' : '#fff',
+                    color: isDarkMode ? '#e2e8f0' : '#1f2a44',
+                    border: `1px solid ${isDarkMode ? '#4b5563' : '#d1d5db'}`,
+                    boxShadow: isDarkMode ? '0 2px 10px rgba(0, 0, 0, 0.3)' : '0 2px 10px rgba(0, 0, 0, 0.1)',
+                    position: 'fixed',
+                    top: '50px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    width: 'auto',
+                    maxWidth: '80%',
+                    zIndex: 1000
+                }
+            };
+            switch (type) {
+                case 'success': toastOptions.style.background = isDarkMode ? '#166534' : '#22c55e'; toastOptions.style.color = '#fff'; break;
+                case 'error': toastOptions.style.background = isDarkMode ? '#991b1b' : '#ef4444'; toastOptions.style.color = '#fff'; break;
+            }
+            Toastify(toastOptions).showToast();
+        }
+
+        async function stabilizeNetwork() {
+            return new Promise(resolve => {
+                network.stabilize(200);
+                network.once('stabilizationIterationsDone', () => {
+                    network.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } });
+                    resolve();
+                });
+            });
+        }
 
         function throttleRequest(fn) {
             return async function(...args) {
