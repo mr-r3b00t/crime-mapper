@@ -1041,6 +1041,90 @@ async function enrichAllInternetDB() {
             }
         });
 
+        // Add this with your other enrichment functions
+const throttledTestHTTPS = throttleRequest(async function testHTTPS(ip, nodeId) {
+    try {
+        // Disable physics during operation
+        network.setOptions({ physics: { enabled: false } });
+        
+        // Make the HTTPS request
+        const response = await fetch(`https://${ip}`, {
+            method: 'GET',
+            mode: 'no-cors', // Using no-cors since we just want to test connectivity
+            timeout: 5000    // 5 second timeout
+        });
+        
+        // If we get here without error, the connection was successful
+        const existingStatus = nodes.get({ 
+            filter: n => n.type === 'https_status' && n.ip === ip 
+        })[0];
+        
+        const statusId = existingStatus ? existingStatus.id : nextId++;
+        
+        if (!existingStatus) {
+            nodes.add({
+                id: statusId,
+                type: 'https_status',
+                label: 'HTTPS Active',
+                title: `HTTPS Status\nIP: ${ip}\nPort: 443\nStatus: Reachable`,
+                color: { background: '#22c55e' }, // Green for success
+                ip: ip
+            });
+        }
+        
+        const edgeId = `${nodeId}-${statusId}-HasHTTPS`;
+        if (!edges.get(edgeId)) {
+            edges.add({ 
+                id: edgeId, 
+                from: nodeId, 
+                to: statusId, 
+                label: 'Has HTTPS' 
+            });
+        }
+        
+        updateNodeSizes();
+        updateSelectOptions();
+        await stabilizeNetwork();
+        showToast(`HTTPS test successful for ${ip}:443`, 'success');
+        
+    } catch (error) {
+        // Handle connection failure
+        const existingStatus = nodes.get({ 
+            filter: n => n.type === 'https_status' && n.ip === ip 
+        })[0];
+        
+        const statusId = existingStatus ? existingStatus.id : nextId++;
+        
+        if (!existingStatus) {
+            nodes.add({
+                id: statusId,
+                type: 'https_status',
+                label: 'HTTPS Unavailable',
+                title: `HTTPS Status\nIP: ${ip}\nPort: 443\nStatus: Unreachable\nError: ${error.message}`,
+                color: { background: '#ef4444' }, // Red for failure
+                ip: ip
+            });
+        }
+        
+        const edgeId = `${nodeId}-${statusId}-HasHTTPS`;
+        if (!edges.get(edgeId)) {
+            edges.add({ 
+                id: edgeId, 
+                from: nodeId, 
+                to: statusId, 
+                label: 'No HTTPS' 
+            });
+        }
+        
+        console.error(`HTTPS test failed for ${ip}: ${error.message}`);
+        showToast(`HTTPS test failed for ${ip}: ${error.message}`, 'error');
+        
+        updateNodeSizes();
+        updateSelectOptions();
+        await stabilizeNetwork();
+    }
+});
+
         const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ipNodeId, isBulk = false) {
             if (!shodanApiKey) { showToast('Please set your Shodan API key in the "API Keys" tab first.', 'error'); return; }
             network.setOptions({ physics: { enabled: false } });
@@ -1595,27 +1679,90 @@ function setHierarchicalLayout() {
 
         function addNode() {
     const type = document.getElementById('addEntityType').value;
-    const inputs = { /* ... */ };
-    const nodeData = createNodeData(type, inputs[type]);
-    if (nodeData) {
-        const existingNodes = nodes.get({ /* ... */ });
-        if (existingNodes.length > 0) {
-            showToast(`${type} already exists`, 'error');
-            return;
+    
+    // Collect inputs based on entity type
+    const inputs = {
+        contact: { 
+            name: document.getElementById('addNameInput').value.trim(),
+            email: document.getElementById('addEmailInput').value.trim()
+        },
+        ip: { 
+            ip: document.getElementById('addIpInput').value.trim()
+        },
+        domain: { 
+            domain: document.getElementById('addDomainInput').value.trim()
+        },
+        organization: { 
+            organization: document.getElementById('addOrgInput').value.trim()
+        },
+        port: { 
+            portNumber: document.getElementById('addPortNumInput').value.trim(),
+            portType: document.getElementById('addPortType').value
+        },
+        wallet: { 
+            address: document.getElementById('addWalletAddressInput').value.trim()
+        },
+        bank: { 
+            accountNumber: document.getElementById('addAccountNumberInput').value.trim(),
+            sortCode: document.getElementById('addSortCodeInput').value.trim()
+        },
+        technology: { 
+            techName: document.getElementById('addTechNameInput').value.trim(),
+            techVersion: document.getElementById('addTechVersionInput').value.trim()
+        },
+        device: { 
+            deviceCategory: document.getElementById('addDeviceCategory').value,
+            deviceName: document.getElementById('addDeviceNameInput').value.trim()
+        },
+        malware: { 
+            malwareName: document.getElementById('addMalwareNameInput').value.trim(),
+            malwareType: document.getElementById('addMalwareType').value
         }
-        // Add node with explicit size control
-        nodes.add({
-            ...nodeData,
-            size: 20, // Fixed initial size
-            widthConstraint: false,
-            heightConstraint: false
-        });
-        updateSelectOptions();
-        clearAddInputs();
-        updateNodeSizes();
-        stabilizeNetwork();
-        saveStateAfterOperation(); 
+    };
+
+    // Get the node data using the inputs for the selected type
+    const nodeData = createNodeData(type, inputs[type]);
+    if (!nodeData) {
+        // createNodeData already shows a toast for validation errors
+        return;
     }
+
+    // Check for duplicates based on key fields
+    const existingNodes = nodes.get({
+        filter: n => n.type === type && (
+            (type === 'contact' && n.name === inputs[type].name && (!inputs[type].email || n.email === inputs[type].email)) ||
+            (type === 'ip' && n.ip === inputs[type].ip) ||
+            (type === 'domain' && n.domain === inputs[type].domain) ||
+            (type === 'organization' && n.organization === inputs[type].organization) ||
+            (type === 'port' && n.portNumber === inputs[type].portNumber && n.portType === inputs[type].portType) ||
+            (type === 'wallet' && n.address === inputs[type].address) ||
+            (type === 'bank' && n.accountNumber === inputs[type].accountNumber && n.sortCode === inputs[type].sortCode) ||
+            (type === 'technology' && n.techName === inputs[type].techName && n.techVersion === inputs[type].techVersion) ||
+            (type === 'device' && n.deviceCategory === inputs[type].deviceCategory && n.deviceName === inputs[type].deviceName) ||
+            (type === 'malware' && n.malwareName === inputs[type].malwareName && n.malwareType === inputs[type].malwareType)
+        )
+    });
+
+    if (existingNodes.length > 0) {
+        showToast(`${type} already exists`, 'error');
+        return;
+    }
+
+    // Add the node
+    nodes.add({
+        ...nodeData,
+        size: 20, // Fixed initial size
+        widthConstraint: false,
+        heightConstraint: false
+    });
+
+    // Update UI and network
+    updateSelectOptions();
+    clearAddInputs();
+    updateNodeSizes();
+    stabilizeNetwork();
+    saveStateAfterOperation();
+    showToast(`${type} added successfully`, 'success');
 }
 
         function editNode() {
