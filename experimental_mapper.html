@@ -421,6 +421,7 @@
                 <h3>Bulk Enrichment</h3>
                 <button onclick="enrichAllIpinfo()">Enrich All IPs with IPinfo</button>
                 <button onclick="enrichAllShodan()">Enrich All IPs with Shodan</button>
+                <button onclick="enrichAllInternetDB()">Enrich All IPs with InternetDB</button>
                 <button onclick="enrichAllGoogleDNS()">Enrich All Domains with Google DNS</button>
             </div>
         </div>
@@ -726,10 +727,16 @@ function stabilizeNetwork() {
 
 function showContextMenu(x, y, value, nodeId, type) {
     const menu = document.getElementById('contextMenu');
-    if (type === 'ip') menu.innerHTML = `<button onclick="throttledEnrichIP('${value}', ${nodeId})">Enrich via IPINFO</button><button onclick="throttledEnrichShodan('${value}', ${nodeId})">Enrich via Shodan</button>`;
-    else if (type === 'domain') menu.innerHTML = `<button onclick="throttledEnrichGoogleDNS('${value}', ${nodeId})">Enrich via Google DNS</button>`;
+    if (type === 'ip') {
+        menu.innerHTML = `
+            <button onclick="throttledEnrichIP('${value}', ${nodeId})">Enrich via IPINFO</button>
+            <button onclick="throttledEnrichShodan('${value}', ${nodeId})">Enrich via Shodan</button>
+            <button onclick="throttledEnrichInternetDB('${value}', ${nodeId})">Enrich via InternetDB</button>
+        `;
+    } else if (type === 'domain') {
+        menu.innerHTML = `<button onclick="throttledEnrichGoogleDNS('${value}', ${nodeId})">Enrich via Google DNS</button>`;
+    }
     
-    // Adjust position to account for canvas offset
     const canvasOffset = container.getBoundingClientRect();
     menu.style.left = `${x + canvasOffset.left}px`;
     menu.style.top = `${y + canvasOffset.top}px`;
@@ -741,6 +748,107 @@ function showContextMenu(x, y, value, nodeId, type) {
             document.getElementById('contextMenu').style.display = 'none';
             document.removeEventListener('click', hideContextMenu);
         }
+
+        const throttledEnrichInternetDB = throttleRequest(async function enrichInternetDB(ip, ipNodeId, isBulk = false) {
+    network.setOptions({ physics: { enabled: false } });
+    try {
+        const response = await fetch(`https://internetdb.shodan.io/${ip}`);
+        if (!response.ok) throw new Error('Failed to fetch InternetDB data');
+        const data = await response.json();
+
+        // Process open ports
+        if (data.ports && data.ports.length > 0) {
+            data.ports.forEach(port => {
+                const existingPort = nodes.get({ filter: n => n.type === 'port' && n.portNumber === port.toString() && n.portType === 'TCP' })[0];
+                const portId = existingPort ? existingPort.id : nextId++;
+                if (!existingPort) {
+                    nodes.add({ 
+                        id: portId, 
+                        type: 'port', 
+                        label: `TCP/${port}`, 
+                        title: `Port\nType: TCP\nNumber: ${port}`, 
+                        color: { background: '#a78bfa' }, 
+                        portType: 'TCP', 
+                        portNumber: port.toString() 
+                    });
+                }
+                const edgeId = `${ipNodeId}-${portId}-Exposes`;
+                if (!edges.get(edgeId)) edges.add({ id: edgeId, from: ipNodeId, to: portId, label: 'Exposes' });
+            });
+        }
+
+        // Process hostnames
+        if (data.hostnames && data.hostnames.length > 0) {
+            data.hostnames.forEach(hostname => {
+                const existingDomain = nodes.get({ filter: n => n.type === 'domain' && n.domain === hostname })[0];
+                const domainId = existingDomain ? existingDomain.id : nextId++;
+                if (!existingDomain) {
+                    nodes.add({ 
+                        id: domainId, 
+                        type: 'domain', 
+                        label: hostname, 
+                        title: `Domain: ${hostname}`, 
+                        color: { background: '#60a5fa' }, 
+                        domain: hostname 
+                    });
+                }
+                const edgeId = `${ipNodeId}-${domainId}-ResolvesTo`;
+                if (!edges.get(edgeId)) edges.add({ id: edgeId, from: ipNodeId, to: domainId, label: 'Resolves to' });
+            });
+        }
+
+        // Process vulnerabilities (CVEs)
+        if (data.cves && data.cves.length > 0) {
+            data.cves.forEach(cve => {
+                const existingCVE = nodes.get({ filter: n => n.type === 'vulnerability' && n.cve === cve })[0];
+                const cveId = existingCVE ? existingCVE.id : nextId++;
+                if (!existingCVE) {
+                    nodes.add({ 
+                        id: cveId, 
+                        type: 'vulnerability', 
+                        label: cve, 
+                        title: `Vulnerability: ${cve}`, 
+                        color: { background: '#ef4444' }, 
+                        cve: cve 
+                    });
+                }
+                const edgeId = `${ipNodeId}-${cveId}-Has`;
+                if (!edges.get(edgeId)) edges.add({ id: edgeId, from: ipNodeId, to: cveId, label: 'Has' });
+            });
+        }
+
+        updateNodeSizes();
+        updateSelectOptions();
+        await stabilizeNetwork();
+        if (!isBulk) showToast(`IP ${ip} enrichment completed using InternetDB`, 'success');
+    } catch (error) {
+        console.error(`Error enriching IP ${ip} with InternetDB: ${error.message}`);
+        showToast(`Error enriching IP ${ip} with InternetDB: ${error.message}`, 'error');
+        await stabilizeNetwork();
+    }
+});
+
+async function enrichAllInternetDB() {
+    network.setOptions({ physics: { enabled: false } });
+    const ipNodes = nodes.get({ filter: n => n.type === 'ip' && n.ip });
+    let successfulEnrichments = 0;
+
+    console.log(`Found ${ipNodes.length} IP nodes to enrich with InternetDB`);
+    
+    for (const node of ipNodes) {
+        try {
+            console.log(`Enriching IP: ${node.ip}`);
+            await throttledEnrichInternetDB(node.ip, node.id, true);
+            successfulEnrichments++;
+        } catch (error) {
+            console.error(`Failed to enrich IP ${node.ip}: ${error.message}`);
+            showToast(`Failed to enrich IP ${node.ip}: ${error.message}`, 'error');
+        }
+    }
+    
+    await stabilizeNetwork();
+    showToast(`InternetDB enrichment completed: ${successfulEnrichments}/${ipNodes.length} IPs enriched`, 'success');
+}
 
         const throttledEnrichIP = throttleRequest(async function enrichIP(ip, ipNodeId, isBulk = false) {
             if (!ipinfoApiKey) { showToast('Please set your IPinfo API key in the "API Keys" tab first.', 'error'); return; }
