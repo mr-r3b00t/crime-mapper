@@ -707,10 +707,10 @@ function loadState() {
             centralGravity: 0.1,
             springLength: 200,
             springConstant: 0.04,
-            damping: 0.3,
+            damping: 0.9,
             avoidOverlap: 0.5
         },
-        maxVelocity: 50,
+        maxVelocity: 25,
         minVelocity: 0.1,
         solver: 'barnesHut'
     },
@@ -731,16 +731,16 @@ function loadState() {
                 centralGravity: 0.1,
                 springLength: 200,
                 springConstant: 0.04,
-                damping: 0.3,
+                damping: 0.9,
                 avoidOverlap: 0.5
             },
-            maxVelocity: 50,
+            maxVelocity: 25,
             minVelocity: 0.1
         }
     });
 }
 
-function stabilizeNetwork() {
+function stabilizeNetwork(skipFit = false) {
     return new Promise(resolve => {
         network.setOptions({
             physics: {
@@ -754,38 +754,46 @@ function stabilizeNetwork() {
                     gravitationalConstant: -8000,
                     centralGravity: 0.3,
                     springLength: 150,
-                    avoidOverlap: 1.0
+                    avoidOverlap: 1.0,
+                    damping: 0.9    // Added higher damping
                 }
             }
         });
 
         network.stabilize(200);
         network.once('stabilizationIterationsDone', () => {
-            // Turn off physics if paused, or adjust settings
+            // Automatically pause physics after stabilization
+            isPhysicsPaused = true;
             network.setOptions({
                 physics: {
-                    enabled: !isPhysicsPaused,
+                    enabled: false,  // Changed to false after stabilization
                     stabilization: { enabled: false },
                     barnesHut: {
                         gravitationalConstant: -8000,
                         centralGravity: 0.3,
                         springLength: 150,
-                        avoidOverlap: 1.0
+                        avoidOverlap: 1.0,
+                        damping: 0.9
                     },
                     minVelocity: 0.1,
                     maxVelocity: 25
                 }
             });
 
-            // Fit the view to all nodes first to ensure bounding box is valid
-            network.fit({
-                animation: {
-                    duration: 500,
-                    easingFunction: 'easeInOutQuad'
-                }
-            });
+            // Update pause button UI
+            const pauseButton = document.getElementById('pause-toggle');
+            pauseButton.textContent = 'Resume Physics';
+            pauseButton.classList.add('paused');
 
-            // Wait for the fit animation to complete before adjusting positions
+            if (!skipFit) {
+                network.fit({
+                    animation: {
+                        duration: 500,
+                        easingFunction: 'easeInOutQuad'
+                    }
+                });
+            }
+
             setTimeout(() => {
                 const boundingBox = network.getBoundingBox();
                 if (boundingBox && nodes.length > 0) {
@@ -798,11 +806,9 @@ function stabilizeNetwork() {
                             y: Math.max(boundingBox.top + margin, Math.min(boundingBox.bottom - margin, y))
                         });
                     });
-                } else {
-                    console.warn('Bounding box unavailable or no nodes present, skipping position constraints');
                 }
                 resolve();
-            }, 550); // Slightly longer than the fit animation duration
+            }, skipFit ? 0 : 550);
         });
     });
 }
@@ -1229,14 +1235,14 @@ async function enrichAllGoogleDNS() {
         document.body.classList.add('dark-mode');
         options.nodes.font = {
             size: 12,
-            color: '#e2e8f0', // Default color
+            color: '#e2e8f0',
             multi: true,
-            strokeWidth: 0,   // Remove outline
-            strokeColor: 'transparent', // Ensure no stroke
-            hover: '#1f2a44', // Dark color on hover
-            highlight: '#1f2a44' // Dark color when selected
+            strokeWidth: 0,
+            strokeColor: 'transparent'
         };
         options.nodes.color = {
+            border: '#94a3b8',  // Added base border color
+            background: '#4b5563',  // Added base background color
             hover: {
                 border: '#60a5fa',
                 background: '#4b5563'
@@ -1249,7 +1255,7 @@ async function enrichAllGoogleDNS() {
         options.edges.font = {
             size: 12,
             color: '#e2e8f0',
-            strokeWidth: 0,   // Remove outline for edge labels too
+            strokeWidth: 0,
             strokeColor: 'transparent'
         };
         options.edges.color = { 
@@ -1261,12 +1267,14 @@ async function enrichAllGoogleDNS() {
         document.body.classList.add('light-mode');
         options.nodes.font = {
             size: 12,
-            color: '#1f2a44', // Default color
+            color: '#1f2a44',
             multi: true,
-            strokeWidth: 0,   // Remove outline in light mode too for consistency
+            strokeWidth: 0,
             strokeColor: 'transparent'
         };
         options.nodes.color = {
+            border: '#6b7280',  // Added base border color
+            background: '#ffffff',  // Added base background color
             hover: {
                 border: '#3b82f6',
                 background: '#e5e7eb'
@@ -1298,40 +1306,59 @@ async function enrichAllGoogleDNS() {
         }
 
         function togglePhysics() {
-            isPhysicsPaused = !isPhysicsPaused;
-            const pauseButton = document.getElementById('pause-toggle');
-            network.setOptions({ 
-                physics: { enabled: !isPhysicsPaused },
-                interaction: { ...baseInteractionOptions }
-            });
-            pauseButton.textContent = isPhysicsPaused ? 'Resume Physics' : 'Pause Physics';
-            pauseButton.classList.toggle('paused', isPhysicsPaused);
-            ensureInteractionSettings();
-        }
+    isPhysicsPaused = !isPhysicsPaused;
+    const pauseButton = document.getElementById('pause-toggle');
+    network.setOptions({ 
+        physics: { 
+            enabled: !isPhysicsPaused,
+            barnesHut: {
+                // Ensure consistent physics settings
+                gravitationalConstant: -8000,
+                centralGravity: 0.1,
+                springLength: 200,
+                springConstant: 0.04,
+                damping: 0.9,
+                avoidOverlap: 0.5
+            },
+            maxVelocity: 25,
+            minVelocity: 0.1
+        },
+        interaction: { ...baseInteractionOptions }
+    });
+    pauseButton.textContent = isPhysicsPaused ? 'Resume Physics' : 'Pause Physics';
+    pauseButton.classList.toggle('paused', isPhysicsPaused);
+    if (!isPhysicsPaused) {
+        // Trigger stabilization when resuming physics
+        stabilizeNetwork();
+    }
+    ensureInteractionSettings();
+}
 
         function resetLayout() {
             nodes.forEach(node => nodes.update({ id: node.id, x: undefined, y: undefined }));
-            stabilizeNetwork();
+            stabilizeNetwork(false);
         }
 
         function setOrganicLayout() {
-            network.setOptions({ 
-                physics: { 
-                    enabled: true,
-                    barnesHut: { 
-                        gravitationalConstant: -8000,
-                        centralGravity: 0.1,
-                        springLength: 200,
-                        springConstant: 0.04,
-                        damping: 0.3,
-                        avoidOverlap: 0.5
-                    }
-                },
-                layout: { hierarchical: false },
-                interaction: { ...baseInteractionOptions }
-            });
-            stabilizeNetwork();
-        }
+    network.setOptions({ 
+        physics: { 
+            enabled: true,
+            barnesHut: { 
+                gravitationalConstant: -8000,
+                centralGravity: 0.1,
+                springLength: 200,
+                springConstant: 0.04,
+                damping: 0.9,
+                avoidOverlap: 0.5
+            },
+            maxVelocity: 25,
+            minVelocity: 0.1
+        },
+        layout: { hierarchical: false },
+        interaction: { ...baseInteractionOptions }
+    });
+    stabilizeNetwork(false);  // This will pause physics after stabilization
+}
 
         function setCircularLayout() {
             network.setOptions({ 
@@ -1351,7 +1378,7 @@ async function enrichAllGoogleDNS() {
                 }); 
                 i++; 
             });
-            stabilizeNetwork();
+            stabilizeNetwork(false);
         }
 
         function setOrthogonalLayout() {
@@ -1371,7 +1398,7 @@ async function enrichAllGoogleDNS() {
                 }); 
                 i++; 
             });
-            stabilizeNetwork();
+            stabilizeNetwork(true);
         }
 
         function setTreeLayout() {
@@ -1389,7 +1416,7 @@ async function enrichAllGoogleDNS() {
                 },
                 interaction: { ...baseInteractionOptions }
             });
-            stabilizeNetwork();
+            stabilizeNetwork(true);
         }
 
         function setHierarchicalLayout() {
@@ -1407,7 +1434,7 @@ async function enrichAllGoogleDNS() {
                 },
                 interaction: { ...baseInteractionOptions }
             });
-            stabilizeNetwork();
+            stabilizeNetwork(true);
         }
 
         function showTab(tabId) {
