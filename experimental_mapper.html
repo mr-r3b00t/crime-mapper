@@ -1121,6 +1121,8 @@ async function enrichAllGoogleDNS() {
             size: 12,
             color: '#e2e8f0', // Default color
             multi: true,
+            strokeWidth: 0,   // Remove outline
+            strokeColor: 'transparent', // Ensure no stroke
             hover: '#1f2a44', // Dark color on hover
             highlight: '#1f2a44' // Dark color when selected
         };
@@ -1134,8 +1136,16 @@ async function enrichAllGoogleDNS() {
                 background: '#4b5563'
             }
         };
-        options.edges.font.color = '#e2e8f0';
-        options.edges.color = { color: '#94a3b8', highlight: '#60a5fa' };
+        options.edges.font = {
+            size: 12,
+            color: '#e2e8f0',
+            strokeWidth: 0,   // Remove outline for edge labels too
+            strokeColor: 'transparent'
+        };
+        options.edges.color = { 
+            color: '#94a3b8', 
+            highlight: '#60a5fa' 
+        };
     } else {
         document.body.classList.remove('dark-mode');
         document.body.classList.add('light-mode');
@@ -1143,8 +1153,8 @@ async function enrichAllGoogleDNS() {
             size: 12,
             color: '#1f2a44', // Default color
             multi: true,
-            hover: undefined, // Use default in light mode
-            highlight: undefined // Use default in light mode
+            strokeWidth: 0,   // Remove outline in light mode too for consistency
+            strokeColor: 'transparent'
         };
         options.nodes.color = {
             hover: {
@@ -1156,8 +1166,16 @@ async function enrichAllGoogleDNS() {
                 background: '#e5e7eb'
             }
         };
-        options.edges.font.color = '#1f2a44';
-        options.edges.color = { color: '#6b7280', highlight: '#3b82f6' };
+        options.edges.font = {
+            size: 12,
+            color: '#1f2a44',
+            strokeWidth: 0,
+            strokeColor: 'transparent'
+        };
+        options.edges.color = { 
+            color: '#6b7280', 
+            highlight: '#3b82f6' 
+        };
     }
     document.getElementById('mode-toggle').textContent = isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode';
     network.setOptions(options);
