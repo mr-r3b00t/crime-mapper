@@ -1340,102 +1340,197 @@ async function enrichAllGoogleDNS() {
         }
 
         function setOrganicLayout() {
-    network.setOptions({ 
-        physics: { 
+    network.setOptions({
+        physics: {
             enabled: true,
-            barnesHut: { 
-                gravitationalConstant: -8000,
-                centralGravity: 0.1,
-                springLength: 200,
-                springConstant: 0.04,
-                damping: 0.9,
-                avoidOverlap: 0.5
+            stabilization: {
+                enabled: true,
+                iterations: 200
             },
-            maxVelocity: 25,
+            barnesHut: {
+                gravitationalConstant: -8000,
+                centralGravity: 0.3,
+                springLength: 150,
+                springConstant: 0.05,
+                damping: 0.9,
+                avoidOverlap: 1.0
+            },
+            maxVelocity: 50,
             minVelocity: 0.1
         },
+        layout: { 
+            hierarchical: false,
+            improvedLayout: true 
+        },
+        interaction: { ...baseInteractionOptions }
+    });
+
+    // Reset node positions
+    nodes.forEach(node => {
+        nodes.update({ 
+            id: node.id, 
+            x: undefined, 
+            y: undefined,
+            fixed: { x: false, y: false }
+        });
+    });
+
+    stabilizeNetwork().then(() => {
+        isPhysicsPaused = true;
+        network.setOptions({ physics: { enabled: false } });
+        const pauseButton = document.getElementById('pause-toggle');
+        pauseButton.textContent = 'Resume Physics';
+        pauseButton.classList.add('paused');
+    });
+}
+
+function setCircularLayout() {
+    network.setOptions({
+        physics: { enabled: false },
         layout: { hierarchical: false },
         interaction: { ...baseInteractionOptions }
     });
-    stabilizeNetwork(false);  // This will pause physics after stabilization
+
+    const containerRect = container.getBoundingClientRect();
+    const radius = Math.min(containerRect.width, containerRect.height) / 2 - 100;
+    const nodeCount = nodes.length;
+    const angleStep = (2 * Math.PI) / nodeCount;
+    const centerX = containerRect.width / 2;
+    const centerY = containerRect.height / 2;
+
+    nodes.forEach((node, i) => {
+        const x = centerX + radius * Math.cos(angleStep * i);
+        const y = centerY + radius * Math.sin(angleStep * i);
+        nodes.update({
+            id: node.id,
+            x: x,
+            y: y,
+            fixed: { x: true, y: true }
+        });
+    });
+
+    network.fit({
+        animation: {
+            duration: 500,
+            easingFunction: 'easeInOutQuad'
+        }
+    });
 }
 
-        function setCircularLayout() {
-            network.setOptions({ 
-                physics: { enabled: false },
-                layout: { hierarchical: false },
-                interaction: { ...baseInteractionOptions }
-            });
-            const radius = Math.min(container.clientWidth, container.clientHeight) / 2 - 50;
-            const nodeCount = nodes.length;
-            let angleStep = (2 * Math.PI) / nodeCount;
-            let i = 0;
-            nodes.forEach(node => { 
-                nodes.update({ 
-                    id: node.id, 
-                    x: radius * Math.cos(angleStep * i), 
-                    y: radius * Math.sin(angleStep * i) 
-                }); 
-                i++; 
-            });
-            stabilizeNetwork(false);
-        }
+function setOrthogonalLayout() {
+    network.setOptions({
+        physics: { enabled: false },
+        layout: { hierarchical: false },
+        interaction: { ...baseInteractionOptions }
+    });
 
-        function setOrthogonalLayout() {
-            network.setOptions({ 
-                physics: { enabled: false },
-                layout: { hierarchical: false },
-                interaction: { ...baseInteractionOptions }
-            });
-            const gridSize = Math.ceil(Math.sqrt(nodes.length));
-            const step = 100;
-            let i = 0;
-            nodes.forEach(node => { 
-                nodes.update({ 
-                    id: node.id, 
-                    x: (i % gridSize) * step, 
-                    y: Math.floor(i / gridSize) * step 
-                }); 
-                i++; 
-            });
-            stabilizeNetwork(true);
-        }
+    const containerRect = container.getBoundingClientRect();
+    const gridSize = Math.ceil(Math.sqrt(nodes.length));
+    const stepX = containerRect.width / (gridSize + 1);
+    const stepY = containerRect.height / (gridSize + 1);
+    let i = 0;
 
-        function setTreeLayout() {
-            network.setOptions({ 
-                physics: { enabled: false },
-                layout: { 
-                    hierarchical: { 
-                        enabled: true,
-                        levelSeparation: 150,
-                        nodeSpacing: 100,
-                        treeSpacing: 200,
-                        direction: 'UD',
-                        sortMethod: 'hubsize'
-                    }
-                },
-                interaction: { ...baseInteractionOptions }
-            });
-            stabilizeNetwork(true);
-        }
+    nodes.forEach(node => {
+        const x = (i % gridSize + 0.5) * stepX;
+        const y = (Math.floor(i / gridSize) + 0.5) * stepY;
+        nodes.update({
+            id: node.id,
+            x: x,
+            y: y,
+            fixed: { x: true, y: true }
+        });
+        i++;
+    });
 
-        function setHierarchicalLayout() {
-            network.setOptions({ 
-                physics: { enabled: false },
-                layout: { 
-                    hierarchical: { 
-                        enabled: true,
-                        levelSeparation: 150,
-                        nodeSpacing: 100,
-                        treeSpacing: 200,
-                        direction: 'UD',
-                        sortMethod: 'directed'
-                    }
-                },
-                interaction: { ...baseInteractionOptions }
-            });
-            stabilizeNetwork(true);
+    network.fit({
+        animation: {
+            duration: 500,
+            easingFunction: 'easeInOutQuad'
         }
+    });
+}
+
+function setTreeLayout() {
+    network.setOptions({
+        physics: { enabled: false },
+        layout: {
+            hierarchical: {
+                enabled: true,
+                levelSeparation: 200,
+                nodeSpacing: 150,
+                treeSpacing: 200,
+                direction: 'UD',
+                sortMethod: 'hubsize',
+                shakeTowards: 'leaves'
+            }
+        },
+        edges: {
+            smooth: {
+                enabled: true,
+                type: 'cubicBezier'
+            }
+        },
+        interaction: { ...baseInteractionOptions }
+    });
+
+    // Reset positions before applying layout
+    nodes.forEach(node => {
+        nodes.update({
+            id: node.id,
+            x: undefined,
+            y: undefined,
+            fixed: { x: false, y: false }
+        });
+    });
+
+    network.fit({
+        animation: {
+            duration: 500,
+            easingFunction: 'easeInOutQuad'
+        }
+    });
+}
+
+function setHierarchicalLayout() {
+    network.setOptions({
+        physics: { enabled: false },
+        layout: {
+            hierarchical: {
+                enabled: true,
+                levelSeparation: 200,
+                nodeSpacing: 150,
+                treeSpacing: 200,
+                direction: 'UD',
+                sortMethod: 'directed',
+                shakeTowards: 'roots'
+            }
+        },
+        edges: {
+            smooth: {
+                enabled: true,
+                type: 'cubicBezier'
+            }
+        },
+        interaction: { ...baseInteractionOptions }
+    });
+
+    // Reset positions before applying layout
+    nodes.forEach(node => {
+        nodes.update({
+            id: node.id,
+            x: undefined,
+            y: undefined,
+            fixed: { x: false, y: false }
+        });
+    });
+
+    network.fit({
+        animation: {
+            duration: 500,
+            easingFunction: 'easeInOutQuad'
+        }
+    });
+}
 
         function showTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
