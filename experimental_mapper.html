@@ -871,39 +871,104 @@ function showContextMenu(x, y, value, nodeId, type) {
             document.removeEventListener('click', hideContextMenu);
         }
 
-        const throttledSendHttpsRequest = throttleRequest(async function sendHttpsRequest(target, type, protocol = 'https') {
-    network.setOptions({ physics: { enabled: false } });
-    let url = `https://cors-anywhere.herokuapp.com/${protocol}://${target}`;
-    
-    try {
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Origin': window.location.origin
-            },
-            mode: 'cors',
-            credentials: 'omit'
+        const throttledSendHttpsRequest = throttleRequest(async function sendHttpsRequest(target, type) {
+            network.setOptions({ physics: { enabled: false } });
+            let url = `https://cors-anywhere.herokuapp.com/https://${target}`;
+            let message;
+
+            try {
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Origin': window.location.origin
+                    },
+                    mode: 'cors',
+                    credentials: 'omit'
+                });
+
+                const status = response.status;
+                const statusText = response.statusText;
+                const headers = {};
+                response.headers.forEach((value, key) => {
+                    headers[key] = value;
+                });
+
+                let body = '';
+                const contentType = headers['content-type'] || '';
+                if (contentType.includes('text') || contentType.includes('html') || contentType.includes('json')) {
+                    body = await response.text();
+                    if (body.length > 500) {
+                        body = body.substring(0, 500) + '... (truncated)';
+                    }
+                } else {
+                    body = '(Binary or unsupported content type)';
+                }
+
+                message = `
+                    HTTPS Request to https://${target}
+                    Status: ${status} ${statusText}
+                    Headers: ${JSON.stringify(headers, null, 2)}
+                    Body: ${body}
+                `.trim();
+                showToast(message, 'success');
+            } catch (error) {
+                message = `
+                    HTTPS Request to https://${target}
+                    Error: ${error.message}
+                    Note: Ensure CORS Anywhere proxy is active (visit https://cors-anywhere.herokuapp.com/ to request temporary access if needed)
+                `.trim();
+                showToast(message, 'error');
+            } finally {
+                await stabilizeNetwork();
+            }
         });
-        // [Rest of the function unchanged]
-        const message = `
-            ${protocol.toUpperCase()} Request to ${protocol}://${target}
-            Status: ${status} ${statusText}
-            Headers: ${JSON.stringify(headers, null, 2)}
-            Body: ${body}
-        `.trim();
-        showToast(message, 'success');
-    } catch (error) {
-        const errorMessage = `
-            ${protocol.toUpperCase()} Request to ${protocol}://${target}
-            Error: ${error.message}
-            Note: Ensure CORS Anywhere proxy is active
-        `.trim();
-        showToast(errorMessage, 'error');
-    } finally {
-        await stabilizeNetwork();
-    }
-});
+
+        function throttleRequest(fn) {
+            return async function(...args) {
+                const now = Date.now();
+                const timeSinceLast = now - lastRequestTime;
+                if (timeSinceLast < RATE_LIMIT_MS) await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_MS - timeSinceLast));
+                lastRequestTime = now;
+                return fn(...args);
+            };
+        }
+
+        function showToast(message, type = 'info') {
+            const toastOptions = {
+                text: message,
+                duration: 6500,
+                position: "center",
+                style: {
+                    background: isDarkMode ? '#2d3748' : '#fff',
+                    color: isDarkMode ? '#e2e8f0' : '#1f2a44',
+                    border: `1px solid ${isDarkMode ? '#4b5563' : '#d1d5db'}`,
+                    boxShadow: isDarkMode ? '0 2px 10px rgba(0, 0, 0, 0.3)' : '0 2px 10px rgba(0, 0, 0, 0.1)',
+                    position: 'fixed',
+                    top: '50px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    width: 'auto',
+                    maxWidth: '80%',
+                    zIndex: 1000
+                }
+            };
+            switch (type) {
+                case 'success': toastOptions.style.background = isDarkMode ? '#166534' : '#22c55e'; toastOptions.style.color = '#fff'; break;
+                case 'error': toastOptions.style.background = isDarkMode ? '#991b1b' : '#ef4444'; toastOptions.style.color = '#fff'; break;
+            }
+            Toastify(toastOptions).showToast();
+        }
+
+        async function stabilizeNetwork() {
+            return new Promise(resolve => {
+                network.stabilize(200);
+                network.once('stabilizationIterationsDone', () => {
+                    network.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } });
+                    resolve();
+                });
+            });
+        }
 
 
 
