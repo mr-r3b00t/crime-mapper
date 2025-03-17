@@ -422,11 +422,24 @@
         <div id="layouts" class="tab-content">
             <div class="input-group">
                 <h3>Graph Layouts</h3>
+                <!-- Existing layout buttons remain here -->
                 <button onclick="setOrganicLayout()">Organic</button>
                 <button onclick="setCircularLayout()">Circular</button>
                 <button onclick="setOrthogonalLayout()">Orthogonal</button>
                 <button onclick="setTreeLayout()">Tree</button>
                 <button onclick="setHierarchicalLayout()">Hierarchical</button>
+            </div>
+            <!-- New section for label visibility -->
+            <div class="input-group">
+                <h3>Label Visibility</h3>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="showNodeLabels" checked onchange="toggleNodeLabels()">
+                    Show Node Labels
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="showEdgeLabels" checked onchange="toggleEdgeLabels()">
+                    Show Edge Labels
+                </label>
             </div>
         </div>
         <div id="footer">
@@ -1699,6 +1712,29 @@ async function enrichAllGoogleDNS() {
                 }
             }
         });
+
+        function toggleNodeLabels() {
+    const showLabels = document.getElementById('showNodeLabels').checked;
+    network.setOptions({
+        nodes: {
+            font: {
+                size: showLabels ? 12 : 0  // Show labels with size 12 or hide by setting to 0
+            },
+            labelHighlightBold: showLabels
+        }
+    });
+}
+
+function toggleEdgeLabels() {
+    const showLabels = document.getElementById('showEdgeLabels').checked;
+    network.setOptions({
+        edges: {
+            font: {
+                size: showLabels ? 12 : 0  // Show labels with size 12 or hide by setting to 0
+            }
+        }
+    });
+}
     </script>
 </body>
 </html>
