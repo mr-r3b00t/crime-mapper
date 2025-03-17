@@ -492,32 +492,7 @@ function saveState() {
     localStorage.setItem('networkGraphState', JSON.stringify(state));
 }
 
-function loadState() {
-    const savedState = localStorage.getItem('networkGraphState');
-    if (savedState) {
-        try {
-            const state = JSON.parse(savedState);
-            nodes.clear();
-            edges.clear();
-            nodes.add(state.nodes);
-            edges.add(state.edges);
-            nextId = state.nextId || 1;
-            isDarkMode = state.isDarkMode !== undefined ? state.isDarkMode : true;
-            isPhysicsPaused = state.isPhysicsPaused || false;
-            updateTheme();
-            togglePhysics(); // Apply the saved physics state
-            updateNodeSizes();
-            updateSelectOptions();
-            stabilizeNetwork();
-            return true;
-        } catch (e) {
-            console.error('Error loading state:', e);
-            showToast('Error loading saved state', 'error');
-            return false;
-        }
-    }
-    return false;
-}
+
 
 // Function to trigger save after key operations
 function saveStateAfterOperation() {
