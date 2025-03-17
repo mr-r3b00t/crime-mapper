@@ -853,15 +853,29 @@ function stabilizeNetwork(skipFit = false) {
     const nodeId = this.getNodeAt(params.pointer.DOM);
     if (nodeId) {
         const node = nodes.get(nodeId);
-        if (node.type === 'ip') showContextMenu(params.pointer.DOM.x, params.pointer.DOM.y, node.ip, nodeId, 'ip');
-        else if (node.type === 'domain') showContextMenu(params.pointer.DOM.x, params.pointer.DOM.y, node.domain, nodeId, 'domain');
+        // Pass the appropriate value based on node type
+        let value;
+        switch (node.type) {
+            case 'ip':
+                value = node.ip;
+                break;
+            case 'domain':
+                value = node.domain;
+                break;
+            default:
+                value = node.label; // Fallback for other types
+        }
+        showContextMenu(params.pointer.DOM.x, params.pointer.DOM.y, value, nodeId, node.type);
     }
 });
 
 function showContextMenu(x, y, value, nodeId, type) {
     const menu = document.getElementById('contextMenu');
+    let menuHtml = `<button onclick="deleteNode(${nodeId})">Delete Node</button>`;
+    
+    // Add type-specific options
     if (type === 'ip') {
-        menu.innerHTML = `
+        menuHtml += `
             <button onclick="throttledEnrichIP('${value}', ${nodeId})">Enrich via IPINFO</button>
             <button onclick="throttledEnrichShodan('${value}', ${nodeId})">Enrich via Shodan</button>
             <button onclick="throttledEnrichInternetDB('${value}', ${nodeId})">Enrich via InternetDB</button>
@@ -869,12 +883,14 @@ function showContextMenu(x, y, value, nodeId, type) {
             <button onclick="throttledSendHttpsRequest('${value}', 'ip', 'http')">Send HTTP Request</button>
         `;
     } else if (type === 'domain') {
-        menu.innerHTML = `
+        menuHtml += `
             <button onclick="throttledEnrichGoogleDNS('${value}', ${nodeId})">Enrich via Google DNS</button>
             <button onclick="throttledSendHttpsRequest('${value}', 'domain', 'https')">Send HTTPS Request</button>
             <button onclick="throttledSendHttpsRequest('${value}', 'domain', 'http')">Send HTTP Request</button>
         `;
     }
+
+    menu.innerHTML = menuHtml;
     
     const canvasOffset = container.getBoundingClientRect();
     menu.style.left = `${x + canvasOffset.left}px`;
@@ -882,6 +898,30 @@ function showContextMenu(x, y, value, nodeId, type) {
     menu.style.display = 'block';
     document.addEventListener('click', hideContextMenu);
 }
+
+function deleteNode(nodeId) {
+            const node = nodes.get(nodeId);
+            if (!node) {
+                showToast('Node not found', 'error');
+                return;
+            }
+
+            // Remove all edges connected to this node
+            const connectedEdges = edges.get({
+                filter: edge => edge.from === nodeId || edge.to === nodeId
+            });
+            edges.remove(connectedEdges.map(edge => edge.id));
+
+            // Remove the node
+            nodes.remove({ id: nodeId });
+
+            // Update UI and network
+            updateSelectOptions();
+            updateNodeSizes();
+            stabilizeNetwork();
+            saveStateAfterOperation();
+            showToast(`Node "${node.label.split('\n')[0]}" deleted`, 'success');
+        }
 
         function hideContextMenu() {
             document.getElementById('contextMenu').style.display = 'none';
