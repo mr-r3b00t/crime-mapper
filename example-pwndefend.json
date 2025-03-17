@@ -1,0 +1,313 @@
+{
+  "nodes": [
+    {
+      "id": 1,
+      "type": "domain",
+      "domain": "pwndefend.com"
+    },
+    {
+      "id": 2,
+      "type": "ip",
+      "ip": "172.67.136.149"
+    },
+    {
+      "id": 3,
+      "type": "ip",
+      "ip": "104.21.81.6"
+    },
+    {
+      "id": 4,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "8080"
+    },
+    {
+      "id": 5,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "2082"
+    },
+    {
+      "id": 6,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "2083"
+    },
+    {
+      "id": 7,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "2052"
+    },
+    {
+      "id": 8,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "2086"
+    },
+    {
+      "id": 9,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "2087"
+    },
+    {
+      "id": 10,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "80"
+    },
+    {
+      "id": 11,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "8880"
+    },
+    {
+      "id": 12,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "8443"
+    },
+    {
+      "id": 13,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "443"
+    },
+    {
+      "id": 14,
+      "type": "port",
+      "portType": "TCP",
+      "portNumber": "2053"
+    },
+    {
+      "id": 15,
+      "type": "asn",
+      "asn": "AS13335"
+    },
+    {
+      "id": 16,
+      "type": "city",
+      "city": "San Francisco"
+    },
+    {
+      "id": 17,
+      "type": "organization",
+      "organization": "Cloudflare, Inc."
+    },
+    {
+      "id": 18,
+      "type": "country",
+      "country": "US"
+    },
+    {
+      "id": 19,
+      "type": "vpn"
+    },
+    {
+      "id": 20,
+      "type": "hosting"
+    }
+  ],
+  "edges": [
+    {
+      "id": "1-2-ResolvesTo",
+      "from": 1,
+      "to": 2,
+      "label": "Resolves to"
+    },
+    {
+      "id": "1-3-ResolvesTo",
+      "from": 1,
+      "to": 3,
+      "label": "Resolves to"
+    },
+    {
+      "id": "2-4-Exposes",
+      "from": 2,
+      "to": 4,
+      "label": "Exposes"
+    },
+    {
+      "id": "2-5-Exposes",
+      "from": 2,
+      "to": 5,
+      "label": "Exposes"
+    },
+    {
+      "id": "2-6-Exposes",
+      "from": 2,
+      "to": 6,
+      "label": "Exposes"
+    },
+    {
+      "id": "2-7-Exposes",
+      "from": 2,
+      "to": 7,
+      "label": "Exposes"
+    },
+    {
+      "id": "2-8-Exposes",
+      "from": 2,
+      "to": 8,
+      "label": "Exposes"
+    },
+    {
+      "id": "2-9-Exposes",
+      "from": 2,
+      "to": 9,
+      "label": "Exposes"
+    },
+    {
+      "id": "2-10-Exposes",
+      "from": 2,
+      "to": 10,
+      "label": "Exposes"
+    },
+    {
+      "id": "2-11-Exposes",
+      "from": 2,
+      "to": 11,
+      "label": "Exposes"
+    },
+    {
+      "id": "2-12-Exposes",
+      "from": 2,
+      "to": 12,
+      "label": "Exposes"
+    },
+    {
+      "id": "2-13-Exposes",
+      "from": 2,
+      "to": 13,
+      "label": "Exposes"
+    },
+    {
+      "id": "3-4-Exposes",
+      "from": 3,
+      "to": 4,
+      "label": "Exposes"
+    },
+    {
+      "id": "3-5-Exposes",
+      "from": 3,
+      "to": 5,
+      "label": "Exposes"
+    },
+    {
+      "id": "3-6-Exposes",
+      "from": 3,
+      "to": 6,
+      "label": "Exposes"
+    },
+    {
+      "id": "3-14-Exposes",
+      "from": 3,
+      "to": 14,
+      "label": "Exposes"
+    },
+    {
+      "id": "3-8-Exposes",
+      "from": 3,
+      "to": 8,
+      "label": "Exposes"
+    },
+    {
+      "id": "3-9-Exposes",
+      "from": 3,
+      "to": 9,
+      "label": "Exposes"
+    },
+    {
+      "id": "3-10-Exposes",
+      "from": 3,
+      "to": 10,
+      "label": "Exposes"
+    },
+    {
+      "id": "3-11-Exposes",
+      "from": 3,
+      "to": 11,
+      "label": "Exposes"
+    },
+    {
+      "id": "3-12-Exposes",
+      "from": 3,
+      "to": 12,
+      "label": "Exposes"
+    },
+    {
+      "id": "3-13-Exposes",
+      "from": 3,
+      "to": 13,
+      "label": "Exposes"
+    },
+    {
+      "id": "2-15-Assigned to",
+      "from": 2,
+      "to": 15,
+      "label": "Assigned to"
+    },
+    {
+      "id": "2-16-Located in",
+      "from": 2,
+      "to": 16,
+      "label": "Located in"
+    },
+    {
+      "id": "2-17-Belongs to",
+      "from": 2,
+      "to": 17,
+      "label": "Belongs to"
+    },
+    {
+      "id": "2-18-Located in",
+      "from": 2,
+      "to": 18,
+      "label": "Located in"
+    },
+    {
+      "id": "2-19-Uses",
+      "from": 2,
+      "to": 19,
+      "label": "Uses"
+    },
+    {
+      "id": "2-20-Uses",
+      "from": 2,
+      "to": 20,
+      "label": "Uses"
+    },
+    {
+      "id": "3-15-Assigned to",
+      "from": 3,
+      "to": 15,
+      "label": "Assigned to"
+    },
+    {
+      "id": "3-16-Located in",
+      "from": 3,
+      "to": 16,
+      "label": "Located in"
+    },
+    {
+      "id": "3-17-Belongs to",
+      "from": 3,
+      "to": 17,
+      "label": "Belongs to"
+    },
+    {
+      "id": "3-18-Located in",
+      "from": 3,
+      "to": 18,
+      "label": "Located in"
+    },
+    {
+      "id": "3-20-Uses",
+      "from": 3,
+      "to": 20,
+      "label": "Uses"
+    }
+  ]
+}
