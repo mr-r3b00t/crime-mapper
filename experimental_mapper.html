@@ -440,6 +440,10 @@
                     <input type="checkbox" id="showEdgeLabels" checked onchange="toggleEdgeLabels()">
                     Show Edge Labels
                 </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="hideIsolatedNodes" onchange="toggleIsolatedNodes()">
+                    Hide Nodes Without Links
+                </label>
             </div>
         </div>
         <div id="footer">
@@ -1960,6 +1964,35 @@ function toggleEdgeLabels() {
             }
         }
     });
+}
+
+function toggleIsolatedNodes() {
+    const hideIsolated = document.getElementById('hideIsolatedNodes').checked;
+    
+    // Get all nodes and their connections
+    nodes.forEach(node => {
+        const connections = edges.get({
+            filter: edge => edge.from === node.id || edge.to === node.id
+        });
+        
+        // Update node visibility based on whether it has connections
+        nodes.update({
+            id: node.id,
+            hidden: hideIsolated && connections.length === 0
+        });
+    });
+    
+    // Stabilize network after visibility changes
+    stabilizeNetwork().then(() => {
+        network.fit({
+            animation: {
+                duration: 300,
+                easingFunction: 'easeInOutQuad'
+            }
+        });
+    });
+    
+    saveStateAfterOperation();
 }
 
 // Add this at the end of the script section
