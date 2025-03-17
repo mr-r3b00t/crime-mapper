@@ -848,9 +848,13 @@ function showContextMenu(x, y, value, nodeId, type) {
             <button onclick="throttledEnrichIP('${value}', ${nodeId})">Enrich via IPINFO</button>
             <button onclick="throttledEnrichShodan('${value}', ${nodeId})">Enrich via Shodan</button>
             <button onclick="throttledEnrichInternetDB('${value}', ${nodeId})">Enrich via InternetDB</button>
+            <button onclick="throttledSendHttpsRequest('${value}', 'ip')">Send HTTPS Request</button>
         `;
     } else if (type === 'domain') {
-        menu.innerHTML = `<button onclick="throttledEnrichGoogleDNS('${value}', ${nodeId})">Enrich via Google DNS</button>`;
+        menu.innerHTML = `
+            <button onclick="throttledEnrichGoogleDNS('${value}', ${nodeId})">Enrich via Google DNS</button>
+            <button onclick="throttledSendHttpsRequest('${value}', 'domain')">Send HTTPS Request</button>
+        `;
     }
     
     const canvasOffset = container.getBoundingClientRect();
@@ -864,6 +868,66 @@ function showContextMenu(x, y, value, nodeId, type) {
             document.getElementById('contextMenu').style.display = 'none';
             document.removeEventListener('click', hideContextMenu);
         }
+
+        const throttledSendHttpsRequest = throttleRequest(async function sendHttpsRequest(target, type) {
+    network.setOptions({ physics: { enabled: false } });
+    let url = `https://${target}`;
+    
+    try {
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+            },
+            mode: 'cors', // Use CORS mode for cross-origin requests
+            credentials: 'omit' // Don't send cookies or credentials
+        });
+
+        // Get response details
+        const status = response.status;
+        const statusText = response.statusText;
+        const headers = {};
+        response.headers.forEach((value, key) => {
+            headers[key] = value;
+        });
+
+        // Try to get the body (limited to text for simplicity)
+        let body = '';
+        const contentType = headers['content-type'] || '';
+        if (contentType.includes('text') || contentType.includes('html') || contentType.includes('json')) {
+            body = await response.text();
+            // Truncate if too long
+            if (body.length > 500) {
+                body = body.substring(0, 500) + '... (truncated)';
+            }
+        } else {
+            body = '(Binary or unsupported content type)';
+        }
+
+        // Format the response message
+        const message = `
+            HTTPS Request to ${url}
+            Status: ${status} ${statusText}
+            Headers: ${JSON.stringify(headers, null, 2)}
+            Body: ${body}
+        `.trim();
+
+        showToast(message, 'success');
+    } catch (error) {
+        // Handle errors (e.g., network failure, CORS issues)
+        const errorMessage = `
+            HTTPS Request to ${url}
+            Error: ${error.message}
+            This could be due to:
+            - Network failure
+            - CORS restrictions
+            - Invalid or unreachable target
+        `.trim();
+        showToast(errorMessage, 'error');
+    } finally {
+        await stabilizeNetwork();
+    }
+});
 
         const throttledEnrichInternetDB = throttleRequest(async function enrichInternetDB(ip, ipNodeId, isBulk = false) {
     network.setOptions({ physics: { enabled: false } });
