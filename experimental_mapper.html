@@ -916,6 +916,62 @@ function stabilizeNetwork(skipFit = false) {
     }
 });
 
+// Add click event handler for nodes
+network.on('click', function(params) {
+    if (params.nodes.length > 0) {
+        const nodeId = params.nodes[0];
+        const node = nodes.get(nodeId);
+        
+        // Determine the primary value based on node type
+        let valueToCopy;
+        switch (node.type) {
+            case 'ip':
+                valueToCopy = node.ip;
+                break;
+            case 'domain':
+                valueToCopy = node.domain;
+                break;
+            case 'contact':
+                valueToCopy = node.email || node.name;
+                break;
+            case 'organization':
+                valueToCopy = node.organization;
+                break;
+            case 'port':
+                valueToCopy = `${node.portType}/${node.portNumber}`;
+                break;
+            case 'wallet':
+                valueToCopy = node.address;
+                break;
+            case 'bank':
+                valueToCopy = node.accountNumber;
+                break;
+            case 'technology':
+                valueToCopy = node.techName;
+                break;
+            case 'device':
+                valueToCopy = node.deviceName;
+                break;
+            case 'malware':
+                valueToCopy = node.malwareName;
+                break;
+            default:
+                valueToCopy = node.label.split('\n')[0]; // Fallback to first line of label
+        }
+
+        if (valueToCopy) {
+            // Copy to clipboard
+            navigator.clipboard.writeText(valueToCopy)
+                .then(() => {
+                    showToast(`Copied "${valueToCopy}" to clipboard`, 'success');
+                })
+                .catch(err => {
+                    showToast(`Failed to copy: ${err.message}`, 'error');
+                });
+        }
+    }
+});
+
 function showEdgeContextMenu(x, y, edgeId) {
     const menu = document.getElementById('edgeContextMenu');
     const edge = edges.get(edgeId);
