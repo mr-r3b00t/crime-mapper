@@ -525,6 +525,8 @@
         const ipRegex = { ipv4: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/, ipv6: /^([0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}$/ };
         const domainRegex = /^(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,}$/;
 
+        let selectedNodes = new Set(); // To track multiple selected nodes
+
         function toggleMenu() {
     const controls = document.getElementById('controls');
     controls.classList.toggle('collapsed');
@@ -542,6 +544,8 @@
         });
     }, 300);
 }
+
+
 
 function saveState() {
     const state = {
@@ -716,14 +720,14 @@ function loadState() {
         }
 
         const baseInteractionOptions = {
-            dragView: true,
-            zoomView: true,
-            dragNodes: true,
-            zoomSpeed: 0.5,
-            navigationButtons: false,
-            multiselect: false,
-            hover: true
-        };
+    dragView: true,
+    zoomView: true,
+    dragNodes: true,
+    zoomSpeed: 0.5,
+    navigationButtons: false,
+    multiselect: true, // Changed from false to true
+    hover: true
+};
 
         let container = document.getElementById('myNetwork');
         let data = { nodes: nodes, edges: edges };
@@ -789,6 +793,17 @@ function loadState() {
 };
         
         let network = new vis.Network(container, data, options);
+
+        network.on('selectNode', function(params) {
+    selectedNodes = new Set(params.nodes); // Update selected nodes
+});
+
+network.on('deselectNode', function(params) {
+    selectedNodes = new Set(params.nodes); // Update when deselected
+});
+
+
+
 
         function ensureInteractionSettings() {
     network.setOptions({
@@ -883,6 +898,7 @@ function stabilizeNetwork(skipFit = false) {
     });
 }
 
+
        
 
         network.on('init', function() {
@@ -901,6 +917,25 @@ function stabilizeNetwork(skipFit = false) {
     params.event.preventDefault();
     const nodeId = this.getNodeAt(params.pointer.DOM);
     const edgeId = this.getEdgeAt(params.pointer.DOM);
+
+    if (nodeId && !selectedNodes.has(nodeId)) {
+        selectedNodes.add(nodeId);
+        this.selectNodes([...selectedNodes]); // Update visual selection
+    }
+
+     // If there are selected nodes, show context menu for them
+     if (selectedNodes.size > 0) {
+        const firstNode = nodes.get([...selectedNodes][0]);
+        let value;
+        switch (firstNode.type) {
+            case 'ip': value = firstNode.ip; break;
+            case 'domain': value = firstNode.domain; break;
+            default: value = firstNode.label;
+        }
+        showContextMenu(params.pointer.DOM.x, params.pointer.DOM.y, value, [...selectedNodes], firstNode.type);
+    } else if (edgeId) {
+        showEdgeContextMenu(params.pointer.DOM.x, params.pointer.DOM.y, edgeId);
+    }
     
     if (nodeId) {
         const node = nodes.get(nodeId);
@@ -1035,32 +1070,36 @@ function removeEdgeDirect(edgeId) {
     hideEdgeContextMenu();
 }
 
-function showContextMenu(x, y, value, nodeId, type) {
+function showContextMenu(x, y, value, nodeIds, type) {
     const menu = document.getElementById('contextMenu');
+    const isMultiple = nodeIds.length > 1;
+    
     let menuHtml = `
-        <button onclick="deleteNode(${nodeId})">Delete Node</button>
-        <button onclick="startLinkCreation(${nodeId})">Create Link From Here</button>
+        <button onclick="deleteNodes([${nodeIds}])">Delete ${isMultiple ? 'Selected Nodes' : 'Node'}</button>
+        ${isMultiple ? '' : `<button onclick="startLinkCreation(${nodeIds[0]})">Create Link From Here</button>`}
     `;
     
-    // Add type-specific options
-    if (type === 'ip') {
-        menuHtml += `
-            <button onclick="throttledEnrichIP('${value}', ${nodeId})">Enrich via IPINFO</button>
-            <button onclick="throttledEnrichShodan('${value}', ${nodeId})">Enrich via Shodan</button>
-            <button onclick="throttledEnrichInternetDB('${value}', ${nodeId})">Enrich via InternetDB</button>
-            <button onclick="throttledSendHttpsRequest('${value}', 'ip', 'https')">Send HTTPS Request</button>
-            <button onclick="throttledSendHttpsRequest('${value}', 'ip', 'http')">Send HTTP Request</button>
-        `;
-    } else if (type === 'domain') {
-        menuHtml += `
-            <button onclick="throttledEnrichGoogleDNS('${value}', ${nodeId})">Enrich via Google DNS</button>
-            <button onclick="throttledSendHttpsRequest('${value}', 'domain', 'https')">Send HTTPS Request</button>
-            <button onclick="throttledSendHttpsRequest('${value}', 'domain', 'http')">Send HTTP Request</button>
-        `;
+    // Add type-specific options (only for single selection or all same type)
+    const allSameType = nodeIds.every(id => nodes.get(id).type === type);
+    if (allSameType) {
+        if (type === 'ip') {
+            menuHtml += `
+                <button onclick="throttledEnrichIPMultiple([${nodeIds.map(id => `'${nodes.get(id).ip}'`)}], [${nodeIds}])">Enrich via IPINFO</button>
+                <button onclick="throttledEnrichShodanMultiple([${nodeIds.map(id => `'${nodes.get(id).ip}'`)}], [${nodeIds}])">Enrich via Shodan</button>
+                <button onclick="throttledEnrichInternetDBMultiple([${nodeIds.map(id => `'${nodes.get(id).ip}'`)}], [${nodeIds}])">Enrich via InternetDB</button>
+                <button onclick="throttledSendHttpsRequestMultiple([${nodeIds.map(id => `'${nodes.get(id).ip}'`)}], 'ip', 'https')">Send HTTPS Request</button>
+                <button onclick="throttledSendHttpsRequestMultiple([${nodeIds.map(id => `'${nodes.get(id).ip}'`)}], 'ip', 'http')">Send HTTP Request</button>
+            `;
+        } else if (type === 'domain') {
+            menuHtml += `
+                <button onclick="throttledEnrichGoogleDNSMultiple([${nodeIds.map(id => `'${nodes.get(id).domain}'`)}], [${nodeIds}])">Enrich via Google DNS</button>
+                <button onclick="throttledSendHttpsRequestMultiple([${nodeIds.map(id => `'${nodes.get(id).domain}'`)}], 'domain', 'https')">Send HTTPS Request</button>
+                <button onclick="throttledSendHttpsRequestMultiple([${nodeIds.map(id => `'${nodes.get(id).domain}'`)}], 'domain', 'http')">Send HTTP Request</button>
+            `;
+        }
     }
 
     menu.innerHTML = menuHtml;
-    
     const canvasOffset = container.getBoundingClientRect();
     menu.style.left = `${x + canvasOffset.left}px`;
     menu.style.top = `${y + canvasOffset.top}px`;
@@ -1706,6 +1745,59 @@ async function enrichAllShodan() {
     await stabilizeNetwork();
     showToast(`Shodan enrichment completed: ${successfulEnrichments}/${ipNodes.length} IPs enriched`, 'success');
 }
+
+function deleteNodes(nodeIds) {
+    nodeIds.forEach(nodeId => {
+        const node = nodes.get(nodeId);
+        if (node) {
+            edges.remove(edges.get({ filter: edge => edge.from === nodeId || edge.to === nodeId }));
+            nodes.remove({ id: nodeId });
+        }
+    });
+    selectedNodes.clear();
+    network.selectNodes([]);
+    updateSelectOptions();
+    updateNodeSizes();
+    stabilizeNetwork();
+    saveStateAfterOperation();
+    showToast(`${nodeIds.length} node${nodeIds.length > 1 ? 's' : ''} deleted`, 'success');
+    hideContextMenu();
+}
+
+const throttledEnrichIPMultiple = throttleRequest(async function(ipValues, nodeIds) {
+    for (let i = 0; i < ipValues.length; i++) {
+        await throttledEnrichIP(ipValues[i], nodeIds[i], true);
+    }
+    showToast(`Enriched ${ipValues.length} IPs with IPinfo`, 'success');
+});
+
+const throttledEnrichShodanMultiple = throttleRequest(async function(ipValues, nodeIds) {
+    for (let i = 0; i < ipValues.length; i++) {
+        await throttledEnrichShodan(ipValues[i], nodeIds[i], true);
+    }
+    showToast(`Enriched ${ipValues.length} IPs with Shodan`, 'success');
+});
+
+const throttledEnrichInternetDBMultiple = throttleRequest(async function(ipValues, nodeIds) {
+    for (let i = 0; i < ipValues.length; i++) {
+        await throttledEnrichInternetDB(ipValues[i], nodeIds[i], true);
+    }
+    showToast(`Enriched ${ipValues.length} IPs with InternetDB`, 'success');
+});
+
+const throttledEnrichGoogleDNSMultiple = throttleRequest(async function(domainValues, nodeIds) {
+    for (let i = 0; i < domainValues.length; i++) {
+        await throttledEnrichGoogleDNS(domainValues[i], nodeIds[i], true);
+    }
+    showToast(`Enriched ${domainValues.length} domains with Google DNS`, 'success');
+});
+
+const throttledSendHttpsRequestMultiple = throttleRequest(async function(targets, type, protocol) {
+    for (const target of targets) {
+        await throttledSendHttpsRequest(target, type, protocol);
+    }
+    showToast(`Sent ${protocol.toUpperCase()} requests to ${targets.length} targets`, 'success');
+});
 
 async function enrichAllGoogleDNS() {
     network.setOptions({ physics: { enabled: false } });
