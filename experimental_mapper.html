@@ -288,15 +288,15 @@
         <button id="pause-toggle" onclick="togglePhysics()">Pause Physics</button>
         <button id="reset-layout" onclick="resetLayout()">Reset Layout</button>
         <div class="tab-buttons">
-            <button class="tab-button active" onclick="showTab('object-management')">Object Management</button>
+            <button class="tab-button" onclick="showTab('object-management')">Object Management</button>
             <button class="tab-button" onclick="showTab('link-management')">Link Management</button>
             <button class="tab-button" onclick="showTab('import-export')">Import/Export</button>
             <button class="tab-button" onclick="showTab('api-keys')">API Keys</button>
             <button class="tab-button" onclick="showTab('enrichment')">Enrichment</button>
-            <button class="tab-button" onclick="showTab('import-iocs')">Import IOCs</button>
+            <button class="tab-button active" onclick="showTab('import-iocs')">Import IOCs</button>
             <button class="tab-button" onclick="showTab('layouts')">Layouts</button>
         </div>
-        <div id="object-management" class="tab-content active">
+        <div id="object-management" class="tab-content">
             <div class="input-group">
                 <h3>Add Entity</h3>
                 <select id="addEntityType">
@@ -466,7 +466,7 @@
                 <button onclick="enrichAllGoogleDNS()">Enrich All Domains with Google DNS</button>
             </div>
         </div>
-        <div id="import-iocs" class="tab-content">
+        <div id="import-iocs" class="tab-content active">
             <div class="input-group">
                 <h3>Import IOCs</h3>
                 <textarea id="iocText" placeholder="Paste IOC text here (IPs, domains)"></textarea>
