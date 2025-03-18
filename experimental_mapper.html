@@ -6,6 +6,31 @@
     <title>Network Graph</title>
     <style>
 
+/* Ensure nodes maintain consistent size regardless of label */
+#myNetwork .vis-network canvas {
+    overflow: visible; /* Prevent label clipping */
+}
+
+.vis-network .vis-label {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+    white-space: normal; /* Allow multi-line labels */
+    max-width: 100%;     /* Keep within node bounds */
+}
+
+/* Optional: Adjust node appearance */
+.vis-network .vis-node {
+    min-width: 40px;    /* Minimum size to accommodate label */
+    min-height: 40px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
 .password-container {
     position: relative;
     width: 100%;
@@ -784,7 +809,19 @@ window.onload = function() {
     stabilizeNetwork();
 
     // Start periodic saving
-    setInterval(saveState, 5 * 60 * 1000); // Save every 5 minutes
+    // Only save when changes occur
+let hasChanges = false;
+nodes.on('add', () => hasChanges = true);
+nodes.on('update', () => hasChanges = true);
+edges.on('add', () => hasChanges = true);
+edges.on('update', () => hasChanges = true);
+
+setInterval(() => {
+    if (hasChanges) {
+        saveState();
+        hasChanges = false;
+    }
+}, 60 * 1000); // Check every minute
 };
 
 // Improve the loadState function with better error handling and logging
@@ -939,7 +976,8 @@ function loadState() {
         },
         scaling: {
             min: 10,
-            max: 125
+            max: 125,
+            label: { enabled: false } // Disable label-based scaling
         },
         // Add these to prevent label influence
         fixed: {
@@ -2284,7 +2322,9 @@ async function enrichAllGoogleDNS() {
     
     await stabilizeNetwork();
     showToast(`Google DNS enrichment completed: ${successfulEnrichments}/${domainNodes.length} domains enriched`, 'success');
+
 }
+
 
         function importIOCsFromText() {
             const text = document.getElementById('iocText').value.trim();
@@ -2349,71 +2389,64 @@ async function enrichAllGoogleDNS() {
                 showToast('Please enter a valid Shodan API key.', 'error');
             }
         }
-
+        
         function updateTheme() {
-    if (isDarkMode) {
-        document.body.classList.remove('light-mode');
-        document.body.classList.add('dark-mode');
-        options.nodes.font = {
-            size: 12,
-            color: '#e2e8f0',
-            multi: true,
-            strokeWidth: 0,
-            strokeColor: 'transparent'
-        };
-        options.nodes.color = {
-            border: '#94a3b8',
-            background: '#4b5563',
-            hover: { border: '#60a5fa', background: '#4b5563' },
-            highlight: { border: '#60a5fa', background: '#4b5563' }
-        };
-        options.edges.font = {
-            size: 12,
-            color: '#e2e8f0',  // Consistent light gray
-            strokeWidth: 0,    // Explicitly disable outline
-            strokeColor: 'transparent'  // No stroke
-        };
-        options.edges.color = { 
-            color: '#94a3b8', 
-            highlight: '#60a5fa' 
-        };
-    } else {
-        // Light mode settings remain unchanged
-        document.body.classList.remove('dark-mode');
-        document.body.classList.add('light-mode');
-        options.nodes.font = {
-            size: 12,
-            color: '#1f2a44',
-            multi: true,
-            strokeWidth: 0,
-            strokeColor: 'transparent'
-        };
-        options.nodes.color = {
-            border: '#6b7280',
-            background: '#ffffff',
-            hover: { border: '#3b82f6', background: '#e5e7eb' },
-            highlight: { border: '#3b82f6', background: '#e5e7eb' }
-        };
-        options.edges.font = {
-            size: 12,
-            color: '#1f2a44',
-            strokeWidth: 0,
-            strokeColor: 'transparent'
-        };
-        options.edges.color = { 
-            color: '#6b7280', 
-            highlight: '#3b82f6' 
-        };
-    }
-    document.getElementById('mode-toggle').textContent = isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode';
-    network.setOptions(options);  // Reapply all options
-    ensureInteractionSettings();  // Maintain interaction settings
+ if (isDarkMode) {
+ document.body.classList.remove('light-mode');
+ document.body.classList.add('dark-mode');
+ options.nodes.font = {
+ size: 12,
+ color: '#e2e8f0',
+ multi: true,
+ align: 'center',
+ vadjust: 0
+ };
+ options.nodes.color = {
+ border: '#94a3b8',
+ background: '#4b5563',
+ hover: { border: '#60a5fa', background: '#4b5563' },
+ highlight: { border: '#60a5fa', background: '#4b5563' }
+ };
+ options.edges.font = {
+ size: 12,
+ color: '#e2e8f0',
+ strokeWidth: 0,
+ strokeColor: 'transparent'
+ };
+ options.edges.color = { color: '#94a3b8', highlight: '#60a5fa' };
+ } else {
+ document.body.classList.remove('dark-mode');
+ document.body.classList.add('light-mode');
+ options.nodes.font = {
+ size: 12,
+ color: '#1f2a44',
+ multi: true,
+ align: 'center',
+ vadjust: 0
+ };
+ options.nodes.color = {
+ border: '#6b7280',
+ background: '#ffffff',
+ hover: { border: '#3b82f6', background: '#e5e7eb' },
+ highlight: { border: '#3b82f6', background: '#e5e7eb' }
+ };
+ options.edges.font = {
+ size: 12,
+ color: '#1f2a44',
+ strokeWidth: 0,
+ strokeColor: 'transparent'
+ };
+ options.edges.color = { color: '#6b7280', highlight: '#3b82f6' };
+ }
+ network.setOptions(options);
+ ensureInteractionSettings();
 }
 
-        function toggleMode() { 
-            isDarkMode = !isDarkMode; 
-            updateTheme(); 
-        }
+function toggleMode() { 
+ isDarkMode = !isDarkMode; 
+ updateTheme(); 
+ document.getElementById('mode-toggle').textContent = isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode';
+}
 
         function togglePhysics() {
     isPhysicsPaused = !isPhysicsPaused;
@@ -2442,7 +2475,7 @@ async function enrichAllGoogleDNS() {
         stabilizeNetwork();
     }
     ensureInteractionSettings();
-}
+    }
 
         function resetLayout() {
             nodes.forEach(node => nodes.update({ id: node.id, x: undefined, y: undefined }));
@@ -3492,7 +3525,6 @@ window.addEventListener('beforeunload', function() {
         console.error('Before unload save failed:', e);
     }
 });
-
 
 
     </script>
