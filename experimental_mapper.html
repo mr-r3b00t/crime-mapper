@@ -1962,7 +1962,7 @@ const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ip
         if (!response.ok) throw new Error('Failed to fetch Shodan data');
         const data = await response.json();
 
-        // Process open ports
+        // Process open ports (existing functionality)
         if (data.ports && data.ports.length > 0) {
             data.ports.forEach(port => {
                 const existingPort = nodes.get({ filter: n => n.type === 'port' && n.portNumber === port.toString() && n.portType === 'TCP' })[0];
@@ -1983,7 +1983,28 @@ const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ip
             });
         }
 
-        // Process HTML hash if available
+        // Process hostnames (new functionality)
+        if (data.hostnames && data.hostnames.length > 0) {
+            data.hostnames.forEach(hostname => {
+                const existingDomain = nodes.get({ filter: n => n.type === 'domain' && n.domain === hostname })[0];
+                const domainId = existingDomain ? existingDomain.id : nextId++;
+                if (!existingDomain) {
+                    nodes.add({ 
+                        id: domainId, 
+                        type: 'domain', 
+                        label: hostname, 
+                        title: `Domain: ${hostname}`, 
+                        color: { background: '#60a5fa' }, 
+                        domain: hostname,
+                        size: 10  // Consistent initial size
+                    });
+                }
+                const edgeId = `${ipNodeId}-${domainId}-ResolvesTo`;
+                if (!edges.get(edgeId)) edges.add({ id: edgeId, from: ipNodeId, to: domainId, label: 'Resolves to' });
+            });
+        }
+
+        // Process HTML hash if available (existing functionality)
         if (data.data && data.data.some(d => d.http && d.http.html_hash)) {
             const htmlHashData = data.data.find(d => d.http && d.http.html_hash);
             const htmlHash = htmlHashData.http.html_hash;
@@ -2003,7 +2024,7 @@ const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ip
             if (!edges.get(edgeIdHtml)) edges.add({ id: edgeIdHtml, from: ipNodeId, to: htmlHashId, label: 'Has HTML Hash' });
         }
 
-        // Process SSL certificate fingerprint if available
+        // Process SSL certificate fingerprint if available (existing functionality)
         if (data.data && data.data.some(d => d.ssl && d.ssl.cert && d.ssl.cert.fingerprint && d.ssl.cert.fingerprint.sha256)) {
             const sslData = data.data.find(d => d.ssl && d.ssl.cert && d.ssl.cert.fingerprint && d.ssl.cert.fingerprint.sha256);
             const sslFingerprint = sslData.ssl.cert.fingerprint.sha256;
@@ -2023,10 +2044,12 @@ const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ip
             if (!edges.get(edgeIdSsl)) edges.add({ id: edgeIdSsl, from: ipNodeId, to: sslHashId, label: 'Has SSL Hash' });
         }
 
+        // Update graph and UI
         updateNodeSizes();
         updateSelectOptions();
         await stabilizeNetwork();
-        if (!isBulk) showToast(`IP ${ip} enrichment completed using Shodan with hashes`, 'success');
+        updateTheme();  // Ensure edge font consistency (from previous fix)
+        if (!isBulk) showToast(`IP ${ip} enrichment completed using Shodan with hostnames`, 'success');
     } catch (error) {
         if (error.name === 'AbortError') {
             showToast(`Enrichment of IP ${ip} was cancelled`, 'info');
@@ -2048,11 +2071,11 @@ async function enrichAllShodan() {
     const ipNodes = nodes.get({ filter: n => n.type === 'ip' && n.ip });
     let successfulEnrichments = 0;
     
-    console.log(`Found ${ipNodes.length} IP nodes to enrich`); // Debug log
+    console.log(`Found ${ipNodes.length} IP nodes to enrich`);
     
     for (const node of ipNodes) {
         try {
-            console.log(`Enriching IP: ${node.ip}`); // Debug log
+            console.log(`Enriching IP: ${node.ip}`);
             await throttledEnrichShodan(node.ip, node.id, true);
             successfulEnrichments++;
         } catch (error) {
@@ -2062,7 +2085,21 @@ async function enrichAllShodan() {
     }
     
     await stabilizeNetwork();
-    showToast(`Shodan enrichment completed: ${successfulEnrichments}/${ipNodes.length} IPs enriched`, 'success');
+    updateTheme();  // Ensure edge font consistency
+    ensureInteractionSettings();
+    showToast(`Shodan enrichment completed: ${successfulEnrichments}/${ipNodes.length} IPs enriched with hostnames`, 'success');
+    
+    if (window.innerWidth <= 768) {
+        const controls = document.getElementById('controls');
+        controls.classList.add('collapsed');
+        document.getElementById('myNetwork').style.display = 'block';
+        network.fit({
+            animation: {
+                duration: 300,
+                easingFunction: 'easeInOutQuad'
+            }
+        });
+    }
 }
 
 function deleteNodes(nodeIds) {
@@ -2094,7 +2131,7 @@ const throttledEnrichShodanMultiple = throttleRequest(async function(ipValues, n
     for (let i = 0; i < ipValues.length; i++) {
         await throttledEnrichShodan(ipValues[i], nodeIds[i], true);
     }
-    showToast(`Enriched ${ipValues.length} IPs with Shodan`, 'success');
+    showToast(`Enriched ${ipValues.length} IPs with Shodan (including hostnames)`, 'success');
 });
 
 const throttledEnrichInternetDBMultiple = throttleRequest(async function(ipValues, nodeIds) {
