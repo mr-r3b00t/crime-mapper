@@ -480,6 +480,10 @@
                 </label>
                 <button onclick="saveCorsProxyUrl()">Save CORS Proxy URL</button>
             </div>
+            <div class="input-group">
+                <h3>Test Functions</h3>
+                <button onclick="runAllTests()">Run Test Functions</button>
+            </div>
         </div>
         <div id="enrichment" class="tab-content">
             <div class="input-group">
@@ -3139,10 +3143,143 @@ function toggleIsolatedNodes() {
     saveStateAfterOperation();
 }
 
+
+    // Test Harness for Network Graph Visualization Tool
+    async function runAllTests() {
+        console.log("Starting All Tests...");
+        showToast("All Tests Started", "info");
+
+        // Helper function to wait
+        const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        // Step 1: Add a Domain Entity (dns.google.com)
+        console.log("Step 1: Adding dns.google.com entity");
+        document.getElementById('addEntityType').value = 'domain';
+        document.getElementById('addDomainInput').value = 'dns.google.com';
+        document.getElementById('addDomainInput').style.display = 'block';
+        addNode();
+        await wait(1000); // Wait for node addition to complete
+
+        // Verify node was added
+        const domainNode = nodes.get({ filter: n => n.type === 'domain' && n.domain === 'dns.google.com' })[0];
+        if (!domainNode) {
+            console.error("Failed to add dns.google.com node");
+            showToast("Failed to add dns.google.com", "error");
+            return;
+        }
+        console.log("dns.google.com added with ID:", domainNode.id);
+        showToast("Added dns.google.com", "success");
+
+        // Step 2: Run Enrichment Functions
+        console.log("Step 2: Running Enrichment Functions");
+
+        // Google DNS Enrichment (should resolve to IPs like 8.8.8.8)
+        console.log("Enriching with Google DNS...");
+        await throttledEnrichGoogleDNS('dns.google.com', domainNode.id);
+        await wait(2000);
+
+        // Get an IP node to enrich further (e.g., 8.8.8.8)
+        const ipNode = nodes.get({ filter: n => n.type === 'ip' && n.ip })[0];
+        if (ipNode) {
+            console.log("Found IP node to enrich:", ipNode.ip);
+
+            // IPinfo Enrichment
+            console.log("Enriching with IPinfo...");
+            await throttledEnrichIP(ipNode.ip, ipNode.id);
+            await wait(2000);
+
+            // Shodan Enrichment
+            console.log("Enriching with Shodan...");
+            await throttledEnrichShodan(ipNode.ip, ipNode.id);
+            await wait(2000);
+
+            // InternetDB Enrichment
+            console.log("Enriching with InternetDB...");
+            await throttledEnrichInternetDB(ipNode.ip, ipNode.id);
+            await wait(2000);
+        } else {
+            console.warn("No IP node found after Google DNS enrichment");
+            showToast("No IP found to enrich further", "warning");
+        }
+
+        // Step 3: Test Bulk Enrichment
+        console.log("Step 3: Testing Bulk Enrichment");
+        await enrichAllIpinfo();
+        await wait(2000);
+        await enrichAllShodan();
+        await wait(2000);
+        await enrichAllInternetDB();
+        await wait(2000);
+        await enrichAllGoogleDNS();
+        await wait(2000);
+
+        // Step 4: Test Layouts
+        console.log("Step 4: Testing Layouts");
+        setOrganicLayout();
+        await wait(1000);
+        setCircularLayout();
+        await wait(1000);
+        setOrthogonalLayout();
+        await wait(1000);
+        setTreeLayout();
+        await wait(1000);
+        setHierarchicalLayout();
+        await wait(1000);
+
+        // Step 5: Test Import/Export
+        console.log("Step 5: Testing Import/Export");
+        exportGraph(); // Export current graph
+        await wait(1000);
+        // Simulate importing IOCs
+        document.getElementById('iocText').value = "8.8.4.4\nexample.com";
+        importIOCsFromText();
+        await wait(1000);
+
+        // Step 6: Test Physics Toggle
+        console.log("Step 6: Testing Physics Toggle");
+        togglePhysics(); // Pause
+        await wait(1000);
+        togglePhysics(); // Resume
+        await wait(1000);
+
+        // Step 7: Test Mode Toggle
+        console.log("Step 7: Testing Mode Toggle");
+        toggleMode(); // Switch to light/dark
+        await wait(1000);
+        toggleMode(); // Switch back
+        await wait(1000);
+
+        // Step 8: Test Label Visibility
+        console.log("Step 8: Testing Label Visibility");
+        document.getElementById('showNodeLabels').checked = false;
+        toggleNodeLabels();
+        await wait(1000);
+        document.getElementById('showNodeLabels').checked = true;
+        toggleNodeLabels();
+        await wait(1000);
+
+        // Step 9: Clean Up - Delete the Original Node
+        console.log("Step 9: Cleaning Up");
+        if (domainNode) {
+            document.getElementById('removeNode').value = domainNode.id;
+            removeNode();
+            await wait(1000);
+            console.log("dns.google.com removed");
+            showToast("Removed dns.google.com", "success");
+        }
+
+        console.log("All Tests Completed");
+        showToast("All Tests Completed", "success");
+        clearGraph();
+    }
+
+
 // Add this at the end of the script section
 window.addEventListener('beforeunload', function() {
     saveState();
 });
+
+
     </script>
 </body>
 </html>
