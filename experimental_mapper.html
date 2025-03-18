@@ -591,6 +591,8 @@
             </script>
         </div>
 
+        <button id="manual-save" onclick="saveStateAfterOperation()">Save Now</button>
+
         <div style="text-align: center; padding: 10px;">
             <button id="stop-task" onclick="stopActiveTask()">Stop Active Task</button>
         </div>
@@ -699,7 +701,23 @@ function saveState() {
         isDarkMode: isDarkMode,
         isPhysicsPaused: isPhysicsPaused
     };
-    localStorage.setItem('networkGraphState', JSON.stringify(state));
+    
+    try {
+        const stateString = JSON.stringify(state);
+        // Check approximate size in bytes (rough estimate)
+        if (stateString.length > 4 * 1024 * 1024) { // 4MB threshold
+            console.warn('State too large for localStorage');
+            showToast('Warning: Graph too large to save automatically', 'warning');
+            return false;
+        }
+        localStorage.setItem('networkGraphState', stateString);
+        showToast('State saved successfully', 'success'); // Added toast for successful save
+        return true;
+    } catch (e) {
+        console.error('Error saving state:', e);
+        showToast('Failed to save state: ' + e.message, 'error');
+        return false;
+    }
 }
 
 
@@ -711,6 +729,17 @@ function saveStateAfterOperation() {
 }
 
 window.onload = function() {
+
+     // Load saved state
+     const stateLoaded = loadState();
+    document.getElementById('stop-task').disabled = true;
+
+    // If no state was loaded, apply defaults
+    if (!stateLoaded) {
+        console.log('No saved state found or loading failed, applying defaults');
+        updateTheme();
+        ensureInteractionSettings();
+    }
     // Load API keys from localStorage
     const storedIpinfoKey = localStorage.getItem('ipinfoApiKey');
     if (storedIpinfoKey) {
@@ -733,16 +762,7 @@ window.onload = function() {
                 // Set default value if not in localStorage
                 document.getElementById('corsProxyUrl').value = corsProxyUrl;
             }
-    // Load saved state
-    const stateLoaded = loadState();
-    document.getElementById('stop-task').disabled = true;
-
-    // If no state was loaded, apply defaults
-    if (!stateLoaded) {
-        console.log('No saved state found or loading failed, applying defaults');
-        updateTheme();
-        ensureInteractionSettings();
-    }
+   
 
     // Update UI elements regardless of state
     updateSelectOptions();
@@ -2239,6 +2259,8 @@ async function enrichAllGoogleDNS() {
             processIOCs(text);
             document.getElementById('iocText').value = '';
             stabilizeNetwork();
+            saveStateAfterOperation(); // Add this to save the state
+            showToast('IOCs imported from text', 'success'); //
         }
 
         function importIOCsFromFile() {
@@ -2250,6 +2272,8 @@ async function enrichAllGoogleDNS() {
                 processIOCs(event.target.result); 
                 fileInput.value = ''; 
                 stabilizeNetwork();
+                saveStateAfterOperation(); // Add this inside the callback
+                showToast('IOCs imported from file', 'success'); // Optional: feedback
             };
             reader.readAsText(file);
         }
@@ -3266,7 +3290,35 @@ window.onload = function() {
     }
     // Rest of your existing onload code...
 };
+const stateLoaded = loadState();
+    document.getElementById('stop-task').disabled = true;
 
+    if (!stateLoaded) {
+        console.log('No saved state found or loading failed, applying defaults');
+        updateTheme();
+        ensureInteractionSettings();
+    } else {
+        // Force UI and network update after successful load
+        updateSelectOptions();
+        updateEdgeSelectOptions();
+        stabilizeNetwork().then(() => {
+            network.fit({ 
+                animation: { 
+                    duration: 500, 
+                    easingFunction: 'easeInOutQuad' 
+                } 
+            });
+        });
+    }
+
+    // Update UI elements regardless of state
+    updateSelectOptions();
+
+    if (window.innerWidth <= 768) {
+        document.getElementById('controls').classList.add('collapsed');
+    }
+
+    setInterval(saveState, 5 * 60 * 1000);
 
     // Test Harness for Network Graph Visualization Tool
     async function runAllTests() {
@@ -3400,8 +3452,13 @@ window.onload = function() {
 
 // Add this at the end of the script section
 window.addEventListener('beforeunload', function() {
-    saveState();
+    try {
+        saveState();
+    } catch (e) {
+        console.error('Before unload save failed:', e);
+    }
 });
+
 
 
     </script>
