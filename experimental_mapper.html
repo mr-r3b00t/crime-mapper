@@ -1651,32 +1651,88 @@ const throttledTestHTTPS = throttleRequest(async function testHTTPS(ip, nodeId) 
     }
 });
 
-        const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ipNodeId, isBulk = false) {
-            if (!shodanApiKey) { showToast('Please set your Shodan API key in the "API Keys" tab first.', 'error'); return; }
-            network.setOptions({ physics: { enabled: false } });
-            try {
-                const response = await fetch(`https://api.shodan.io/shodan/host/${ip}?key=${shodanApiKey}`);
-                if (!response.ok) throw new Error('Failed to fetch Shodan data');
-                const data = await response.json();
-                if (data.ports && data.ports.length > 0) {
-                    data.ports.forEach(port => {
-                        const existingPort = nodes.get({ filter: n => n.type === 'port' && n.portNumber === port.toString() && n.portType === 'TCP' })[0];
-                        const portId = existingPort ? existingPort.id : nextId++;
-                        if (!existingPort) nodes.add({ id: portId, type: 'port', label: `TCP/${port}`, title: `Port\nType: TCP\nNumber: ${port}`, color: { background: '#a78bfa' }, portType: 'TCP', portNumber: port.toString() });
-                        const edgeId = `${ipNodeId}-${portId}-Exposes`;
-                        if (!edges.get(edgeId)) edges.add({ id: edgeId, from: ipNodeId, to: portId, label: 'Exposes' });
+const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ipNodeId, isBulk = false) {
+    if (!shodanApiKey) { 
+        showToast('Please set your Shodan API key in the "API Keys" tab first.', 'error'); 
+        return; 
+    }
+    network.setOptions({ physics: { enabled: false } });
+    try {
+        const response = await fetch(`https://api.shodan.io/shodan/host/${ip}?key=${shodanApiKey}`);
+        if (!response.ok) throw new Error('Failed to fetch Shodan data');
+        const data = await response.json();
+
+        // Process open ports (existing functionality)
+        if (data.ports && data.ports.length > 0) {
+            data.ports.forEach(port => {
+                const existingPort = nodes.get({ filter: n => n.type === 'port' && n.portNumber === port.toString() && n.portType === 'TCP' })[0];
+                const portId = existingPort ? existingPort.id : nextId++;
+                if (!existingPort) {
+                    nodes.add({ 
+                        id: portId, 
+                        type: 'port', 
+                        label: `TCP/${port}`, 
+                        title: `Port\nType: TCP\nNumber: ${port}`, 
+                        color: { background: '#a78bfa' }, 
+                        portType: 'TCP', 
+                        portNumber: port.toString() 
                     });
                 }
-                updateNodeSizes();
-                updateSelectOptions();
-                await stabilizeNetwork();
-                if (!isBulk) showToast(`IP ${ip} enrichment completed using Shodan`, 'success');
-            } catch (error) {
-                console.error(`Error enriching IP ${ip} with Shodan: ${error.message}`);
-                showToast(`Error enriching IP ${ip} with Shodan: ${error.message}`, 'error');
-                await stabilizeNetwork();
+                const edgeId = `${ipNodeId}-${portId}-Exposes`;
+                if (!edges.get(edgeId)) edges.add({ id: edgeId, from: ipNodeId, to: portId, label: 'Exposes' });
+            });
+        }
+
+        // Process HTML hash if available
+        if (data.data && data.data.some(d => d.http && d.http.html_hash)) {
+            const htmlHashData = data.data.find(d => d.http && d.http.html_hash);
+            const htmlHash = htmlHashData.http.html_hash;
+            const existingHtmlHash = nodes.get({ filter: n => n.type === 'html_hash' && n.hash === htmlHash })[0];
+            const htmlHashId = existingHtmlHash ? existingHtmlHash.id : nextId++;
+            if (!existingHtmlHash) {
+                nodes.add({ 
+                    id: htmlHashId, 
+                    type: 'html_hash', 
+                    label: `HTML Hash: ${htmlHash}`, 
+                    title: `HTML Hash\nValue: ${htmlHash}`, 
+                    color: { background: '#f59e0b' }, // Amber color for HTML hash
+                    hash: htmlHash 
+                });
             }
-        });
+            const edgeIdHtml = `${ipNodeId}-${htmlHashId}-HasHTMLHash`;
+            if (!edges.get(edgeIdHtml)) edges.add({ id: edgeIdHtml, from: ipNodeId, to: htmlHashId, label: 'Has HTML Hash' });
+        }
+
+        // Process SSL certificate fingerprint if available
+        if (data.data && data.data.some(d => d.ssl && d.ssl.cert && d.ssl.cert.fingerprint && d.ssl.cert.fingerprint.sha256)) {
+            const sslData = data.data.find(d => d.ssl && d.ssl.cert && d.ssl.cert.fingerprint && d.ssl.cert.fingerprint.sha256);
+            const sslFingerprint = sslData.ssl.cert.fingerprint.sha256;
+            const existingSslHash = nodes.get({ filter: n => n.type === 'ssl_hash' && n.fingerprint === sslFingerprint })[0];
+            const sslHashId = existingSslHash ? existingSslHash.id : nextId++;
+            if (!existingSslHash) {
+                nodes.add({ 
+                    id: sslHashId, 
+                    type: 'ssl_hash', 
+                    label: `SSL SHA256: ${sslFingerprint.substring(0, 8)}...`, // Truncate for display
+                    title: `SSL Certificate Fingerprint\nSHA256: ${sslFingerprint}`, 
+                    color: { background: '#8b5cf6' }, // Purple color for SSL hash
+                    fingerprint: sslFingerprint 
+                });
+            }
+            const edgeIdSsl = `${ipNodeId}-${sslHashId}-HasSSLHash`;
+            if (!edges.get(edgeIdSsl)) edges.add({ id: edgeIdSsl, from: ipNodeId, to: sslHashId, label: 'Has SSL Hash' });
+        }
+
+        updateNodeSizes();
+        updateSelectOptions();
+        await stabilizeNetwork();
+        if (!isBulk) showToast(`IP ${ip} enrichment completed using Shodan with hashes`, 'success');
+    } catch (error) {
+        console.error(`Error enriching IP ${ip} with Shodan: ${error.message}`);
+        showToast(`Error enriching IP ${ip} with Shodan: ${error.message}`, 'error');
+        await stabilizeNetwork();
+    }
+});
 
         const throttledEnrichGoogleDNS = throttleRequest(async function enrichGoogleDNS(domain, domainNodeId, isBulk = false) {
             network.setOptions({ physics: { enabled: false } });
@@ -2245,7 +2301,9 @@ function setHierarchicalLayout() {
                 bank: { fields: ['accountNumber', 'sortCode'], color: '#10b981', label: v => `${v.accountNumber}\n${v.sortCode}`, title: v => `Bank Account\nAccount Number: ${v.accountNumber}\nSort Code: ${v.sortCode}` },
                 technology: { fields: ['techName', 'techVersion'], color: '#ec4899', label: v => `${v.techName}\n${v.techVersion}`, title: v => `Technology\nName: ${v.techName}\nVersion: ${v.techVersion}` },
                 device: { fields: ['deviceCategory', 'deviceName'], color: '#14b8a6', label: v => `${v.deviceName}\n${v.deviceCategory}`, title: v => `Device\nName: ${v.deviceName}\nCategory: ${v.deviceCategory}` },
-                malware: { fields: ['malwareName', 'malwareType'], color: '#ef4444', label: v => `${v.malwareName}\n${v.malwareType}`, title: v => `Malware\nName: ${v.malwareName}\nType: ${v.malwareType}` }
+                malware: { fields: ['malwareName', 'malwareType'], color: '#ef4444', label: v => `${v.malwareName}\n${v.malwareType}`, title: v => `Malware\nName: ${v.malwareName}\nType: ${v.malwareType}` },
+                html_hash: { fields: ['hash'], color: '#f59e0b', label: v => `HTML Hash: ${v.hash}`, title: v => `HTML Hash\nValue: ${v.hash}` },
+                ssl_hash: { fields: ['fingerprint'], color: '#8b5cf6', label: v => `SSL SHA256: ${v.fingerprint.substring(0, 8)}...`, title: v => `SSL Certificate Fingerprint\nSHA256: ${v.fingerprint}` }
             };
             const config = configs[type];
             if (!config || config.fields.some(f => !values[f])) { showToast(`Please enter all required fields for ${type}`, 'error'); return null; }
@@ -2574,86 +2632,201 @@ function setHierarchicalLayout() {
         }
 
         function importGraph() {
-            let fileInput = document.getElementById('importFile');
-            let file = fileInput.files[0];
-            if (!file) return showToast('Please select a JSON file', 'error');
-            let reader = new FileReader();
-            reader.onload = function(event) {
-                try {
-                    let importedData = JSON.parse(event.target.result);
-                    nodes.clear(); 
-                    edges.clear();
-                    importedData.nodes.forEach(node => {
-                        let nodeData = { id: node.id, size: 20, type: node.type, label: '', title: '', color: { background: '' } };
-                        if (node.type === 'contact') {
-                            if (!node.name) return;
-                            nodeData.label = node.email ? `${node.name}\n${node.email}` : node.name;
-                            nodeData.title = node.email ? `Contact\nName: ${node.name}\nEmail: ${node.email}` : `Contact\nName: ${node.name}`;
-                            nodeData.color.background = '#4ade80';
-                            nodeData.name = node.name;
-                            if (node.email) nodeData.email = node.email;
-                        } else if (node.type === 'ip') {
-                            if (!node.ip) return;
-                            nodeData.label = node.ip; nodeData.title = `IP Address: ${node.ip}`; nodeData.color.background = '#f87171'; nodeData.ip = node.ip;
-                        } else if (node.type === 'domain') {
-                            if (!node.domain) return;
-                            nodeData.label = node.domain; nodeData.title = `Domain: ${node.domain}`; nodeData.color.background = '#60a5fa'; nodeData.domain = node.domain;
-                        } else if (node.type === 'organization') {
-                            if (!node.organization) return;
-                            nodeData.label = node.organization; nodeData.title = `Organization: ${node.organization}`; nodeData.color.background = '#facc15'; nodeData.organization = node.organization;
-                        } else if (node.type === 'port') {
-                            if (!node.portNumber || !node.portType) return;
-                            nodeData.label = `${node.portType}/${node.portNumber}`; nodeData.title = `Port\nType: ${node.portType}\nNumber: ${node.portNumber}`; nodeData.color.background = '#a78bfa'; nodeData.portType = node.portType; nodeData.portNumber = node.portNumber;
-                        } else if (node.type === 'wallet') {
-                            if (!node.address) return;
-                            nodeData.label = node.address; nodeData.title = `Wallet\nAddress: ${node.address}`; nodeData.color.background = '#fb923c'; nodeData.address = node.address;
-                        } else if (node.type === 'bank') {
-                            if (!node.accountNumber || !node.sortCode) return;
-                            nodeData.label = `${node.accountNumber}\n${node.sortCode}`; nodeData.title = `Bank Account\nAccount Number: ${node.accountNumber}\nSort Code: ${node.sortCode}`; nodeData.color.background = '#10b981'; nodeData.accountNumber = node.accountNumber; nodeData.sortCode = node.sortCode;
-                        } else if (node.type === 'technology') {
-                            if (!node.techName || !node.techVersion) return;
-                            nodeData.label = `${node.techName}\n${node.techVersion}`; nodeData.title = `Technology\nName: ${node.techName}\nVersion: ${node.techVersion}`; nodeData.color.background = '#ec4899'; nodeData.techName = node.techName; nodeData.techVersion = node.techVersion;
-                        } else if (node.type === 'device') {
-                            if (!node.deviceCategory || !node.deviceName) return;
-                            nodeData.label = `${node.deviceName}\n${node.deviceCategory}`; nodeData.title = `Device\nName: ${node.deviceName}\nCategory: ${node.deviceCategory}`; nodeData.color.background = '#14b8a6'; nodeData.deviceCategory = node.deviceCategory; nodeData.deviceName = node.deviceName;
-                        } else if (node.type === 'malware') {
-                            if (!node.malwareName || !node.malwareType) return;
-                            nodeData.label = `${node.malwareName}\n${node.malwareType}`; nodeData.title = `Malware\nName: ${node.malwareName}\nType: ${node.malwareType}`; nodeData.color.background = '#ef4444'; nodeData.malwareName = node.malwareName; nodeData.malwareType = node.malwareType;
-                        } else if (node.type === 'country') {
-                            if (!node.country) return;
-                            nodeData.label = node.country; nodeData.title = `Country: ${node.country}`; nodeData.color.background = '#34d399'; nodeData.country = node.country;
-                        } else if (node.type === 'asn') {
-                            if (!node.asn) return;
-                            nodeData.label = node.asn; nodeData.title = `ASN: ${node.asn}`; nodeData.color.background = '#a3e635'; nodeData.asn = node.asn;
-                        } else if (node.type === 'city') {
-                            if (!node.city) return;
-                            nodeData.label = node.city; nodeData.title = `City: ${node.city}`; nodeData.color.background = '#f97316'; nodeData.city = node.city;
-                        } else if (node.type === 'vpn' || node.type === 'proxy' || node.type === 'tor' || node.type === 'relay' || node.type === 'hosting') {
-                            if (!node.value) return;
-                            nodeData.label = node.type.charAt(0).toUpperCase() + node.type.slice(1); 
-                            nodeData.title = `${nodeData.label} for IP: ${node.value}`;
-                            nodeData.color.background = { vpn: '#9333ea', proxy: '#f43f5e', tor: '#64748b', relay: '#eab308', hosting: '#14b8a6' }[node.type]; 
-                            nodeData.value = node.value;
-                        }
-                        if (!nodes.get({ filter: n => n.type === nodeData.type && ((nodeData.ip && n.ip === nodeData.ip) || (nodeData.domain && n.domain === nodeData.domain) || (nodeData.organization && n.organization === nodeData.organization) || (nodeData.country && n.country === nodeData.country) || (nodeData.asn && n.asn === nodeData.asn) || (nodeData.city && n.city === nodeData.city) || (nodeData.value && n.value === nodeData.value) || (nodeData.name && n.name === nodeData.name && (!nodeData.email || n.email === nodeData.email)) || (nodeData.portNumber && nodeData.portType && n.portNumber === nodeData.portNumber && n.portType === nodeData.portType) || (nodeData.address && n.address === nodeData.address) || (nodeData.accountNumber && nodeData.sortCode && n.accountNumber === nodeData.accountNumber && n.sortCode === nodeData.sortCode) || (nodeData.techName && nodeData.techVersion && n.techName === nodeData.techName && n.techVersion === nodeData.techVersion) || (nodeData.deviceCategory && nodeData.deviceName && n.deviceCategory === nodeData.deviceCategory && n.deviceName === nodeData.deviceName) || (nodeData.malwareName && nodeData.malwareType && n.malwareName === nodeData.malwareName && n.malwareType === nodeData.malwareType)) }).length) nodes.add(nodeData);
-                    });
-                    importedData.edges.forEach(edge => { 
-                        if (edge.from && edge.to && !edges.get({ filter: e => e.from === edge.from && e.to === edge.to && e.label === (edge.label || undefined) }).length) 
-                            edges.add({ id: edge.id || `edge_${edge.from}_${edge.to}_${Date.now()}`, from: edge.from, to: edge.to, label: edge.label || undefined }); 
-                    });
-                    updateNodeSizes(); 
-                    updateSelectOptions(); 
-                    nextId = Math.max(...importedData.nodes.map(n => n.id)) + 1 || 1; 
-                    fileInput.value = ''; 
-                    stabilizeNetwork();
-                    saveStateAfterOperation();
-                } catch (e) { 
-                    console.error('Error importing JSON:', e); 
-                    showToast('Error importing JSON: ' + e.message, 'error'); 
+    let fileInput = document.getElementById('importFile');
+    let file = fileInput.files[0];
+    if (!file) return showToast('Please select a JSON file', 'error');
+    let reader = new FileReader();
+    reader.onload = function(event) {
+        try {
+            let importedData = JSON.parse(event.target.result);
+            nodes.clear(); 
+            edges.clear();
+            importedData.nodes.forEach(node => {
+                let nodeData = { 
+                    id: node.id, 
+                    size: 20, 
+                    type: node.type, 
+                    label: '', 
+                    title: '', 
+                    color: { background: '' } 
+                };
+                switch (node.type) {
+                    case 'contact':
+                        if (!node.name) return;
+                        nodeData.label = node.email ? `${node.name}\n${node.email}` : node.name;
+                        nodeData.title = node.email ? `Contact\nName: ${node.name}\nEmail: ${node.email}` : `Contact\nName: ${node.name}`;
+                        nodeData.color.background = '#4ade80';
+                        nodeData.name = node.name;
+                        if (node.email) nodeData.email = node.email;
+                        break;
+                    case 'ip':
+                        if (!node.ip) return;
+                        nodeData.label = node.ip;
+                        nodeData.title = `IP Address: ${node.ip}`;
+                        nodeData.color.background = '#f87171';
+                        nodeData.ip = node.ip;
+                        break;
+                    case 'domain':
+                        if (!node.domain) return;
+                        nodeData.label = node.domain;
+                        nodeData.title = `Domain: ${node.domain}`;
+                        nodeData.color.background = '#60a5fa';
+                        nodeData.domain = node.domain;
+                        break;
+                    case 'organization':
+                        if (!node.organization) return;
+                        nodeData.label = node.organization;
+                        nodeData.title = `Organization: ${node.organization}`;
+                        nodeData.color.background = '#facc15';
+                        nodeData.organization = node.organization;
+                        break;
+                    case 'port':
+                        if (!node.portNumber || !node.portType) return;
+                        nodeData.label = `${node.portType}/${node.portNumber}`;
+                        nodeData.title = `Port\nType: ${node.portType}\nNumber: ${node.portNumber}`;
+                        nodeData.color.background = '#a78bfa';
+                        nodeData.portType = node.portType;
+                        nodeData.portNumber = node.portNumber;
+                        break;
+                    case 'wallet':
+                        if (!node.address) return;
+                        nodeData.label = node.address;
+                        nodeData.title = `Wallet\nAddress: ${node.address}`;
+                        nodeData.color.background = '#fb923c';
+                        nodeData.address = node.address;
+                        break;
+                    case 'bank':
+                        if (!node.accountNumber || !node.sortCode) return;
+                        nodeData.label = `${node.accountNumber}\n${node.sortCode}`;
+                        nodeData.title = `Bank Account\nAccount Number: ${node.accountNumber}\nSort Code: ${node.sortCode}`;
+                        nodeData.color.background = '#10b981';
+                        nodeData.accountNumber = node.accountNumber;
+                        nodeData.sortCode = node.sortCode;
+                        break;
+                    case 'technology':
+                        if (!node.techName || !node.techVersion) return;
+                        nodeData.label = `${node.techName}\n${node.techVersion}`;
+                        nodeData.title = `Technology\nName: ${node.techName}\nVersion: ${node.techVersion}`;
+                        nodeData.color.background = '#ec4899';
+                        nodeData.techName = node.techName;
+                        nodeData.techVersion = node.techVersion;
+                        break;
+                    case 'device':
+                        if (!node.deviceCategory || !node.deviceName) return;
+                        nodeData.label = `${node.deviceName}\n${node.deviceCategory}`;
+                        nodeData.title = `Device\nName: ${node.deviceName}\nCategory: ${node.deviceCategory}`;
+                        nodeData.color.background = '#14b8a6';
+                        nodeData.deviceCategory = node.deviceCategory;
+                        nodeData.deviceName = node.deviceName;
+                        break;
+                    case 'malware':
+                        if (!node.malwareName || !node.malwareType) return;
+                        nodeData.label = `${node.malwareName}\n${node.malwareType}`;
+                        nodeData.title = `Malware\nName: ${node.malwareName}\nType: ${node.malwareType}`;
+                        nodeData.color.background = '#ef4444';
+                        nodeData.malwareName = node.malwareName;
+                        nodeData.malwareType = node.malwareType;
+                        break;
+                    case 'country':
+                        if (!node.country) return;
+                        nodeData.label = node.country;
+                        nodeData.title = `Country: ${node.country}`;
+                        nodeData.color.background = '#34d399';
+                        nodeData.country = node.country;
+                        break;
+                    case 'asn':
+                        if (!node.asn) return;
+                        nodeData.label = node.asn;
+                        nodeData.title = `ASN: ${node.asn}`;
+                        nodeData.color.background = '#a3e635';
+                        nodeData.asn = node.asn;
+                        break;
+                    case 'city':
+                        if (!node.city) return;
+                        nodeData.label = node.city;
+                        nodeData.title = `City: ${node.city}`;
+                        nodeData.color.background = '#f97316';
+                        nodeData.city = node.city;
+                        break;
+                    case 'vpn':
+                    case 'proxy':
+                    case 'tor':
+                    case 'relay':
+                    case 'hosting':
+                        if (!node.value) return;
+                        nodeData.label = node.type.charAt(0).toUpperCase() + node.type.slice(1);
+                        nodeData.title = `${nodeData.label} for IP: ${node.value}`;
+                        nodeData.color.background = { 
+                            vpn: '#9333ea', 
+                            proxy: '#f43f5e', 
+                            tor: '#64748b', 
+                            relay: '#eab308', 
+                            hosting: '#14b8a6' 
+                        }[node.type];
+                        nodeData.value = node.value;
+                        break;
+                    case 'html_hash':
+                        if (!node.hash) return;
+                        nodeData.label = `HTML Hash: ${node.hash}`;
+                        nodeData.title = `HTML Hash\nValue: ${node.hash}`;
+                        nodeData.color.background = '#f59e0b';
+                        nodeData.hash = node.hash;
+                        break;
+                    case 'ssl_hash':
+                        if (!node.fingerprint) return;
+                        nodeData.label = `SSL SHA256: ${node.fingerprint.substring(0, 8)}...`;
+                        nodeData.title = `SSL Certificate Fingerprint\nSHA256: ${node.fingerprint}`;
+                        nodeData.color.background = '#8b5cf6';
+                        nodeData.fingerprint = node.fingerprint;
+                        break;
+                    default:
+                        return; // Skip unknown node types
                 }
-            };
-            reader.readAsText(file);
+                // Prevent duplicate nodes based on unique attributes
+                if (!nodes.get({ filter: n => n.type === nodeData.type && (
+                    (nodeData.ip && n.ip === nodeData.ip) ||
+                    (nodeData.domain && n.domain === nodeData.domain) ||
+                    (nodeData.organization && n.organization === nodeData.organization) ||
+                    (nodeData.country && n.country === nodeData.country) ||
+                    (nodeData.asn && n.asn === nodeData.asn) ||
+                    (nodeData.city && n.city === nodeData.city) ||
+                    (nodeData.value && n.value === nodeData.value) ||
+                    (nodeData.name && n.name === nodeData.name && (!nodeData.email || n.email === nodeData.email)) ||
+                    (nodeData.portNumber && nodeData.portType && n.portNumber === nodeData.portNumber && n.portType === nodeData.portType) ||
+                    (nodeData.address && n.address === nodeData.address) ||
+                    (nodeData.accountNumber && nodeData.sortCode && n.accountNumber === nodeData.accountNumber && n.sortCode === nodeData.sortCode) ||
+                    (nodeData.techName && nodeData.techVersion && n.techName === nodeData.techName && n.techVersion === nodeData.techVersion) ||
+                    (nodeData.deviceCategory && nodeData.deviceName && n.deviceCategory === nodeData.deviceCategory && n.deviceName === nodeData.deviceName) ||
+                    (nodeData.malwareName && nodeData.malwareType && n.malwareName === nodeData.malwareName && n.malwareType === nodeData.malwareType) ||
+                    (nodeData.hash && n.hash === nodeData.hash) ||
+                    (nodeData.fingerprint && n.fingerprint === nodeData.fingerprint)
+                ) }).length) {
+                    nodes.add(nodeData);
+                }
+            });
+            importedData.edges.forEach(edge => { 
+                if (edge.from && edge.to && !edges.get({ filter: e => e.from === edge.from && e.to === edge.to && e.label === (edge.label || undefined) }).length) {
+                    edges.add({ 
+                        id: edge.id || `edge_${edge.from}_${edge.to}_${Date.now()}`, 
+                        from: edge.from, 
+                        to: edge.to, 
+                        label: edge.label || undefined 
+                    }); 
+                }
+            });
+            updateNodeSizes(); 
+            updateSelectOptions(); 
+            nextId = Math.max(...importedData.nodes.map(n => n.id)) + 1 || 1; 
+            fileInput.value = ''; 
+            stabilizeNetwork();
+            saveStateAfterOperation();
+        } catch (e) { 
+            console.error('Error importing JSON:', e); 
+            showToast('Error importing JSON: ' + e.message, 'error'); 
         }
+    };
+    reader.readAsText(file);
+}
 
         document.addEventListener('keypress', event => {
             if (event.key === 'Enter') {
