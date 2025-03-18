@@ -1,28 +1,29 @@
-# crime-mapper
-A tool for mapping cyber crime
+# Crime-Mapper  
+**A sleek tool for mapping cyber crime**  
 
-Created by @UK_Daniel_Card
+Created by **@UK_Daniel_Card**  
 
-https://mr-r3b00t.github.io/crime-mapper/crimemapper.html
+🔗 [Live Demo](https://mr-r3b00t.github.io/crime-mapper/crimemapper.html)  
+🔗 [Experimental Version](https://mr-r3b00t.github.io/crime-mapper/experimental_mapper.html)  
 
-https://mr-r3b00t.github.io/crime-mapper/experimental_mapper.html
+### Features  
+- Import and Export to JSON  
+- Runs locally or via GitHub Pages  
+- Powered by an external JS library and third-party API keys (*BYOK - Bring Your Own Keys*)  
 
-Includes Import and Export to JSON
+### Built With  
+- GROK3  
+- ChatGPT  
 
-Runs locally or via Github pages but uses an external js library and third party API keys (bring your own keys)
+⚠️ **Status:** Very Alpha - use at your own risk!  
 
-Made using GROK3 and ChatGPT
+### Support the Project  
+☕ [Buy Me a Coffee](https://buymeacoffee.com/mrr3b00t)  
 
-Very Alpha - use at own risk!
+© Xservus Limited  
 
+---
 
-https://buymeacoffee.com/mrr3b00t
-
-Copyright (c) Xservus Limited
-
-# Other tools that might be useful:
-https://gephi.org/features/
-
-
-https://graphviz.org
-
+## Explore More Tools  
+- [Gephi](https://gephi.org/features/) - Advanced graph visualization  
+- [Graphviz](https://graphviz.org) - Graph visualization software  
