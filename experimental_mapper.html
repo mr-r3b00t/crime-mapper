@@ -572,6 +572,37 @@
 
         let selectedNodes = new Set(); // To track multiple selected nodes
 
+        async function enrichAllIpinfo() {
+    network.setOptions({ physics: { enabled: false } });
+    const ipNodes = nodes.get({ filter: n => n.type === 'ip' && n.ip });
+    let successfulEnrichments = 0;
+    
+    console.log(`Found ${ipNodes.length} IP nodes to enrich with IPinfo`);
+    
+    for (const node of ipNodes) {
+        try {
+            console.log(`Enriching IP: ${node.ip}`);
+            await throttledEnrichIP(node.ip, node.id, true);
+            successfulEnrichments++;
+        } catch (error) {
+            console.error(`Failed to enrich IP ${node.ip}: ${error.message}`);
+            showToast(`Failed to enrich IP ${node.ip}: ${error.message}`, 'error');
+        }
+    }
+    
+    await stabilizeNetwork();
+    ensureInteractionSettings();
+    showToast(`IPinfo enrichment completed: ${successfulEnrichments}/${ipNodes.length} IPs enriched`, 'success');
+    
+    if (window.innerWidth <= 768) {
+        const controls = document.getElementById('controls');
+        controls.classList.add('collapsed');
+        document.getElementById('myNetwork').style.display = 'block';
+        network.fit({
+            animation: { duration: 300, easingFunction: 'easeInOutQuad' }
+        });
+    }
+}
 
         // Add this new function
 function stopActiveTask() {
