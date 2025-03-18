@@ -3,6 +3,8 @@
 
 Created by **@UK_Daniel_Card**  
 
+The experimental version is the live, bleeeding edge version.
+
 🔗 [Live Demo](https://mr-r3b00t.github.io/crime-mapper/crimemapper.html)  
 🔗 [Experimental Version](https://mr-r3b00t.github.io/crime-mapper/experimental_mapper.html)  
 
