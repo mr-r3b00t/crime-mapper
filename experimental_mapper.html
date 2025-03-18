@@ -637,7 +637,7 @@
     <div id="contextMenu" style="display: none;"></div>
     <div id="edgeContextMenu" style="display: none;"></div>
 
-    <script>
+<script>
         let routeViaProxy = false;
         let ignoreApiKeysViaProxy = false;
         let nodes = new vis.DataSet([]);
@@ -657,12 +657,12 @@
 
         let selectedNodes = new Set(); // To track multiple selected nodes
 
-        async function enrichAllIpinfo() {
-    network.setOptions({ physics: { enabled: false } });
-    const ipNodes = nodes.get({ filter: n => n.type === 'ip' && n.ip });
-    let successfulEnrichments = 0;
+    async function enrichAllIpinfo() {
+        network.setOptions({ physics: { enabled: false } });
+        const ipNodes = nodes.get({ filter: n => n.type === 'ip' && n.ip });
+        let successfulEnrichments = 0;
     
-    console.log(`Found ${ipNodes.length} IP nodes to enrich with IPinfo`);
+        console.log(`Found ${ipNodes.length} IP nodes to enrich with IPinfo`);
     
     for (const node of ipNodes) {
         try {
@@ -686,8 +686,10 @@
         network.fit({
             animation: { duration: 300, easingFunction: 'easeInOutQuad' }
         });
+        }
+
     }
-}
+
 
         // Add this new function
 function stopActiveTask() {
@@ -2705,121 +2707,105 @@ function setHierarchicalLayout() {
         function createNodeData(type, values) {
     const nodeData = { 
         id: nextId++, 
-        size: 10, // Consistent starting size
+        size: 10,
         type,
-        // Ensure no size constraints from label
         widthConstraint: false,
         heightConstraint: false
     };
-            const configs = {
-                contact: { fields: ['name'], optionalFields: ['email'], color: '#4ade80', label: v => v.email ? `${v.name}\n${v.email}` : v.name, title: v => v.email ? `Contact\nName: ${v.name}\nEmail: ${v.email}` : `Contact\nName: ${v.name}` },
-                ip: { fields: ['ip'], color: '#f87171', label: v => v.ip, title: v => `IP Address: ${v.ip}`, validate: v => ipRegex.ipv4.test(v.ip) || ipRegex.ipv6.test(v.ip) },
-                domain: { fields: ['domain'], color: '#60a5fa', label: v => v.domain, title: v => `Domain: ${v.domain}` },
-                organization: { fields: ['organization'], color: '#facc15', label: v => v.organization, title: v => `Organization: ${v.organization}` },
-                port: { fields: ['portNumber', 'portType'], color: '#a78bfa', label: v => `${v.portType}/${v.portNumber}`, title: v => `Port\nType: ${v.portType}\nNumber: ${v.portNumber}` },
-                wallet: { fields: ['address'], color: '#fb923c', label: v => v.address, title: v => `Wallet\nAddress: ${v.address}` },
-                bank: { fields: ['accountNumber', 'sortCode'], color: '#10b981', label: v => `${v.accountNumber}\n${v.sortCode}`, title: v => `Bank Account\nAccount Number: ${v.accountNumber}\nSort Code: ${v.sortCode}` },
-                technology: { fields: ['techName', 'techVersion'], color: '#ec4899', label: v => `${v.techName}\n${v.techVersion}`, title: v => `Technology\nName: ${v.techName}\nVersion: ${v.techVersion}` },
-                device: { fields: ['deviceCategory', 'deviceName'], color: '#14b8a6', label: v => `${v.deviceName}\n${v.deviceCategory}`, title: v => `Device\nName: ${v.deviceName}\nCategory: ${v.deviceCategory}` },
-                malware: { fields: ['malwareName', 'malwareType'], color: '#ef4444', label: v => `${v.malwareName}\n${v.malwareType}`, title: v => `Malware\nName: ${v.malwareName}\nType: ${v.malwareType}` },
-                html_hash: { fields: ['hash'], color: '#f59e0b', label: v => `HTML Hash: ${v.hash}`, title: v => `HTML Hash\nValue: ${v.hash}` },
-                ssl_hash: { fields: ['fingerprint'], color: '#8b5cf6', label: v => `SSL SHA256: ${v.fingerprint.substring(0, 8)}...`, title: v => `SSL Certificate Fingerprint\nSHA256: ${v.fingerprint}` }
-            };
-            const config = configs[type];
-            if (!config || config.fields.some(f => !values[f])) { showToast(`Please enter all required fields for ${type}`, 'error'); return null; }
-            if (config.validate && !config.validate(values)) { showToast(`Invalid ${type} format`, 'error'); return null; }
-            const allValues = { ...values };
-            if (config.optionalFields) config.optionalFields.forEach(f => { if (values[f]) allValues[f] = values[f]; });
-            Object.assign(nodeData, { label: config.label(allValues), title: config.title(allValues), color: { background: config.color }, ...allValues });
-            return nodeData;
-        }
-
-        function addNode() {
-    const type = document.getElementById('addEntityType').value;
-    
-    // Collect inputs based on entity type
-    const inputs = {
+    const configs = {
         contact: { 
-            name: document.getElementById('addNameInput').value.trim(),
-            email: document.getElementById('addEmailInput').value.trim()
+            fields: ['name'], 
+            optionalFields: ['email'], 
+            color: '#4ade80', 
+            label: v => `Contact: ${v.email ? `${v.name}\n${v.email}` : v.name}`, 
+            title: v => v.email ? `Contact\nName: ${v.name}\nEmail: ${v.email}` : `Contact\nName: ${v.name}` 
         },
         ip: { 
-            ip: document.getElementById('addIpInput').value.trim()
+            fields: ['ip'], 
+            color: '#f87171', 
+            label: v => `IP: ${v.ip}`, 
+            title: v => `IP Address: ${v.ip}`, 
+            validate: v => ipRegex.ipv4.test(v.ip) || ipRegex.ipv6.test(v.ip) 
         },
         domain: { 
-            domain: document.getElementById('addDomainInput').value.trim()
+            fields: ['domain'], 
+            color: '#60a5fa', 
+            label: v => `Domain: ${v.domain}`, 
+            title: v => `Domain: ${v.domain}` 
         },
         organization: { 
-            organization: document.getElementById('addOrgInput').value.trim()
+            fields: ['organization'], 
+            color: '#facc15', 
+            label: v => `Organization: ${v.organization}`, 
+            title: v => `Organization: ${v.organization}` 
         },
         port: { 
-            portNumber: document.getElementById('addPortNumInput').value.trim(),
-            portType: document.getElementById('addPortType').value
+            fields: ['portNumber', 'portType'], 
+            color: '#a78bfa', 
+            label: v => `Port: ${v.portType}/${v.portNumber}`, 
+            title: v => `Port\nType: ${v.portType}\nNumber: ${v.portNumber}` 
         },
         wallet: { 
-            address: document.getElementById('addWalletAddressInput').value.trim()
+            fields: ['address'], 
+            color: '#fb923c', 
+            label: v => `Wallet: ${v.address}`, 
+            title: v => `Wallet\nAddress: ${v.address}` 
         },
         bank: { 
-            accountNumber: document.getElementById('addAccountNumberInput').value.trim(),
-            sortCode: document.getElementById('addSortCodeInput').value.trim()
+            fields: ['accountNumber', 'sortCode'], 
+            color: '#10b981', 
+            label: v => `Bank: ${v.accountNumber}\n${v.sortCode}`, 
+            title: v => `Bank Account\nAccount Number: ${v.accountNumber}\nSort Code: ${v.sortCode}` 
         },
         technology: { 
-            techName: document.getElementById('addTechNameInput').value.trim(),
-            techVersion: document.getElementById('addTechVersionInput').value.trim()
+            fields: ['techName', 'techVersion'], 
+            color: '#ec4899', 
+            label: v => `Technology: ${v.techName}\n${v.techVersion}`, 
+            title: v => `Technology\nName: ${v.techName}\nVersion: ${v.techVersion}` 
         },
         device: { 
-            deviceCategory: document.getElementById('addDeviceCategory').value,
-            deviceName: document.getElementById('addDeviceNameInput').value.trim()
+            fields: ['deviceCategory', 'deviceName'], 
+            color: '#14b8a6', 
+            label: v => `Device: ${v.deviceName}\n${v.deviceCategory}`, 
+            title: v => `Device\nName: ${v.deviceName}\nCategory: ${v.deviceCategory}` 
         },
         malware: { 
-            malwareName: document.getElementById('addMalwareNameInput').value.trim(),
-            malwareType: document.getElementById('addMalwareType').value
+            fields: ['malwareName', 'malwareType'], 
+            color: '#ef4444', 
+            label: v => `Malware: ${v.malwareName}\n${v.malwareType}`, 
+            title: v => `Malware\nName: ${v.malwareName}\nType: ${v.malwareType}` 
+        },
+        html_hash: { 
+            fields: ['hash'], 
+            color: '#f59e0b', 
+            label: v => `HTML Hash: ${v.hash}`, 
+            title: v => `HTML Hash\nValue: ${v.hash}` 
+        },
+        ssl_hash: { 
+            fields: ['fingerprint'], 
+            color: '#8b5cf6', 
+            label: v => `SSL Hash: ${v.fingerprint.substring(0, 8)}...`, 
+            title: v => `SSL Certificate Fingerprint\nSHA256: ${v.fingerprint}` 
         }
     };
-
-    // Get the node data using the inputs for the selected type
-    const nodeData = createNodeData(type, inputs[type]);
-    if (!nodeData) {
-        // createNodeData already shows a toast for validation errors
-        return;
+    const config = configs[type];
+    if (!config || config.fields.some(f => !values[f])) { 
+        showToast(`Please enter all required fields for ${type}`, 'error'); 
+        return null; 
     }
-
-    // Check for duplicates based on key fields
-    const existingNodes = nodes.get({
-        filter: n => n.type === type && (
-            (type === 'contact' && n.name === inputs[type].name && (!inputs[type].email || n.email === inputs[type].email)) ||
-            (type === 'ip' && n.ip === inputs[type].ip) ||
-            (type === 'domain' && n.domain === inputs[type].domain) ||
-            (type === 'organization' && n.organization === inputs[type].organization) ||
-            (type === 'port' && n.portNumber === inputs[type].portNumber && n.portType === inputs[type].portType) ||
-            (type === 'wallet' && n.address === inputs[type].address) ||
-            (type === 'bank' && n.accountNumber === inputs[type].accountNumber && n.sortCode === inputs[type].sortCode) ||
-            (type === 'technology' && n.techName === inputs[type].techName && n.techVersion === inputs[type].techVersion) ||
-            (type === 'device' && n.deviceCategory === inputs[type].deviceCategory && n.deviceName === inputs[type].deviceName) ||
-            (type === 'malware' && n.malwareName === inputs[type].malwareName && n.malwareType === inputs[type].malwareType)
-        )
-    });
-
-    if (existingNodes.length > 0) {
-        showToast(`${type} already exists`, 'error');
-        return;
+    if (config.validate && !config.validate(values)) { 
+        showToast(`Invalid ${type} format`, 'error'); 
+        return null; 
     }
-
-    // Add the node
-    nodes.add({
-        ...nodeData,
-        size: 10, // Fixed initial size
-        widthConstraint: false,
-        heightConstraint: false
+    const allValues = { ...values };
+    if (config.optionalFields) config.optionalFields.forEach(f => { if (values[f]) allValues[f] = values[f]; });
+    Object.assign(nodeData, { 
+        label: config.label(allValues), 
+        title: config.title(allValues), 
+        color: { background: config.color }, 
+        ...allValues 
     });
-
-    // Update UI and network
-    updateSelectOptions();
-    clearAddInputs();
-    updateNodeSizes();
-    stabilizeNetwork();
-    saveStateAfterOperation();
-    showToast(`${type} added successfully`, 'success');
+    return nodeData;
 }
 
         function editNode() {
@@ -3066,7 +3052,7 @@ function updateNodeSizes(affectedNodeIds = null) {
                 switch (node.type) {
                     case 'contact':
                         if (!node.name) return;
-                        nodeData.label = node.email ? `${node.name}\n${node.email}` : node.name;
+                        nodeData.label = `Contact: ${node.email ? `${node.name}\n${node.email}` : node.name}`;
                         nodeData.title = node.email ? `Contact\nName: ${node.name}\nEmail: ${node.email}` : `Contact\nName: ${node.name}`;
                         nodeData.color.background = '#4ade80';
                         nodeData.name = node.name;
@@ -3074,28 +3060,28 @@ function updateNodeSizes(affectedNodeIds = null) {
                         break;
                     case 'ip':
                         if (!node.ip) return;
-                        nodeData.label = node.ip;
+                        nodeData.label = `IP: ${node.ip}`;
                         nodeData.title = `IP Address: ${node.ip}`;
                         nodeData.color.background = '#f87171';
                         nodeData.ip = node.ip;
                         break;
                     case 'domain':
                         if (!node.domain) return;
-                        nodeData.label = node.domain;
+                        nodeData.label = `Domain: ${node.domain}`;
                         nodeData.title = `Domain: ${node.domain}`;
                         nodeData.color.background = '#60a5fa';
                         nodeData.domain = node.domain;
                         break;
                     case 'organization':
                         if (!node.organization) return;
-                        nodeData.label = node.organization;
+                        nodeData.label = `Organization: ${node.organization}`;
                         nodeData.title = `Organization: ${node.organization}`;
                         nodeData.color.background = '#facc15';
                         nodeData.organization = node.organization;
                         break;
                     case 'port':
                         if (!node.portNumber || !node.portType) return;
-                        nodeData.label = `${node.portType}/${node.portNumber}`;
+                        nodeData.label = `Port: ${node.portType}/${node.portNumber}`;
                         nodeData.title = `Port\nType: ${node.portType}\nNumber: ${node.portNumber}`;
                         nodeData.color.background = '#a78bfa';
                         nodeData.portType = node.portType;
@@ -3103,14 +3089,14 @@ function updateNodeSizes(affectedNodeIds = null) {
                         break;
                     case 'wallet':
                         if (!node.address) return;
-                        nodeData.label = node.address;
+                        nodeData.label = `Wallet: ${node.address}`;
                         nodeData.title = `Wallet\nAddress: ${node.address}`;
                         nodeData.color.background = '#fb923c';
                         nodeData.address = node.address;
                         break;
                     case 'bank':
                         if (!node.accountNumber || !node.sortCode) return;
-                        nodeData.label = `${node.accountNumber}\n${node.sortCode}`;
+                        nodeData.label = `Bank: ${node.accountNumber}\n${node.sortCode}`;
                         nodeData.title = `Bank Account\nAccount Number: ${node.accountNumber}\nSort Code: ${node.sortCode}`;
                         nodeData.color.background = '#10b981';
                         nodeData.accountNumber = node.accountNumber;
@@ -3118,7 +3104,7 @@ function updateNodeSizes(affectedNodeIds = null) {
                         break;
                     case 'technology':
                         if (!node.techName || !node.techVersion) return;
-                        nodeData.label = `${node.techName}\n${node.techVersion}`;
+                        nodeData.label = `Technology: ${node.techName}\n${node.techVersion}`;
                         nodeData.title = `Technology\nName: ${node.techName}\nVersion: ${node.techVersion}`;
                         nodeData.color.background = '#ec4899';
                         nodeData.techName = node.techName;
@@ -3126,7 +3112,7 @@ function updateNodeSizes(affectedNodeIds = null) {
                         break;
                     case 'device':
                         if (!node.deviceCategory || !node.deviceName) return;
-                        nodeData.label = `${node.deviceName}\n${node.deviceCategory}`;
+                        nodeData.label = `Device: ${node.deviceName}\n${node.deviceCategory}`;
                         nodeData.title = `Device\nName: ${node.deviceName}\nCategory: ${node.deviceCategory}`;
                         nodeData.color.background = '#14b8a6';
                         nodeData.deviceCategory = node.deviceCategory;
@@ -3134,7 +3120,7 @@ function updateNodeSizes(affectedNodeIds = null) {
                         break;
                     case 'malware':
                         if (!node.malwareName || !node.malwareType) return;
-                        nodeData.label = `${node.malwareName}\n${node.malwareType}`;
+                        nodeData.label = `Malware: ${node.malwareName}\n${node.malwareType}`;
                         nodeData.title = `Malware\nName: ${node.malwareName}\nType: ${node.malwareType}`;
                         nodeData.color.background = '#ef4444';
                         nodeData.malwareName = node.malwareName;
@@ -3142,21 +3128,21 @@ function updateNodeSizes(affectedNodeIds = null) {
                         break;
                     case 'country':
                         if (!node.country) return;
-                        nodeData.label = node.country;
+                        nodeData.label = `Country: ${node.country}`;
                         nodeData.title = `Country: ${node.country}`;
                         nodeData.color.background = '#34d399';
                         nodeData.country = node.country;
                         break;
                     case 'asn':
                         if (!node.asn) return;
-                        nodeData.label = node.asn;
+                        nodeData.label = `ASN: ${node.asn}`;
                         nodeData.title = `ASN: ${node.asn}`;
                         nodeData.color.background = '#a3e635';
                         nodeData.asn = node.asn;
                         break;
                     case 'city':
                         if (!node.city) return;
-                        nodeData.label = node.city;
+                        nodeData.label = `City: ${node.city}`;
                         nodeData.title = `City: ${node.city}`;
                         nodeData.color.background = '#f97316';
                         nodeData.city = node.city;
@@ -3167,8 +3153,8 @@ function updateNodeSizes(affectedNodeIds = null) {
                     case 'relay':
                     case 'hosting':
                         if (!node.value) return;
-                        nodeData.label = node.type.charAt(0).toUpperCase() + node.type.slice(1);
-                        nodeData.title = `${nodeData.label} for IP: ${node.value}`;
+                        nodeData.label = `${node.type.charAt(0).toUpperCase() + node.type.slice(1)}: ${node.value}`;
+                        nodeData.title = `${node.type.charAt(0).toUpperCase() + node.type.slice(1)} for IP: ${node.value}`;
                         nodeData.color.background = { 
                             vpn: '#9333ea', 
                             proxy: '#f43f5e', 
@@ -3187,7 +3173,7 @@ function updateNodeSizes(affectedNodeIds = null) {
                         break;
                     case 'ssl_hash':
                         if (!node.fingerprint) return;
-                        nodeData.label = `SSL SHA256: ${node.fingerprint.substring(0, 8)}...`;
+                        nodeData.label = `SSL Hash: ${node.fingerprint.substring(0, 8)}...`;
                         nodeData.title = `SSL Certificate Fingerprint\nSHA256: ${node.fingerprint}`;
                         nodeData.color.background = '#8b5cf6';
                         nodeData.fingerprint = node.fingerprint;
@@ -3233,6 +3219,7 @@ function updateNodeSizes(affectedNodeIds = null) {
             fileInput.value = ''; 
             stabilizeNetwork();
             saveStateAfterOperation();
+            showToast('Graph imported successfully', 'success');
         } catch (e) { 
             console.error('Error importing JSON:', e); 
             showToast('Error importing JSON: ' + e.message, 'error'); 
