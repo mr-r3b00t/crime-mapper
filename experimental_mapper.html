@@ -344,7 +344,7 @@
 </head>
 <body class="dark-mode">
     <div id="controls">
-        <button id="menu-toggle" onclick="toggleMenu()">></button>
+        <button id="menu-toggle" onclick="toggleMenu()" title="Toggle Menu">></button>
         <button id="mode-toggle" onclick="toggleMode()">Switch to Light Mode</button>
         <button id="pause-toggle" onclick="togglePhysics()">Pause Physics</button>
         <button id="reset-layout" onclick="resetLayout()">Reset Layout</button>
@@ -1289,7 +1289,10 @@ function showContextMenu(x, y, value, nodeIds, type) {
     `;
     
     // Add type-specific options (only for single selection or all same type)
-    const allSameType = nodeIds.every(id => nodes.get(id).type === type);
+    const allSameType = nodeIds.every(id => {
+    const node = nodes.get(id);
+    return node && node.type === type;
+});
     if (allSameType) {
         if (type === 'ip') {
             menuHtml += `
@@ -2903,37 +2906,30 @@ function setHierarchicalLayout() {
         }
 
         function clearGraph() {
-            if (!confirm('Are you sure you want to clear the graph?')) return;
-            nodes.clear(); 
-            edges.clear(); 
-            nextId = 1; 
-            updateSelectOptions(); 
-            updateEdgeSelectOptions(); 
-            clearAddInputs(); 
-            clearEditInputs(); 
-            stabilizeNetwork();
-            saveStateAfterOperation();
-        }
+    if (!confirm('Are you sure you want to clear the entire graph? This action cannot be undone.')) return;
+    nodes.clear();
+    edges.clear();
+    nextId = 1;
+    updateSelectOptions();
+    updateEdgeSelectOptions();
+    clearAddInputs();
+    clearEditInputs();
+    stabilizeNetwork();
+    saveStateAfterOperation();
+    showToast('Graph cleared', 'success');
+}
 
-        function updateNodeSizes() {
-    nodes.forEach(node => { 
-        // Count connections
-        const connections = edges.get({ 
-            filter: edge => edge.from === node.id || edge.to === node.id 
-        }).length; 
-        
-        // Base size 20, add 5 per connection, max 60
+function updateNodeSizes(affectedNodeIds = null) {
+    const nodesToUpdate = affectedNodeIds ? nodes.get(affectedNodeIds) : nodes.get();
+    nodesToUpdate.forEach(node => {
+        const connections = edges.get({ filter: edge => edge.from === node.id || edge.to === node.id }).length;
         const newSize = Math.min(15 + connections * 10, 120);
-        
-        nodes.update({ 
-            id: node.id, 
-            size: newSize,
-            // Ensure label doesn't affect size
-            widthConstraint: false,
-            heightConstraint: false
-        }); 
+        nodes.update({ id: node.id, size: newSize, widthConstraint: false, heightConstraint: false });
     });
 }
+
+
+
 
         function updateSelectOptions() {
             ['editNodeSelect', 'fromNode', 'toNode', 'removeNode'].forEach(id => {
