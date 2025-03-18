@@ -898,9 +898,12 @@ function ensureInteractionSettings() {
     network.setOptions({
         interaction: { 
             ...baseInteractionOptions,
-            zoomView: true,
+            zoomView: true,        // Explicitly ensure zooming is enabled
             dragView: true,
-            zoomSpeed: 0.5
+            dragNodes: true,
+            zoomSpeed: 0.5,
+            multiselect: true,
+            hover: true
         },
         physics: {
             enabled: !isPhysicsPaused,
@@ -922,6 +925,7 @@ function ensureInteractionSettings() {
 function stabilizeNetwork(skipFit = false) {
     return new Promise(resolve => {
         network.setOptions({
+            
             physics: {
                 enabled: true,
                 stabilization: {
@@ -1519,15 +1523,65 @@ function deleteNode(nodeId) {
             Toastify(toastOptions).showToast();
         }
 
-        async function stabilizeNetwork() {
-            return new Promise(resolve => {
-                network.stabilize(200);
-                network.once('stabilizationIterationsDone', () => {
-                    network.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } });
-                    resolve();
-                });
+        async function stabilizeNetwork(skipFit = false) {
+    return new Promise(resolve => {
+        network.setOptions({
+            physics: {
+                enabled: true,
+                stabilization: {
+                    enabled: true,
+                    iterations: 200,
+                    updateInterval: 50
+                },
+                barnesHut: {
+                    gravitationalConstant: -8000,
+                    centralGravity: 0.3,
+                    springLength: 150,
+                    avoidOverlap: 1.0,
+                    damping: 0.9
+                }
+            },
+            interaction: { ...baseInteractionOptions, zoomView: true } // Preserve zoom
+        });
+
+        network.stabilize(200);
+        network.once('stabilizationIterationsDone', () => {
+            network.setOptions({
+                physics: {
+                    enabled: !isPhysicsPaused,
+                    stabilization: { enabled: false }
+                },
+                interaction: { ...baseInteractionOptions, zoomView: true } // Re-ensure zoom
             });
-        }
+
+            if (!skipFit) {
+                network.fit({
+                    animation: {
+                        duration: 500,
+                        easingFunction: 'easeInOutQuad'
+                    }
+                });
+            }
+
+            setTimeout(() => {
+                const boundingBox = network.getBoundingBox();
+                if (boundingBox && nodes.length > 0) {
+                    const margin = 50;
+                    nodes.forEach(node => {
+                        const { x, y } = network.getPositions([node.id])[node.id] || { x: 0, y: 0 };
+                        nodes.update({
+                            id: node.id,
+                            x: Math.max(boundingBox.left + margin, Math.min(boundingBox.right - margin, x)),
+                            y: Math.max(boundingBox.top + margin, Math.min(boundingBox.bottom - margin, y))
+                        });
+                    });
+                }
+                ensureInteractionSettings(); // Final check
+                resolve();
+            }, skipFit ? 0 : 550);
+        });
+    });
+}
 
 
 
