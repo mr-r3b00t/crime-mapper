@@ -1213,7 +1213,7 @@ network.on('click', function(params) {
         const nodeId = params.nodes[0];
         const node = nodes.get(nodeId);
         
-        // Determine the primary value based on node type
+        // Determine the raw value based on node type without prefix
         let valueToCopy;
         switch (node.type) {
             case 'ip':
@@ -1247,7 +1247,7 @@ network.on('click', function(params) {
                 valueToCopy = node.malwareName;
                 break;
             default:
-                valueToCopy = node.label.split('\n')[0]; // Fallback to first line of label
+                valueToCopy = node.label.split('\n')[0].split(': ')[1] || node.label.split('\n')[0]; // Fallback to removing prefix if present
         }
 
         if (valueToCopy) {
@@ -1261,7 +1261,7 @@ network.on('click', function(params) {
                 });
         }
     }
-    // If multiple nodes are selected (params.nodes.length > 1) or no nodes (params.nodes.length === 0), do nothing
+    // If multiple nodes are selected or no nodes, do nothing
 });
 
 function showEdgeContextMenu(x, y, edgeId) {
