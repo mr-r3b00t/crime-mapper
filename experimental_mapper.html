@@ -5,6 +5,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Network Graph</title>
     <style>
+
+#stop-task {
+    padding: 6px 12px;
+    background-color: #dc2626; /* Red color */
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background-color var(--transition);
+    width: auto;
+    margin: 0 auto;
+    display: inline-block;
+}
+
+#stop-task:hover {
+    background-color: #b91c1c; /* Darker red on hover */
+}
+
+#stop-task:disabled {
+    background-color: #9ca3af;
+    cursor: not-allowed;
+}
+
         :root {
             --transition: 0.3s;
             --shadow-light: 0 2px 10px rgba(0, 0, 0, 0.1);
@@ -516,6 +540,11 @@
                 data-coffee-color="#ffffff">
             </script>
         </div>
+
+        <div style="text-align: center; padding: 10px;">
+            <button id="stop-task" onclick="stopActiveTask()">Stop Active Task</button>
+        </div>
+
         <div id="footer">
             Created by mrr3b00t (@UK_Daniel_Card)
             © Xservus Limited - v0.21
@@ -535,12 +564,31 @@
         let corsProxyUrl = 'https://cors-anywhere.herokuapp.com/'; // Default value
         let isPhysicsPaused = false;
         let lastRequestTime = 0;
+        let activeTaskController = null;
         const RATE_LIMIT_MS = 500;
 
         const ipRegex = { ipv4: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/, ipv6: /^([0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}$/ };
         const domainRegex = /^(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,}$/;
 
         let selectedNodes = new Set(); // To track multiple selected nodes
+
+
+        // Add this new function
+function stopActiveTask() {
+    if (activeTaskController) {
+        activeTaskController.abort();
+        activeTaskController = null;
+        network.setOptions({ physics: { enabled: !isPhysicsPaused } });
+        stabilizeNetwork();
+        showToast('Active enrichment task stopped', 'success');
+        
+        // Re-enable the button
+        const stopButton = document.getElementById('stop-task');
+        stopButton.disabled = false;
+    } else {
+        showToast('No active task to stop', 'info');
+    }
+}
 
         function toggleMenu() {
     const controls = document.getElementById('controls');
@@ -606,6 +654,7 @@ window.onload = function() {
             }
     // Load saved state
     const stateLoaded = loadState();
+    document.getElementById('stop-task').disabled = true;
 
     // If no state was loaded, apply defaults
     if (!stateLoaded) {
@@ -725,14 +774,38 @@ function loadState() {
         }
 
         function throttleRequest(fn) {
-            return async function(...args) {
-                const now = Date.now();
-                const timeSinceLast = now - lastRequestTime;
-                if (timeSinceLast < RATE_LIMIT_MS) await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_MS - timeSinceLast));
-                lastRequestTime = now;
-                return fn(...args);
-            };
+    return async function(...args) {
+        if (activeTaskController) {
+            throw new Error('Another task is already running');
         }
+        
+        activeTaskController = new AbortController();
+        const stopButton = document.getElementById('stop-task');
+        stopButton.disabled = false; // Enable button when task starts
+        
+        const now = Date.now();
+        const timeSinceLast = now - lastRequestTime;
+        if (timeSinceLast < RATE_LIMIT_MS) await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_MS - timeSinceLast));
+        lastRequestTime = now;
+        
+        try {
+            const result = await fn(...args, activeTaskController.signal);
+            activeTaskController = null;
+            stopButton.disabled = true; // Disable button when task completes
+            return result;
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                console.log('Task aborted');
+            } else {
+                throw error;
+            }
+        } finally {
+            if (activeTaskController === null) {
+                stopButton.disabled = true;
+            }
+        }
+    };
+}
 
         const baseInteractionOptions = {
     dragView: true,
@@ -820,9 +893,15 @@ network.on('deselectNode', function(params) {
 
 
 
-        function ensureInteractionSettings() {
+        // Ensure interaction settings are always applied
+function ensureInteractionSettings() {
     network.setOptions({
-        interaction: { ...baseInteractionOptions },
+        interaction: { 
+            ...baseInteractionOptions,
+            zoomView: true,
+            dragView: true,
+            zoomSpeed: 0.5
+        },
         physics: {
             enabled: !isPhysicsPaused,
             stabilization: { enabled: false },
@@ -1334,15 +1413,75 @@ function deleteNode(nodeId) {
             Toastify(toastOptions).showToast();
         }
 
-        async function stabilizeNetwork() {
-            return new Promise(resolve => {
-                network.stabilize(200);
-                network.once('stabilizationIterationsDone', () => {
-                    network.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } });
-                    resolve();
-                });
+        async function stabilizeNetwork(skipFit = false) {
+    return new Promise(resolve => {
+        network.setOptions({
+            physics: {
+                enabled: true,
+                stabilization: {
+                    enabled: true,
+                    iterations: 200,
+                    updateInterval: 50
+                },
+                barnesHut: {
+                    gravitationalConstant: -8000,
+                    centralGravity: 0.3,
+                    springLength: 150,
+                    avoidOverlap: 1.0,
+                    damping: 0.9
+                }
+            },
+            // Explicitly preserve interaction settings
+            interaction: { 
+                ...baseInteractionOptions,
+                zoomView: true,  // Ensure zooming is enabled
+                dragView: true,
+                zoomSpeed: 0.5
+            }
+        });
+
+        network.stabilize(200);
+        network.once('stabilizationIterationsDone', () => {
+            network.setOptions({
+                physics: {
+                    enabled: !isPhysicsPaused,
+                    stabilization: { enabled: false }
+                },
+                interaction: { 
+                    ...baseInteractionOptions,
+                    zoomView: true,
+                    dragView: true,
+                    zoomSpeed: 0.5
+                }
             });
-        }
+
+            if (!skipFit) {
+                network.fit({
+                    animation: {
+                        duration: 500,
+                        easingFunction: 'easeInOutQuad'
+                    }
+                });
+            }
+
+            setTimeout(() => {
+                const boundingBox = network.getBoundingBox();
+                if (boundingBox && nodes.length > 0) {
+                    const margin = 50;
+                    nodes.forEach(node => {
+                        const { x, y } = network.getPositions([node.id])[node.id] || { x: 0, y: 0 };
+                        nodes.update({
+                            id: node.id,
+                            x: Math.max(boundingBox.left + margin, Math.min(boundingBox.right - margin, x)),
+                            y: Math.max(boundingBox.top + margin, Math.min(boundingBox.bottom - margin, y))
+                        });
+                    });
+                }
+                resolve();
+            }, skipFit ? 0 : 550);
+        });
+    });
+}
 
         function throttleRequest(fn) {
             return async function(...args) {
@@ -1463,6 +1602,7 @@ function deleteNode(nodeId) {
         updateNodeSizes();
         updateSelectOptions();
         await stabilizeNetwork();
+        ensureInteractionSettings();
         if (!isBulk) showToast(`IP ${ip} enrichment completed using InternetDB`, 'success');
     } catch (error) {
         console.error(`Error enriching IP ${ip} with InternetDB: ${error.message}`);
@@ -1490,6 +1630,7 @@ async function enrichAllInternetDB() {
     }
     
     await stabilizeNetwork();
+    ensureInteractionSettings();
     showToast(`InternetDB enrichment completed: ${successfulEnrichments}/${ipNodes.length} IPs enriched`, 'success');
     
     // Add this: Restore mobile layout after enrichment
@@ -1506,67 +1647,81 @@ async function enrichAllInternetDB() {
     }
 }
 
-        const throttledEnrichIP = throttleRequest(async function enrichIP(ip, ipNodeId, isBulk = false) {
-            if (!ipinfoApiKey) { showToast('Please set your IPinfo API key in the "API Keys" tab first.', 'error'); return; }
-            network.setOptions({ physics: { enabled: false } });
-            try {
-                const response = await fetch(`https://ipinfo.io/${ip}/json?token=${ipinfoApiKey}`);
-                if (!response.ok) throw new Error('Failed to fetch IP info');
-                const data = await response.json();
-                const asn = data.asn?.asn || 'Unknown ASN';
-                const city = data.city || 'Unknown City';
-                const companyName = data.company?.name || 'Unknown Company';
-                const country = data.country || 'Unknown Country';
-                const privacy = data.privacy || { vpn: false, proxy: false, tor: false, relay: false, hosting: false };
+const throttledEnrichIP = throttleRequest(async function enrichIP(ip, ipNodeId, isBulk = false, signal) {
+    if (!ipinfoApiKey) { 
+        showToast('Please set your IPinfo API key in the "API Keys" tab first.', 'error'); 
+        return; 
+    }
+    network.setOptions({ physics: { enabled: false } });
+    try {
+        const response = await fetch(`https://ipinfo.io/${ip}/json?token=${ipinfoApiKey}`, { signal });
+        if (!response.ok) throw new Error('Failed to fetch IP info');
+        const data = await response.json();
+        const asn = data.asn?.asn || 'Unknown ASN';
+        const city = data.city || 'Unknown City';
+        const companyName = data.company?.name || 'Unknown Company';
+        const country = data.country || 'Unknown Country';
+        const privacy = data.privacy || { vpn: false, proxy: false, tor: false, relay: false, hosting: false };
 
-                function linkOrCreateNode(type, key, value, label, title, color, edgeLabel) {
-                    const existingNode = nodes.get({ filter: n => n.type === type && n[key] === value })[0];
-                    const targetId = existingNode ? existingNode.id : nextId++;
-                    if (!existingNode) nodes.add({ id: targetId, type: type, label: label, title: title, color: { background: color }, [key]: value });
-                    const edgeId = `${ipNodeId}-${targetId}-${edgeLabel}`;
-                    if (!edges.get(edgeId)) edges.add({ id: edgeId, from: ipNodeId, to: targetId, label: edgeLabel });
+        function linkOrCreateNode(type, key, value, label, title, color, edgeLabel) {
+            const existingNode = nodes.get({ filter: n => n.type === type && n[key] === value })[0];
+            const targetId = existingNode ? existingNode.id : nextId++;
+            if (!existingNode) nodes.add({ 
+                id: targetId, 
+                type: type, 
+                label: label, 
+                title: title, 
+                color: { background: color }, 
+                [key]: value 
+            });
+            const edgeId = `${ipNodeId}-${targetId}-${edgeLabel}`;
+            if (!edges.get(edgeId)) edges.add({ id: edgeId, from: ipNodeId, to: targetId, label: edgeLabel });
+        }
+
+        linkOrCreateNode('asn', 'asn', asn, asn, `ASN: ${asn}`, '#a3e635', 'Assigned to');
+        linkOrCreateNode('city', 'city', city, city, `City: ${city}`, '#f97316', 'Located in');
+        linkOrCreateNode('organization', 'organization', companyName, companyName, `Company: ${companyName}`, '#facc15', 'Belongs to');
+        linkOrCreateNode('country', 'country', country, country, `Country: ${country}`, '#34d399', 'Located in');
+
+        const privacyTypes = [
+            { key: 'vpn', label: 'VPN', color: '#9333ea' },
+            { key: 'proxy', label: 'Proxy', color: '#f43f5e' },
+            { key: 'tor', label: 'Tor', color: '#64748b' },
+            { key: 'relay', label: 'Relay', color: '#eab308' },
+            { key: 'hosting', label: 'Hosting', color: '#14b8a6' }
+        ];
+        privacyTypes.forEach(privacyType => {
+            if (privacy[privacyType.key]) {
+                const existingPrivacy = nodes.get({ filter: n => n.type === privacyType.key })[0];
+                const privacyNodeId = existingPrivacy ? existingPrivacy.id : nextId++;
+                if (!existingPrivacy) {
+                    nodes.add({ 
+                        id: privacyNodeId, 
+                        type: privacyType.key, 
+                        label: privacyType.label, 
+                        title: `${privacyType.label}`,
+                        color: { background: privacyType.color }
+                    });
                 }
-
-                linkOrCreateNode('asn', 'asn', asn, asn, `ASN: ${asn}`, '#a3e635', 'Assigned to');
-                linkOrCreateNode('city', 'city', city, city, `City: ${city}`, '#f97316', 'Located in');
-                linkOrCreateNode('organization', 'organization', companyName, companyName, `Company: ${companyName}`, '#facc15', 'Belongs to');
-                linkOrCreateNode('country', 'country', country, country, `Country: ${country}`, '#34d399', 'Located in');
-
-                const privacyTypes = [
-                    { key: 'vpn', label: 'VPN', color: '#9333ea' },
-                    { key: 'proxy', label: 'Proxy', color: '#f43f5e' },
-                    { key: 'tor', label: 'Tor', color: '#64748b' },
-                    { key: 'relay', label: 'Relay', color: '#eab308' },
-                    { key: 'hosting', label: 'Hosting', color: '#14b8a6' }
-                ];
-                privacyTypes.forEach(privacyType => {
-                    if (privacy[privacyType.key]) {
-                        const existingPrivacy = nodes.get({ filter: n => n.type === privacyType.key })[0];
-                        const privacyNodeId = existingPrivacy ? existingPrivacy.id : nextId++;
-                        if (!existingPrivacy) {
-                            nodes.add({ 
-                                id: privacyNodeId, 
-                                type: privacyType.key, 
-                                label: privacyType.label, 
-                                title: `${privacyType.label}`,
-                                color: { background: privacyType.color }
-                            });
-                        }
-                        const edgeId = `${ipNodeId}-${privacyNodeId}-Uses`;
-                        if (!edges.get(edgeId)) edges.add({ id: edgeId, from: ipNodeId, to: privacyNodeId, label: 'Uses' });
-                    }
-                });
-
-                updateNodeSizes();
-                updateSelectOptions();
-                await stabilizeNetwork();
-                if (!isBulk) showToast(`IP ${ip} enrichment completed using IPinfo`, 'success');
-            } catch (error) {
-                console.error(`Error enriching IP ${ip}: ${error.message}`);
-                showToast(`Error enriching IP ${ip}: ${error.message}`, 'error');
-                await stabilizeNetwork();
+                const edgeId = `${ipNodeId}-${privacyNodeId}-Uses`;
+                if (!edges.get(edgeId)) edges.add({ id: edgeId, from: ipNodeId, to: privacyNodeId, label: 'Uses' });
             }
         });
+
+        updateNodeSizes();
+        updateSelectOptions();
+        await stabilizeNetwork();
+        if (!isBulk) showToast(`IP ${ip} enrichment completed using IPinfo`, 'success');
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            showToast(`Enrichment of IP ${ip} was cancelled`, 'info');
+            return;
+        }
+        console.error(`Error enriching IP ${ip}: ${error.message}`);
+        showToast(`Error enriching IP ${ip}: ${error.message}`, 'error');
+        await stabilizeNetwork();
+    }
+});
 
         // Add this with your other enrichment functions
 const throttledTestHTTPS = throttleRequest(async function testHTTPS(ip, nodeId) {
@@ -1652,18 +1807,18 @@ const throttledTestHTTPS = throttleRequest(async function testHTTPS(ip, nodeId) 
     }
 });
 
-const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ipNodeId, isBulk = false) {
+const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ipNodeId, isBulk = false, signal) {
     if (!shodanApiKey) { 
         showToast('Please set your Shodan API key in the "API Keys" tab first.', 'error'); 
         return; 
     }
     network.setOptions({ physics: { enabled: false } });
     try {
-        const response = await fetch(`https://api.shodan.io/shodan/host/${ip}?key=${shodanApiKey}`);
+        const response = await fetch(`https://api.shodan.io/shodan/host/${ip}?key=${shodanApiKey}`, { signal });
         if (!response.ok) throw new Error('Failed to fetch Shodan data');
         const data = await response.json();
 
-        // Process open ports (existing functionality)
+        // Process open ports
         if (data.ports && data.ports.length > 0) {
             data.ports.forEach(port => {
                 const existingPort = nodes.get({ filter: n => n.type === 'port' && n.portNumber === port.toString() && n.portType === 'TCP' })[0];
@@ -1696,7 +1851,7 @@ const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ip
                     type: 'html_hash', 
                     label: `HTML Hash: ${htmlHash}`, 
                     title: `HTML Hash\nValue: ${htmlHash}`, 
-                    color: { background: '#f59e0b' }, // Amber color for HTML hash
+                    color: { background: '#f59e0b' },
                     hash: htmlHash 
                 });
             }
@@ -1714,9 +1869,9 @@ const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ip
                 nodes.add({ 
                     id: sslHashId, 
                     type: 'ssl_hash', 
-                    label: `SSL SHA256: ${sslFingerprint.substring(0, 8)}...`, // Truncate for display
+                    label: `SSL SHA256: ${sslFingerprint.substring(0, 8)}...`,
                     title: `SSL Certificate Fingerprint\nSHA256: ${sslFingerprint}`, 
-                    color: { background: '#8b5cf6' }, // Purple color for SSL hash
+                    color: { background: '#8b5cf6' },
                     fingerprint: sslFingerprint 
                 });
             }
@@ -1729,67 +1884,15 @@ const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ip
         await stabilizeNetwork();
         if (!isBulk) showToast(`IP ${ip} enrichment completed using Shodan with hashes`, 'success');
     } catch (error) {
+        if (error.name === 'AbortError') {
+            showToast(`Enrichment of IP ${ip} was cancelled`, 'info');
+            return;
+        }
         console.error(`Error enriching IP ${ip} with Shodan: ${error.message}`);
         showToast(`Error enriching IP ${ip} with Shodan: ${error.message}`, 'error');
         await stabilizeNetwork();
     }
 });
-
-        const throttledEnrichGoogleDNS = throttleRequest(async function enrichGoogleDNS(domain, domainNodeId, isBulk = false) {
-            network.setOptions({ physics: { enabled: false } });
-            try {
-                const response = await fetch(`https://dns.google/resolve?name=${domain}`);
-                if (!response.ok) throw new Error('Failed to fetch DNS data');
-                const data = await response.json();
-                if (data.Answer) {
-                    data.Answer.forEach(answer => {
-                        if (answer.type === 1) { // Type 1 is A record (IPv4)
-                            const ip = answer.data;
-                            const existingIP = nodes.get({ filter: n => n.type === 'ip' && n.ip === ip })[0];
-                            const ipId = existingIP ? existingIP.id : nextId++;
-                            if (!existingIP) nodes.add({ id: ipId, type: 'ip', label: ip, title: `IP Address: ${ip}`, color: { background: '#f87171' }, ip: ip, size: 20 });
-                            const edgeId = `${domainNodeId}-${ipId}-ResolvesTo`;
-                            if (!edges.get(edgeId)) edges.add({ id: edgeId, from: domainNodeId, to: ipId, label: 'Resolves to' });
-                        }
-                    });
-                }
-                updateNodeSizes();
-                updateSelectOptions();
-                await stabilizeNetwork();
-                if (!isBulk) showToast(`Domain ${domain} enrichment completed using Google DNS`, 'success');
-            } catch (error) {
-                console.error(`Error enriching domain ${domain} with Google DNS: ${error.message}`);
-                showToast(`Error enriching domain ${domain} with Google DNS: ${error.message}`, 'error');
-                await stabilizeNetwork();
-            }
-        });
-
-        async function enrichAllIpinfo() {
-    if (!ipinfoApiKey) { 
-        showToast('Please set your IPinfo API key in the "API Keys" tab first.', 'error'); 
-        return; 
-    }
-    
-    network.setOptions({ physics: { enabled: false } });
-    const ipNodes = nodes.get({ filter: n => n.type === 'ip' && n.ip });
-    let successfulEnrichments = 0;
-    
-    console.log(`Found ${ipNodes.length} IP nodes to enrich`); // Debug log
-    
-    for (const node of ipNodes) {
-        try {
-            console.log(`Enriching IP: ${node.ip}`); // Debug log
-            await throttledEnrichIP(node.ip, node.id, true);
-            successfulEnrichments++;
-        } catch (error) {
-            console.error(`Failed to enrich IP ${node.ip}: ${error.message}`);
-            showToast(`Failed to enrich IP ${node.ip}: ${error.message}`, 'error');
-        }
-    }
-    
-    await stabilizeNetwork();
-    showToast(`IPinfo enrichment completed: ${successfulEnrichments}/${ipNodes.length} IPs enriched`, 'success');
-}
 
 async function enrichAllShodan() {
     if (!shodanApiKey) { 
@@ -1855,6 +1958,62 @@ const throttledEnrichInternetDBMultiple = throttleRequest(async function(ipValue
         await throttledEnrichInternetDB(ipValues[i], nodeIds[i], true);
     }
     showToast(`Enriched ${ipValues.length} IPs with InternetDB`, 'success');
+});
+
+const throttledEnrichGoogleDNS = throttleRequest(async function enrichGoogleDNS(domain, domainNodeId, isBulk = false, signal) {
+    network.setOptions({ physics: { enabled: false } });
+    try {
+        const response = await fetch(`https://dns.google.com/resolve?name=${domain}`, { signal });
+        if (!response.ok) throw new Error('Failed to fetch Google DNS data');
+        const data = await response.json();
+
+        // Process Answer section for A records (IPv4)
+        if (data.Answer) {
+            data.Answer.forEach(answer => {
+                if (answer.type === 1) { // Type 1 is A record (IPv4)
+                    const ip = answer.data;
+                    const existingIP = nodes.get({ filter: n => n.type === 'ip' && n.ip === ip })[0];
+                    const ipId = existingIP ? existingIP.id : nextId++;
+                    
+                    if (!existingIP) {
+                        nodes.add({ 
+                            id: ipId, 
+                            type: 'ip', 
+                            label: ip, 
+                            title: `IP Address: ${ip}`, 
+                            color: { background: '#f87171' }, 
+                            ip: ip,
+                            size: 20
+                        });
+                    }
+                    
+                    // Create edge from domain to IP (correct direction)
+                    const edgeId = `${domainNodeId}-${ipId}-ResolvesTo`;
+                    if (!edges.get(edgeId)) {
+                        edges.add({ 
+                            id: edgeId, 
+                            from: domainNodeId,  // Domain as source
+                            to: ipId,           // IP as target
+                            label: 'Resolves to' 
+                        });
+                    }
+                }
+            });
+        }
+
+        updateNodeSizes();
+        updateSelectOptions();
+        await stabilizeNetwork();
+        if (!isBulk) showToast(`Domain ${domain} enrichment completed using Google DNS`, 'success');
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            showToast(`Enrichment of domain ${domain} was cancelled`, 'info');
+            return;
+        }
+        console.error(`Error enriching domain ${domain} with Google DNS: ${error.message}`);
+        showToast(`Error enriching domain ${domain} with Google DNS: ${error.message}`, 'error');
+        await stabilizeNetwork();
+    }
 });
 
 const throttledEnrichGoogleDNSMultiple = throttleRequest(async function(domainValues, nodeIds) {
