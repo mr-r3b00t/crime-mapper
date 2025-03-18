@@ -934,9 +934,18 @@ function loadState() {
     },
     edges: { 
         arrows: { to: { enabled: true, scaleFactor: 0.5 } }, 
-        font: { size: 12, color: '#e2e8f0' },
+        font: { 
+            size: 12, 
+            color: '#e2e8f0',  // Light gray for dark mode
+            strokeWidth: 0,    // No outline
+            strokeColor: 'transparent'  // Ensure no stroke color
+        },
         smooth: true,
-        width: 1
+        width: 1,
+        color: { 
+            color: '#94a3b8',  // Default edge color in dark mode
+            highlight: '#60a5fa'  // Highlight color
+        }
     },
     physics: { 
         enabled: true,
@@ -2259,28 +2268,23 @@ async function enrichAllGoogleDNS() {
             strokeColor: 'transparent'
         };
         options.nodes.color = {
-            border: '#94a3b8',  // Added base border color
-            background: '#4b5563',  // Added base background color
-            hover: {
-                border: '#60a5fa',
-                background: '#4b5563'
-            },
-            highlight: {
-                border: '#60a5fa',
-                background: '#4b5563'
-            }
+            border: '#94a3b8',
+            background: '#4b5563',
+            hover: { border: '#60a5fa', background: '#4b5563' },
+            highlight: { border: '#60a5fa', background: '#4b5563' }
         };
         options.edges.font = {
             size: 12,
-            color: '#e2e8f0',
-            strokeWidth: 0,
-            strokeColor: 'transparent'
+            color: '#e2e8f0',  // Consistent light gray
+            strokeWidth: 0,    // Explicitly disable outline
+            strokeColor: 'transparent'  // No stroke
         };
         options.edges.color = { 
             color: '#94a3b8', 
             highlight: '#60a5fa' 
         };
     } else {
+        // Light mode settings remain unchanged
         document.body.classList.remove('dark-mode');
         document.body.classList.add('light-mode');
         options.nodes.font = {
@@ -2291,16 +2295,10 @@ async function enrichAllGoogleDNS() {
             strokeColor: 'transparent'
         };
         options.nodes.color = {
-            border: '#6b7280',  // Added base border color
-            background: '#ffffff',  // Added base background color
-            hover: {
-                border: '#3b82f6',
-                background: '#e5e7eb'
-            },
-            highlight: {
-                border: '#3b82f6',
-                background: '#e5e7eb'
-            }
+            border: '#6b7280',
+            background: '#ffffff',
+            hover: { border: '#3b82f6', background: '#e5e7eb' },
+            highlight: { border: '#3b82f6', background: '#e5e7eb' }
         };
         options.edges.font = {
             size: 12,
@@ -2314,8 +2312,8 @@ async function enrichAllGoogleDNS() {
         };
     }
     document.getElementById('mode-toggle').textContent = isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode';
-    network.setOptions(options);
-    ensureInteractionSettings();
+    network.setOptions(options);  // Reapply all options
+    ensureInteractionSettings();  // Maintain interaction settings
 }
 
         function toggleMode() { 
