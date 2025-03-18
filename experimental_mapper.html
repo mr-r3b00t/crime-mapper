@@ -822,7 +822,7 @@ function loadState() {
         let options = {
     nodes: {
         shape: 'dot',  // Changed from 'circle' to 'dot' for consistent sizing
-        size: 20,      // Base size for all nodes
+        size: 10,      // Base size for all nodes
         font: { 
             size: 12, 
             color: '#e2e8f0', 
@@ -830,7 +830,7 @@ function loadState() {
         },
         scaling: {
             min: 10,
-            max: 70
+            max: 125
         },
         // Add these to prevent label influence
         fixed: {
@@ -2499,7 +2499,7 @@ function setHierarchicalLayout() {
         function createNodeData(type, values) {
     const nodeData = { 
         id: nextId++, 
-        size: 20, // Consistent starting size
+        size: 10, // Consistent starting size
         type,
         // Ensure no size constraints from label
         widthConstraint: false,
@@ -2602,7 +2602,7 @@ function setHierarchicalLayout() {
     // Add the node
     nodes.add({
         ...nodeData,
-        size: 20, // Fixed initial size
+        size: 10, // Fixed initial size
         widthConstraint: false,
         heightConstraint: false
     });
@@ -2783,7 +2783,7 @@ function setHierarchicalLayout() {
         }).length; 
         
         // Base size 20, add 5 per connection, max 60
-        const newSize = Math.min(20 + connections * 5, 60);
+        const newSize = Math.min(15 + connections * 10, 120);
         
         nodes.update({ 
             id: node.id, 
@@ -2858,7 +2858,7 @@ function setHierarchicalLayout() {
             importedData.nodes.forEach(node => {
                 let nodeData = { 
                     id: node.id, 
-                    size: 20, 
+                    size: 10, 
                     type: node.type, 
                     label: '', 
                     title: '', 
