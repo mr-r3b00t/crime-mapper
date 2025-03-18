@@ -965,9 +965,9 @@ function stabilizeNetwork(skipFit = false) {
     }
 });
 
-// Add click event handler for nodes
 network.on('click', function(params) {
-    if (params.nodes.length > 0) {
+    // Check if exactly one node is selected
+    if (params.nodes.length === 1) {
         const nodeId = params.nodes[0];
         const node = nodes.get(nodeId);
         
@@ -1019,6 +1019,7 @@ network.on('click', function(params) {
                 });
         }
     }
+    // If multiple nodes are selected (params.nodes.length > 1) or no nodes (params.nodes.length === 0), do nothing
 });
 
 function showEdgeContextMenu(x, y, edgeId) {
