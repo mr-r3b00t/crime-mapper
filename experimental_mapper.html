@@ -574,7 +574,7 @@
         <div id="import-iocs" class="tab-content active">
             <div class="input-group">
                 <h3>Import IOCs</h3>
-                <textarea id="iocText" placeholder="Paste IOC text here (IPs, domains)"></textarea>
+                <textarea id="iocText" placeholder="Paste IOC text here (IPs, domains, emails)"></textarea>
                 <button onclick="importIOCsFromText()">Import from Text</button>
                 <input type="file" id="iocFile" accept=".txt">
                 <button onclick="importIOCsFromFile()">Import from File</button>
@@ -630,7 +630,7 @@
 
         <div id="footer">
             Created by mrr3b00t (@UK_Daniel_Card)
-            © Xservus Limited - v0.22
+            © Xservus Limited - v0.23 experimental
         </div>
     </div>
     <div id="myNetwork"></div>
@@ -2256,71 +2256,93 @@ async function enrichAllGoogleDNS() {
 }
 
 
-        function importIOCsFromText() {
-            const text = document.getElementById('iocText').value.trim();
-            if (!text) { showToast('Please enter some text containing IOCs', 'error'); return; }
-            processIOCs(text);
-            document.getElementById('iocText').value = '';
-            stabilizeNetwork();
-            saveStateAfterOperation(); // Add this to save the state
-            showToast('IOCs imported from text', 'success'); //
-        }
+async function importIOCsFromText() {
+    const text = document.getElementById('iocText').value.trim();
+    if (!text) { showToast('Please enter some text containing IOCs', 'error'); return; }
+    await processIOCs(text);
+    document.getElementById('iocText').value = '';
+    saveStateAfterOperation();
+    showToast('IOCs (including emails) import completed', 'success');
+}
 
-        function importIOCsFromFile() {
-            const fileInput = document.getElementById('iocFile');
-            const file = fileInput.files[0];
-            if (!file) { showToast('Please select a text file containing IOCs', 'error'); return; }
-            const reader = new FileReader();
-            reader.onload = function(event) { 
-                processIOCs(event.target.result); 
-                fileInput.value = ''; 
-                stabilizeNetwork();
-                saveStateAfterOperation(); // Add this inside the callback
-                showToast('IOCs imported from file', 'success'); // Optional: feedback
-            };
-            reader.readAsText(file);
-        }
+async function importIOCsFromFile() {
+    const fileInput = document.getElementById('iocFile');
+    const file = fileInput.files[0];
+    if (!file) { showToast('Please select a text file containing IOCs', 'error'); return; }
+    const reader = new FileReader();
+    reader.onload = async function(event) { 
+        await processIOCs(event.target.result); 
+        fileInput.value = ''; 
+        saveStateAfterOperation();
+        showToast('IOCs (including emails) import completed', 'success');
+    };
+    reader.readAsText(file);
+}
 
-        function processIOCs(text) {
-    // Existing IP processing
-    const ipMatches = text.match(/(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)|(?:[0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}/g) || [];
-    ipMatches.forEach(ip => {
-        if ((ipRegex.ipv4.test(ip) || ipRegex.ipv6.test(ip)) && !nodes.get({ filter: n => n.type === 'ip' && n.ip === ip }).length) 
-            nodes.add({ 
-                id: nextId++, 
-                type: 'ip', 
+        async function processIOCs(text) {
+    // Disable physics for the duration of the import
+    network.setOptions({ physics: { enabled: false } });
+    
+    // Pre-collect all matches to avoid multiple regex passes
+    const ipMatches = new Set(text.match(/(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)|(?:[0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}/g) || []);
+    const domainMatches = new Set(text.match(/(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,}/g) || []);
+    const emailMatches = new Set(text.match(emailRegex) || []);
+
+    // Maps to track existing nodes and avoid lookups
+    const existingNodes = new Map();
+    nodes.forEach(node => {
+        if (node.type === 'ip' && node.ip) existingNodes.set(`ip:${node.ip}`, node);
+        if (node.type === 'domain' && node.domain) existingNodes.set(`domain:${node.domain}`, node);
+        if (node.type === 'contact' && node.email) existingNodes.set(`email:${node.email}`, node);
+    });
+
+    const newNodes = [];
+    const newEdges = [];
+    let processedCount = 0;
+    const batchSize = 50; // Process in batches of 50
+
+    // Process IPs
+    for (const ip of ipMatches) {
+        if ((ipRegex.ipv4.test(ip) || ipRegex.ipv6.test(ip)) && !existingNodes.has(`ip:${ip}`)) {
+            const nodeId = nextId++;
+            newNodes.push({
+                id: nodeId,
+                type: 'ip',
                 label: `IP: ${ip}`,
-                title: `IP Address: ${ip}`, 
-                color: { background: '#f87171' }, 
-                ip: ip, 
-                size: 20 
+                title: `IP Address: ${ip}`,
+                color: { background: '#f87171' },
+                ip: ip,
+                size: 20
             });
-    });
+            existingNodes.set(`ip:${ip}`, { id: nodeId });
+        }
+    }
 
-    // Existing domain processing
-    const domainMatches = text.match(/(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,}/g) || [];
-    domainMatches.forEach(domain => {
-        if (domainRegex.test(domain) && !nodes.get({ filter: n => n.type === 'domain' && n.domain === domain }).length) 
-            nodes.add({ 
-                id: nextId++, 
-                type: 'domain', 
+    // Process domains from domain matches
+    for (const domain of domainMatches) {
+        if (domainRegex.test(domain) && !existingNodes.has(`domain:${domain}`)) {
+            const nodeId = nextId++;
+            newNodes.push({
+                id: nodeId,
+                type: 'domain',
                 label: `Domain: ${domain}`,
-                title: `Domain: ${domain}`, 
-                color: { background: '#60a5fa' }, 
-                domain: domain, 
-                size: 20 
+                title: `Domain: ${domain}`,
+                color: { background: '#60a5fa' },
+                domain: domain,
+                size: 20
             });
-    });
+            existingNodes.set(`domain:${domain}`, { id: nodeId });
+        }
+    }
 
-    // Email processing with domain linking
-    const emailMatches = text.match(emailRegex) || [];
-    emailMatches.forEach(email => {
-        if (!nodes.get({ filter: n => n.type === 'contact' && n.email === email }).length) {
+    // Process emails and link to domains
+    for (const email of emailMatches) {
+        if (!existingNodes.has(`email:${email}`)) {
             const emailNodeId = nextId++;
             const emailDomain = email.split('@')[1];
-            
-            // Add the email as a contact node
-            nodes.add({
+
+            // Add email node
+            newNodes.push({
                 id: emailNodeId,
                 type: 'contact',
                 label: `Contact: ${email}`,
@@ -2330,37 +2352,60 @@ async function enrichAllGoogleDNS() {
                 name: email.split('@')[0],
                 size: 10
             });
+            existingNodes.set(`email:${email}`, { id: emailNodeId });
 
-            // Find or create the corresponding domain node
-            let domainNode = nodes.get({ filter: n => n.type === 'domain' && n.domain === emailDomain })[0];
+            // Find or create domain node
+            let domainNode = existingNodes.get(`domain:${emailDomain}`);
             if (!domainNode) {
-                domainNode = {
-                    id: nextId++,
+                const domainNodeId = nextId++;
+                newNodes.push({
+                    id: domainNodeId,
                     type: 'domain',
                     label: `Domain: ${emailDomain}`,
                     title: `Domain: ${emailDomain}`,
                     color: { background: '#60a5fa' },
                     domain: emailDomain,
                     size: 20
-                };
-                nodes.add(domainNode);
+                });
+                domainNode = { id: domainNodeId };
+                existingNodes.set(`domain:${emailDomain}`, domainNode);
             }
 
-            // Create an edge between the email and its domain
+            // Add edge
             const edgeId = `edge_${emailNodeId}_${domainNode.id}_${Date.now()}`;
             if (!edges.get({ filter: e => e.from === emailNodeId && e.to === domainNode.id }).length) {
-                edges.add({
+                newEdges.push({
                     id: edgeId,
                     from: emailNodeId,
                     to: domainNode.id,
                     label: 'Registered with'
                 });
             }
-        }
-    });
 
+            // Batch processing
+            processedCount++;
+            if (processedCount % batchSize === 0) {
+                nodes.add(newNodes);
+                edges.add(newEdges);
+                newNodes.length = 0;
+                newEdges.length = 0;
+                await new Promise(resolve => setTimeout(resolve, 0)); // Allow UI to breathe
+                showToast(`Processed ${processedCount} of ${emailMatches.size} emails`, 'info');
+            }
+        }
+    }
+
+    // Add remaining items
+    if (newNodes.length > 0) nodes.add(newNodes);
+    if (newEdges.length > 0) edges.add(newEdges);
+
+    // Update UI once at the end
     updateNodeSizes();
     updateSelectOptions();
+
+    // Re-enable physics and stabilize
+    await stabilizeNetwork();
+    showToast(`Imported ${ipMatches.size} IPs, ${domainMatches.size} domains, and ${emailMatches.size} emails`, 'success');
 }
 
         function saveIpinfoApiKey() {
