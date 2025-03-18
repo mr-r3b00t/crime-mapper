@@ -6,6 +6,43 @@
     <title>Network Graph</title>
     <style>
 
+.password-container {
+    position: relative;
+    width: 100%;
+    margin-bottom: 8px;
+}
+
+.password-container input {
+    padding-right: 60px; /* Make room for the toggle button */
+}
+
+.toggle-password {
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 2px 8px;
+    background-color: #6b7280;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 10px;
+    cursor: pointer;
+    width: auto;
+}
+
+.light-mode .toggle-password {
+    background-color: #6b7280;
+}
+
+.dark-mode .toggle-password {
+    background-color: #9ca3af;
+}
+
+.toggle-password:hover {
+    background-color: #4b5563;
+}
+
 #stop-task {
     padding: 6px 12px;
     background-color: #dc2626; /* Red color */
@@ -458,7 +495,10 @@
         <div id="api-keys" class="tab-content">
             <div class="input-group">
                 <h3>IPINFO API Key</h3>
-                <input type="text" id="ipinfoApiKey" placeholder="Enter IPinfo API Key">
+                <div class="password-container">
+                    <input type="password" id="ipinfoApiKey" placeholder="Enter IPinfo API Key">
+                    <button type="button" class="toggle-password" data-target="ipinfoApiKey">Show</button>
+                </div>
                 <label class="checkbox-label">
                     <input type="checkbox" id="storeIpinfoKey"> Store in local storage
                 </label>
@@ -466,7 +506,10 @@
             </div>
             <div class="input-group">
                 <h3>Shodan API Key</h3>
-                <input type="text" id="shodanApiKey" placeholder="Enter Shodan API Key">
+                <div class="password-container">
+                    <input type="password" id="shodanApiKey" placeholder="Enter Shodan API Key">
+                    <button type="button" class="toggle-password" data-target="shodanApiKey">Show</button>
+                </div>
                 <label class="checkbox-label">
                     <input type="checkbox" id="storeShodanKey"> Store in local storage
                 </label>
@@ -474,7 +517,10 @@
             </div>
             <div class="input-group">
                 <h3>CORS Proxy URL</h3>
-                <input type="text" id="corsProxyUrl" placeholder="Enter CORS Proxy URL" value="https://cors-anywhere.herokuapp.com/">
+                <div class="password-container">
+                    <input type="password" id="corsProxyUrl" placeholder="Enter CORS Proxy URL" value="https://cors-anywhere.herokuapp.com/">
+                    <button type="button" class="toggle-password" data-target="corsProxyUrl">Show</button>
+                </div>
                 <label class="checkbox-label">
                     <input type="checkbox" id="storeCorsProxy" checked> Store in local storage
                 </label>
@@ -3142,6 +3188,49 @@ function toggleIsolatedNodes() {
     
     saveStateAfterOperation();
 }
+
+// Password toggle functionality
+document.querySelectorAll('.toggle-password').forEach(button => {
+    button.addEventListener('click', function() {
+        const targetId = this.getAttribute('data-target');
+        const input = document.getElementById(targetId);
+        if (input.type === 'password') {
+            input.type = 'text';
+            this.textContent = 'Hide';
+        } else {
+            input.type = 'password';
+            this.textContent = 'Show';
+        }
+    });
+});
+
+// Ensure stored values are loaded into password fields
+window.onload = function() {
+    // Existing onload code...
+    
+    // Load API keys from localStorage
+    const storedIpinfoKey = localStorage.getItem('ipinfoApiKey');
+    if (storedIpinfoKey) {
+        ipinfoApiKey = storedIpinfoKey;
+        document.getElementById('ipinfoApiKey').value = storedIpinfoKey;
+        document.getElementById('storeIpinfoKey').checked = true;
+    }
+    const storedShodanKey = localStorage.getItem('shodanApiKey');
+    if (storedShodanKey) {
+        shodanApiKey = storedShodanKey;
+        document.getElementById('shodanApiKey').value = storedShodanKey;
+        document.getElementById('storeShodanKey').checked = true;
+    }
+    const storedCorsProxy = localStorage.getItem('corsProxyUrl');
+    if (storedCorsProxy) {
+        corsProxyUrl = storedCorsProxy;
+        document.getElementById('corsProxyUrl').value = storedCorsProxy;
+        document.getElementById('storeCorsProxy').checked = true;
+    } else {
+        document.getElementById('corsProxyUrl').value = corsProxyUrl;
+    }
+    // Rest of your existing onload code...
+};
 
 
     // Test Harness for Network Graph Visualization Tool
