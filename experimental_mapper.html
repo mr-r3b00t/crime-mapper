@@ -654,6 +654,7 @@
 
         const ipRegex = { ipv4: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/, ipv6: /^([0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}$/ };
         const domainRegex = /^(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,}$/;
+        const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 
         let selectedNodes = new Set(); // To track multiple selected nodes
 
@@ -2281,32 +2282,83 @@ async function enrichAllGoogleDNS() {
         }
 
         function processIOCs(text) {
+    // Existing IP processing
     const ipMatches = text.match(/(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)|(?:[0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}/g) || [];
     ipMatches.forEach(ip => {
         if ((ipRegex.ipv4.test(ip) || ipRegex.ipv6.test(ip)) && !nodes.get({ filter: n => n.type === 'ip' && n.ip === ip }).length) 
             nodes.add({ 
                 id: nextId++, 
                 type: 'ip', 
-                label: `IP: ${ip}`, // Changed to "IP: value" format
+                label: `IP: ${ip}`,
                 title: `IP Address: ${ip}`, 
                 color: { background: '#f87171' }, 
                 ip: ip, 
                 size: 20 
             });
     });
+
+    // Existing domain processing
     const domainMatches = text.match(/(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,}/g) || [];
     domainMatches.forEach(domain => {
         if (domainRegex.test(domain) && !nodes.get({ filter: n => n.type === 'domain' && n.domain === domain }).length) 
             nodes.add({ 
                 id: nextId++, 
                 type: 'domain', 
-                label: `Domain: ${domain}`, // Changed to "Domain: value" format
+                label: `Domain: ${domain}`,
                 title: `Domain: ${domain}`, 
                 color: { background: '#60a5fa' }, 
                 domain: domain, 
                 size: 20 
             });
     });
+
+    // Email processing with domain linking
+    const emailMatches = text.match(emailRegex) || [];
+    emailMatches.forEach(email => {
+        if (!nodes.get({ filter: n => n.type === 'contact' && n.email === email }).length) {
+            const emailNodeId = nextId++;
+            const emailDomain = email.split('@')[1];
+            
+            // Add the email as a contact node
+            nodes.add({
+                id: emailNodeId,
+                type: 'contact',
+                label: `Contact: ${email}`,
+                title: `Contact\nEmail: ${email}`,
+                color: { background: '#4ade80' },
+                email: email,
+                name: email.split('@')[0],
+                size: 10
+            });
+
+            // Find or create the corresponding domain node
+            let domainNode = nodes.get({ filter: n => n.type === 'domain' && n.domain === emailDomain })[0];
+            if (!domainNode) {
+                domainNode = {
+                    id: nextId++,
+                    type: 'domain',
+                    label: `Domain: ${emailDomain}`,
+                    title: `Domain: ${emailDomain}`,
+                    color: { background: '#60a5fa' },
+                    domain: emailDomain,
+                    size: 20
+                };
+                nodes.add(domainNode);
+            }
+
+            // Create an edge between the email and its domain
+            const edgeId = `edge_${emailNodeId}_${domainNode.id}_${Date.now()}`;
+            if (!edges.get({ filter: e => e.from === emailNodeId && e.to === domainNode.id }).length) {
+                edges.add({
+                    id: edgeId,
+                    from: emailNodeId,
+                    to: domainNode.id,
+                    label: 'Registered with'
+                });
+            }
+        }
+    });
+
     updateNodeSizes();
     updateSelectOptions();
 }
