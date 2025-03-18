@@ -524,6 +524,12 @@
                 <label class="checkbox-label">
                     <input type="checkbox" id="storeCorsProxy" checked> Store in local storage
                 </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="routeViaProxy"> Route all traffic via proxy
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="ignoreApiKeysViaProxy"> Ignore API keys when using proxy
+                </label>
                 <button onclick="saveCorsProxyUrl()">Save CORS Proxy URL</button>
             </div>
             <div class="input-group">
@@ -607,6 +613,8 @@
     <div id="edgeContextMenu" style="display: none;"></div>
 
     <script>
+        let routeViaProxy = false;
+        let ignoreApiKeysViaProxy = false;
         let nodes = new vis.DataSet([]);
         let edges = new vis.DataSet([]);
         let nextId = 1;
@@ -1423,76 +1431,99 @@ function deleteNode(nodeId) {
         }
 
         const throttledSendHttpsRequest = throttleRequest(async function sendHttpsRequest(target, type) {
-            network.setOptions({ physics: { enabled: false } });
-            let url = `${corsProxyUrl}/https://${target}`;
-            let message;
+    network.setOptions({ physics: { enabled: false } });
+    let url = type === 'ip' ? 
+        `https://${target}` : 
+        `https://${target}`;
+    url = constructUrl(url);
+    let message;
 
-            try {
-                const response = await fetch(url, {
-                    method: 'GET',
-                    headers: {
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                        'Origin': window.location.origin
-                    },
-                    mode: 'cors',
-                    credentials: 'omit'
-                });
-
-                const status = response.status;
-                const statusText = response.statusText;
-                const headers = {};
-                response.headers.forEach((value, key) => {
-                    headers[key] = value;
-                });
-
-                let body = '';
-                const contentType = headers['content-type'] || '';
-                if (contentType.includes('text') || contentType.includes('html') || contentType.includes('json')) {
-                    body = await response.text();
-                    if (body.length > 500) {
-                        body = body.substring(0, 500) + '... (truncated)';
-                    }
-                } else {
-                    body = '(Binary or unsupported content type)';
-                }
-
-                message = `
-                    HTTPS Request to https://${target}
-                    Status: ${status} ${statusText}
-                    Headers: ${JSON.stringify(headers, null, 2)}
-                    Body: ${body}
-                `.trim();
-                showToast(message, 'success');
-            } catch (error) {
-                message = `
-                    HTTPS Request to https://${target}
-                    Error: ${error.message}
-                    Note: Ensure the CORS proxy (${corsProxyUrl}) is active and correctly configured
-                `.trim();
-                showToast(message, 'error');
-            } finally {
-                await stabilizeNetwork();
-            }
+    try {
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Origin': window.location.origin
+            },
+            mode: 'cors',
+            credentials: 'omit'
         });
 
-        function saveCorsProxyUrl() {
-            corsProxyUrl = document.getElementById('corsProxyUrl').value.trim();
-            const storeProxy = document.getElementById('storeCorsProxy').checked;
-            if (corsProxyUrl) {
-                if (storeProxy) {
-                    localStorage.setItem('corsProxyUrl', corsProxyUrl);
-                    showToast('CORS Proxy URL saved successfully!', 'success');
-                } else {
-                    localStorage.removeItem('corsProxyUrl');
-                    showToast('CORS Proxy URL set for this session only', 'success');
-                }
-            } else {
-                corsProxyUrl = 'https://cors-anywhere.herokuapp.com/'; // Reset to default if empty
-                localStorage.removeItem('corsProxyUrl');
-                document.getElementById('corsProxyUrl').value = corsProxyUrl;
-                showToast('CORS Proxy URL reset to default', 'info');
+        const status = response.status;
+        const statusText = response.statusText;
+        const headers = {};
+        response.headers.forEach((value, key) => {
+            headers[key] = value;
+        });
+
+        let body = '';
+        const contentType = headers['content-type'] || '';
+        if (contentType.includes('text') || contentType.includes('html') || contentType.includes('json')) {
+            body = await response.text();
+            if (body.length > 500) {
+                body = body.substring(0, 500) + '... (truncated)';
             }
+        } else {
+            body = '(Binary or unsupported content type)';
         }
+
+        message = `
+            HTTPS Request to https://${target}
+            Status: ${status} ${statusText}
+            Headers: ${JSON.stringify(headers, null, 2)}
+            Body: ${body}
+        `.trim();
+        showToast(message, 'success');
+    } catch (error) {
+        message = `
+            HTTPS Request to https://${target}
+            Error: ${error.message}
+            Note: Ensure the CORS proxy (${corsProxyUrl}) is active and correctly configured
+        `.trim();
+        showToast(message, 'error');
+    } finally {
+        await stabilizeNetwork();
+    }
+});
+
+        function saveCorsProxyUrl() {
+    corsProxyUrl = document.getElementById('corsProxyUrl').value.trim();
+    const storeProxy = document.getElementById('storeCorsProxy').checked;
+    routeViaProxy = document.getElementById('routeViaProxy').checked;
+    ignoreApiKeysViaProxy = document.getElementById('ignoreApiKeysViaProxy').checked;
+
+    if (corsProxyUrl) {
+        if (storeProxy) {
+            localStorage.setItem('corsProxyUrl', corsProxyUrl);
+            localStorage.setItem('routeViaProxy', routeViaProxy);
+            localStorage.setItem('ignoreApiKeysViaProxy', ignoreApiKeysViaProxy);
+            showToast('CORS Proxy settings saved successfully!', 'success');
+        } else {
+            localStorage.removeItem('corsProxyUrl');
+            localStorage.removeItem('routeViaProxy');
+            localStorage.removeItem('ignoreApiKeysViaProxy');
+            showToast('CORS Proxy settings set for this session only', 'success');
+        }
+    } else {
+        corsProxyUrl = 'https://cors-anywhere.herokuapp.com/';
+        routeViaProxy = false;
+        ignoreApiKeysViaProxy = false;
+        localStorage.removeItem('corsProxyUrl');
+        localStorage.removeItem('routeViaProxy');
+        localStorage.removeItem('ignoreApiKeysViaProxy');
+        document.getElementById('corsProxyUrl').value = corsProxyUrl;
+        document.getElementById('routeViaProxy').checked = false;
+        document.getElementById('ignoreApiKeysViaProxy').checked = false;
+        showToast('CORS Proxy settings reset to default', 'info');
+    }
+}
+
+function constructUrl(baseUrl, useApiKey = true) {
+    if (routeViaProxy) {
+        return `${corsProxyUrl}/${baseUrl}`;
+    }
+    return useApiKey ? baseUrl : baseUrl.split('?')[0]; // Remove query params if ignoring API keys
+}
 
         function throttleRequest(fn) {
             return async function(...args) {
@@ -1696,12 +1727,11 @@ function deleteNode(nodeId) {
     });
 }
 
-
-
-        const throttledEnrichInternetDB = throttleRequest(async function enrichInternetDB(ip, ipNodeId, isBulk = false) {
+const throttledEnrichInternetDB = throttleRequest(async function enrichInternetDB(ip, ipNodeId, isBulk = false) {
     network.setOptions({ physics: { enabled: false } });
     try {
-        const response = await fetch(`https://internetdb.shodan.io/${ip}`);
+        const url = constructUrl(`https://internetdb.shodan.io/${ip}`);
+        const response = await fetch(url);
         if (!response.ok) throw new Error('Failed to fetch InternetDB data');
         const data = await response.json();
 
@@ -1778,6 +1808,8 @@ function deleteNode(nodeId) {
     }
 });
 
+ 
+
 async function enrichAllInternetDB() {
     network.setOptions({ physics: { enabled: false } });
     const ipNodes = nodes.get({ filter: n => n.type === 'ip' && n.ip });
@@ -1815,13 +1847,17 @@ async function enrichAllInternetDB() {
 }
 
 const throttledEnrichIP = throttleRequest(async function enrichIP(ip, ipNodeId, isBulk = false, signal) {
-    if (!ipinfoApiKey) { 
+    if (!ipinfoApiKey && !ignoreApiKeysViaProxy) { 
         showToast('Please set your IPinfo API key in the "API Keys" tab first.', 'error'); 
         return; 
     }
     network.setOptions({ physics: { enabled: false } });
     try {
-        const response = await fetch(`https://ipinfo.io/${ip}/json?token=${ipinfoApiKey}`, { signal });
+        const baseUrl = ignoreApiKeysViaProxy ? 
+            `https://ipinfo.io/${ip}/json` : 
+            `https://ipinfo.io/${ip}/json?token=${ipinfoApiKey}`;
+        const url = constructUrl(baseUrl, !ignoreApiKeysViaProxy);
+        const response = await fetch(url, { signal });
         if (!response.ok) throw new Error('Failed to fetch IP info');
         const data = await response.json();
         const asn = data.asn?.asn || 'Unknown ASN';
@@ -1891,19 +1927,16 @@ const throttledEnrichIP = throttleRequest(async function enrichIP(ip, ipNodeId, 
 });
 
         // Add this with your other enrichment functions
-const throttledTestHTTPS = throttleRequest(async function testHTTPS(ip, nodeId) {
+        const throttledTestHTTPS = throttleRequest(async function testHTTPS(ip, nodeId) {
     try {
-        // Disable physics during operation
         network.setOptions({ physics: { enabled: false } });
-        
-        // Make the HTTPS request
-        const response = await fetch(`https://${ip}`, {
+        const url = constructUrl(`https://${ip}`);
+        const response = await fetch(url, {
             method: 'GET',
-            mode: 'no-cors', // Using no-cors since we just want to test connectivity
-            timeout: 5000    // 5 second timeout
+            mode: 'no-cors',
+            timeout: 5000
         });
         
-        // If we get here without error, the connection was successful
         const existingStatus = nodes.get({ 
             filter: n => n.type === 'https_status' && n.ip === ip 
         })[0];
@@ -1916,7 +1949,7 @@ const throttledTestHTTPS = throttleRequest(async function testHTTPS(ip, nodeId) 
                 type: 'https_status',
                 label: 'HTTPS Active',
                 title: `HTTPS Status\nIP: ${ip}\nPort: 443\nStatus: Reachable`,
-                color: { background: '#22c55e' }, // Green for success
+                color: { background: '#22c55e' },
                 ip: ip
             });
         }
@@ -1937,7 +1970,6 @@ const throttledTestHTTPS = throttleRequest(async function testHTTPS(ip, nodeId) 
         showToast(`HTTPS test successful for ${ip}:443`, 'success');
         
     } catch (error) {
-        // Handle connection failure
         const existingStatus = nodes.get({ 
             filter: n => n.type === 'https_status' && n.ip === ip 
         })[0];
@@ -1950,7 +1982,7 @@ const throttledTestHTTPS = throttleRequest(async function testHTTPS(ip, nodeId) 
                 type: 'https_status',
                 label: 'HTTPS Unavailable',
                 title: `HTTPS Status\nIP: ${ip}\nPort: 443\nStatus: Unreachable\nError: ${error.message}`,
-                color: { background: '#ef4444' }, // Red for failure
+                color: { background: '#ef4444' },
                 ip: ip
             });
         }
@@ -1975,17 +2007,20 @@ const throttledTestHTTPS = throttleRequest(async function testHTTPS(ip, nodeId) 
 });
 
 const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ipNodeId, isBulk = false, signal) {
-    if (!shodanApiKey) { 
+    if (!shodanApiKey && !ignoreApiKeysViaProxy) { 
         showToast('Please set your Shodan API key in the "API Keys" tab first.', 'error'); 
         return; 
     }
     network.setOptions({ physics: { enabled: false } });
     try {
-        const response = await fetch(`https://api.shodan.io/shodan/host/${ip}?key=${shodanApiKey}`, { signal });
+        const baseUrl = ignoreApiKeysViaProxy ? 
+            `https://api.shodan.io/shodan/host/${ip}` : 
+            `https://api.shodan.io/shodan/host/${ip}?key=${shodanApiKey}`;
+        const url = constructUrl(baseUrl, !ignoreApiKeysViaProxy);
+        const response = await fetch(url, { signal });
         if (!response.ok) throw new Error('Failed to fetch Shodan data');
         const data = await response.json();
 
-        // Process open ports (existing functionality)
         if (data.ports && data.ports.length > 0) {
             data.ports.forEach(port => {
                 const existingPort = nodes.get({ filter: n => n.type === 'port' && n.portNumber === port.toString() && n.portType === 'TCP' })[0];
@@ -2006,7 +2041,6 @@ const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ip
             });
         }
 
-        // Process hostnames (new functionality)
         if (data.hostnames && data.hostnames.length > 0) {
             data.hostnames.forEach(hostname => {
                 const existingDomain = nodes.get({ filter: n => n.type === 'domain' && n.domain === hostname })[0];
@@ -2019,7 +2053,7 @@ const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ip
                         title: `Domain: ${hostname}`, 
                         color: { background: '#60a5fa' }, 
                         domain: hostname,
-                        size: 10  // Consistent initial size
+                        size: 10
                     });
                 }
                 const edgeId = `${ipNodeId}-${domainId}-ResolvesTo`;
@@ -2027,7 +2061,6 @@ const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ip
             });
         }
 
-        // Process HTML hash if available (existing functionality)
         if (data.data && data.data.some(d => d.http && d.http.html_hash)) {
             const htmlHashData = data.data.find(d => d.http && d.http.html_hash);
             const htmlHash = htmlHashData.http.html_hash;
@@ -2047,7 +2080,6 @@ const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ip
             if (!edges.get(edgeIdHtml)) edges.add({ id: edgeIdHtml, from: ipNodeId, to: htmlHashId, label: 'Has HTML Hash' });
         }
 
-        // Process SSL certificate fingerprint if available (existing functionality)
         if (data.data && data.data.some(d => d.ssl && d.ssl.cert && d.ssl.cert.fingerprint && d.ssl.cert.fingerprint.sha256)) {
             const sslData = data.data.find(d => d.ssl && d.ssl.cert && d.ssl.cert.fingerprint && d.ssl.cert.fingerprint.sha256);
             const sslFingerprint = sslData.ssl.cert.fingerprint.sha256;
@@ -2067,11 +2099,10 @@ const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ip
             if (!edges.get(edgeIdSsl)) edges.add({ id: edgeIdSsl, from: ipNodeId, to: sslHashId, label: 'Has SSL Hash' });
         }
 
-        // Update graph and UI
         updateNodeSizes();
         updateSelectOptions();
         await stabilizeNetwork();
-        updateTheme();  // Ensure edge font consistency (from previous fix)
+        updateTheme();
         if (!isBulk) showToast(`IP ${ip} enrichment completed using Shodan with hostnames`, 'success');
     } catch (error) {
         if (error.name === 'AbortError') {
@@ -2167,14 +2198,14 @@ const throttledEnrichInternetDBMultiple = throttleRequest(async function(ipValue
 const throttledEnrichGoogleDNS = throttleRequest(async function enrichGoogleDNS(domain, domainNodeId, isBulk = false, signal) {
     network.setOptions({ physics: { enabled: false } });
     try {
-        const response = await fetch(`https://dns.google.com/resolve?name=${domain}`, { signal });
+        const url = constructUrl(`https://dns.google.com/resolve?name=${domain}`);
+        const response = await fetch(url, { signal });
         if (!response.ok) throw new Error('Failed to fetch Google DNS data');
         const data = await response.json();
 
-        // Process Answer section for A records (IPv4)
         if (data.Answer) {
             data.Answer.forEach(answer => {
-                if (answer.type === 1) { // Type 1 is A record (IPv4)
+                if (answer.type === 1) {
                     const ip = answer.data;
                     const existingIP = nodes.get({ filter: n => n.type === 'ip' && n.ip === ip })[0];
                     const ipId = existingIP ? existingIP.id : nextId++;
@@ -2191,13 +2222,12 @@ const throttledEnrichGoogleDNS = throttleRequest(async function enrichGoogleDNS(
                         });
                     }
                     
-                    // Create edge from domain to IP (correct direction)
                     const edgeId = `${domainNodeId}-${ipId}-ResolvesTo`;
                     if (!edges.get(edgeId)) {
                         edges.add({ 
                             id: edgeId, 
-                            from: domainNodeId,  // Domain as source
-                            to: ipId,           // IP as target
+                            from: domainNodeId,
+                            to: ipId,
                             label: 'Resolves to' 
                         });
                     }
@@ -3284,8 +3314,16 @@ window.onload = function() {
     } else {
         document.getElementById('corsProxyUrl').value = corsProxyUrl;
     }
-    // Rest of your existing onload code...
+    
+    routeViaProxy = localStorage.getItem('routeViaProxy') === 'true';
+    ignoreApiKeysViaProxy = localStorage.getItem('ignoreApiKeysViaProxy') === 'true';
+    document.getElementById('routeViaProxy').checked = routeViaProxy;
+    document.getElementById('ignoreApiKeysViaProxy').checked = ignoreApiKeysViaProxy;
+    
+    // Rest of existing onload code...
 };
+
+
 const stateLoaded = loadState();
     document.getElementById('stop-task').disabled = true;
 
