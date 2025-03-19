@@ -2245,6 +2245,313 @@ const throttledEnrichInternetDB = throttleRequest(async function enrichInternetD
 });
 
  
+async function enrichAllShodan() {
+    // Initialize maps for deduplication
+    let existingPorts = new Map(nodes.get({ filter: n => n.type === 'port' }).map(n => [`${n.portType}/${n.portNumber}`, n.id]));
+    let existingVulns = new Map(nodes.get({ filter: n => n.type === 'vulnerability' }).map(n => [n.cve, n.id]));
+    let existingDomains = new Map(nodes.get({ filter: n => n.type === 'domain' }).map(n => [n.domain, n.id]));
+    let existingSslHashes = new Map(nodes.get({ filter: n => n.type === 'ssl_hash' }).map(n => [n.fingerprint, n.id]));
+    let existingHtmlHashes = new Map(nodes.get({ filter: n => n.type === 'html_hash' }).map(n => [n.hash, n.id]));
+
+    if (!shodanApiKey && !ignoreApiKeysViaProxy) { 
+        showToast('Please set your Shodan API key in the "API Keys" tab first.', 'error'); 
+        return; 
+    }
+    
+    // Show progress bar at the start
+    showProgressBar();
+    network.setOptions({ physics: { enabled: false } });
+    const ipNodes = nodes.get({ filter: n => n.type === 'ip' && n.ip });
+    const totalIPs = ipNodes.length;
+    let successfulEnrichments = 0;
+    
+    console.log(`Found ${totalIPs} IP nodes to enrich with Shodan`);
+    showToast(`Starting Shodan enrichment for ${totalIPs} IPs`, 'info');
+    
+    const batchSize = 5;
+    const delayBetweenBatches = 100;
+    const shodanDelayMs = SHODAN_RATE_LIMIT_MS; // 1000ms
+    const totalBatches = Math.ceil(totalIPs / batchSize);
+    const timePerBatchMs = shodanDelayMs * batchSize;
+    const totalBatchDelays = (totalBatches - 1) * delayBetweenBatches;
+    const estimatedTimeMs = (timePerBatchMs * totalBatches) + totalBatchDelays + 1000;
+    
+    const estimatedSeconds = Math.ceil(estimatedTimeMs / 1000);
+    const estimatedMinutes = Math.floor(estimatedSeconds / 60);
+    const remainingSeconds = estimatedSeconds % 60;
+    const timeEstimateStr = estimatedMinutes > 0 
+        ? `${estimatedMinutes}m ${remainingSeconds}s` 
+        : `${estimatedSeconds}s`;
+    
+    showToast(`Estimated time for Shodan enrichment: ~${timeEstimateStr}`, 'info');
+    const progressBar = document.getElementById('progress-bar');
+    progressBar.textContent = `Shodan Enrichment: 0/${totalIPs} IPs (0%) - Est. ${timeEstimateStr}`;
+    
+    const newNodes = [];
+    const newEdges = [];
+
+    async function sha256(str) {
+        try {
+            if (typeof str !== 'string' || str.trim().length === 0) {
+                return null;
+            }
+            const encoder = new TextEncoder();
+            const data = encoder.encode(str);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        } catch (error) {
+            console.error(`SHA-256 hash failed: ${error.message}`);
+            return null;
+        }
+    }
+
+    async function processBatch(batch) {
+        for (const node of batch) {
+            if (activeTaskController && activeTaskController.signal.aborted) {
+                return false; // Return false to indicate cancellation
+            }
+            try {
+                const baseUrl = ignoreApiKeysViaProxy ?
+                    `https://api.shodan.io/shodan/host/${node.ip}` :
+                    `https://api.shodan.io/shodan/host/${node.ip}?key=${shodanApiKey}`;
+                const url = constructUrl(baseUrl, !ignoreApiKeysViaProxy);
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                const data = await response.json();
+                console.log(`Shodan response for ${node.ip}:`, JSON.stringify(data, null, 2));
+
+                // Domains
+                if (data.domains && data.domains.length > 0) {
+                    data.domains.forEach(domain => {
+                        let domainId = existingDomains.get(domain);
+                        if (!domainId) {
+                            domainId = nextId++;
+                            newNodes.push({
+                                id: domainId,
+                                type: 'domain',
+                                label: `Domain: ${domain}`,
+                                title: `Domain: ${domain}`,
+                                color: { background: '#60a5fa' },
+                                domain: domain
+                            });
+                            existingDomains.set(domain, domainId);
+                        }
+                        const edgeId = `${node.id}-${domainId}-ResolvesTo`;
+                        if (!newEdges.some(e => e.id === edgeId) && !edges.get(edgeId)) {
+                            newEdges.push({ id: edgeId, from: node.id, to: domainId, label: 'Resolves to' });
+                        }
+                    });
+                }
+
+                // Hostnames
+                if (data.hostnames && data.hostnames.length > 0) {
+                    data.hostnames.forEach(hostname => {
+                        let domainId = existingDomains.get(hostname);
+                        if (!domainId) {
+                            domainId = nextId++;
+                            newNodes.push({
+                                id: domainId,
+                                type: 'domain',
+                                label: `Hostname: ${hostname}`,
+                                title: `Hostname: ${hostname}`,
+                                color: { background: '#60a5fa' },
+                                domain: hostname
+                            });
+                            existingDomains.set(hostname, domainId);
+                        }
+                        const edgeId = `${node.id}-${domainId}-ResolvesTo`;
+                        if (!newEdges.some(e => e.id === edgeId) && !edges.get(edgeId)) {
+                            newEdges.push({ id: edgeId, from: node.id, to: domainId, label: 'Resolves to' });
+                        }
+                    });
+                }
+
+                // Ports
+                if (data.ports && data.ports.length > 0) {
+                    data.ports.forEach(port => {
+                        const portKey = `TCP/${port}`;
+                        let portId = existingPorts.get(portKey);
+                        if (!portId) {
+                            portId = nextId++;
+                            newNodes.push({
+                                id: portId,
+                                type: 'port',
+                                label: `TCP/${port}`,
+                                title: `Port\nType: TCP\nNumber: ${port}`,
+                                color: { background: '#a78bfa' },
+                                portType: 'TCP',
+                                portNumber: port.toString()
+                            });
+                            existingPorts.set(portKey, portId);
+                        }
+                        const edgeId = `${node.id}-${portId}-Exposes`;
+                        if (!newEdges.some(e => e.id === edgeId) && !edges.get(edgeId)) {
+                            newEdges.push({ id: edgeId, from: node.id, to: portId, label: 'Exposes' });
+                        }
+                    });
+                }
+
+                // Vulnerabilities
+                if (data.vulns && Object.keys(data.vulns).length > 0) {
+                    Object.keys(data.vulns).forEach(cve => {
+                        let cveId = existingVulns.get(cve);
+                        if (!cveId) {
+                            cveId = nextId++;
+                            newNodes.push({
+                                id: cveId,
+                                type: 'vulnerability',
+                                label: `Vulnerability: ${cve}`,
+                                title: `Vulnerability\nCVE: ${cve}`,
+                                color: { background: '#dc2626' },
+                                vulnName: cve,
+                                cve: cve,
+                                url: `https://nvd.nist.gov/vuln/detail/${cve}`
+                            });
+                            existingVulns.set(cve, cveId);
+                        }
+                        const edgeId = `${node.id}-${cveId}-Has`;
+                        if (!newEdges.some(e => e.id === edgeId) && !edges.get(edgeId)) {
+                            newEdges.push({ id: edgeId, from: node.id, to: cveId, label: 'Has' });
+                        }
+                    });
+                }
+
+                // SSL and HTML Hashes
+                if (data.data && data.data.length > 0) {
+                    for (const banner of data.data) {
+                        if (banner.ssl && banner.ssl.cert && banner.ssl.cert.fingerprint && banner.ssl.cert.fingerprint.sha256) {
+                            const fingerprint = banner.ssl.cert.fingerprint.sha256;
+                            let sslId = existingSslHashes.get(fingerprint);
+                            if (!sslId) {
+                                sslId = nextId++;
+                                newNodes.push({
+                                    id: sslId,
+                                    type: 'ssl_hash',
+                                    label: `SSL Hash: ${fingerprint.substring(0, 8)}...`,
+                                    title: `SSL Certificate Fingerprint\nSHA256: ${fingerprint}`,
+                                    color: { background: '#8b5cf6' },
+                                    fingerprint: fingerprint
+                                });
+                                existingSslHashes.set(fingerprint, sslId);
+                            }
+                            const edgeId = `${node.id}-${sslId}-Uses`;
+                            if (!newEdges.some(e => e.id === edgeId) && !edges.get(edgeId)) {
+                                newEdges.push({ id: edgeId, from: node.id, to: sslId, label: 'Uses' });
+                            }
+                        }
+
+                        if (banner.html && typeof banner.html === 'string' && banner.html.trim().length > 0) {
+                            const htmlHash = await sha256(banner.html);
+                            if (htmlHash) {
+                                let htmlId = existingHtmlHashes.get(htmlHash);
+                                if (!htmlId) {
+                                    htmlId = nextId++;
+                                    newNodes.push({
+                                        id: htmlId,
+                                        type: 'html_hash',
+                                        label: `HTML Hash: ${htmlHash.substring(0, 8)}...`,
+                                        title: `HTML Hash\nSHA256: ${htmlHash}`,
+                                        color: { background: '#f59e0b' },
+                                        hash: htmlHash
+                                    });
+                                    existingHtmlHashes.set(htmlHash, htmlId);
+                                }
+                                const edgeId = `${node.id}-${htmlId}-Serves`;
+                                if (!newEdges.some(e => e.id === edgeId) && !edges.get(edgeId)) {
+                                    newEdges.push({ id: edgeId, from: node.id, to: htmlId, label: 'Serves' });
+                                }
+                            }
+                        }
+                    }
+                }
+
+                successfulEnrichments++;
+            } catch (error) {
+                console.error(`Failed to enrich IP ${node.ip}: ${error.message}`);
+                showToast(`Failed to enrich IP ${node.ip}: ${error.message}`, 'error');
+            }
+            await new Promise(resolve => setTimeout(resolve, shodanDelayMs));
+        }
+        return true; // Indicate successful completion
+    }
+    
+    let lastProgressUpdate = 0;
+    const progressUpdateInterval = 1000;
+    const startTime = Date.now();
+    
+    for (let i = 0; i < totalIPs; i += batchSize) {
+        if (activeTaskController && activeTaskController.signal.aborted) {
+            progressBar.textContent = `Shodan Enrichment: Stopped at ${successfulEnrichments}/${totalIPs} IPs`;
+            progressBar.classList.remove('progress-active');
+            progressBar.classList.add('progress-complete');
+            setTimeout(() => {
+                progressBar.classList.add('progress-hidden');
+            }, 3000); // Hide after 3 seconds for stopped state
+            showToast('Shodan enrichment stopped', 'info');
+            break;
+        }
+        
+        const batch = ipNodes.slice(i, Math.min(i + batchSize, totalIPs));
+        console.log(`Processing batch ${Math.floor(i / batchSize) + 1} of ${totalBatches}, IPs ${i} to ${Math.min(i + batchSize - 1, totalIPs - 1)}`);
+        
+        const batchSuccess = await processBatch(batch);
+        
+        if (batchSuccess) {
+            if (newNodes.length > 0) {
+                nodes.add(newNodes);
+                newNodes.length = 0;
+            }
+            if (newEdges.length > 0) {
+                edges.add(newEdges);
+                newEdges.length = 0;
+            }
+        }
+        
+        const currentTime = Date.now();
+        if (currentTime - lastProgressUpdate >= progressUpdateInterval || i + batchSize >= totalIPs) {
+            const processedIPs = Math.min(i + batchSize, totalIPs);
+            const progress = ((processedIPs / totalIPs) * 100).toFixed(1);
+            const elapsedTimeMs = currentTime - startTime;
+            const processedTimePerIp = elapsedTimeMs / processedIPs;
+            const remainingIps = totalIPs - processedIPs;
+            const remainingTimeMs = Math.max(0, remainingIps * processedTimePerIp); // Dynamic estimate
+            const remainingSeconds = Math.ceil(remainingTimeMs / 1000);
+            const remainingMinutes = Math.floor(remainingSeconds / 60);
+            const remainingSecondsPart = remainingSeconds % 60;
+            const remainingTimeStr = remainingMinutes > 0 
+                ? `${remainingMinutes}m ${remainingSecondsPart}s` 
+                : `${remainingSeconds}s`;
+            
+            progressBar.textContent = `Shodan Enrichment: ${successfulEnrichments}/${totalIPs} IPs (${progress}%) - Est. ${remainingTimeStr} remaining`;
+            lastProgressUpdate = currentTime;
+            updateSelectOptions();
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+    }
+    
+    if (newNodes.length > 0) nodes.add(newNodes);
+    if (newEdges.length > 0) edges.add(newEdges);
+    updateNodeSizes();
+    updateSelectOptions();
+    updateTheme();
+    await stabilizeNetwork();
+    ensureInteractionSettings();
+    
+    // Ensure progress bar completes even if stopped early
+    if (!(activeTaskController && activeTaskController.signal.aborted)) {
+        completeProgressBar();
+        showToast(`Shodan enrichment completed: ${successfulEnrichments}/${totalIPs} IPs enriched`, 'success');
+    }
+    
+    if (window.innerWidth <= 768) {
+        const controls = document.getElementById('controls');
+        controls.classList.add('collapsed');
+        document.getElementById('myNetwork').style.display = 'block';
+        network.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
+    }
+}
 
 
 async function enrichAllInternetDB() {
@@ -2569,155 +2876,7 @@ const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ip
     }
 });
 
-async function enrichAllShodan() {
-    if (!shodanApiKey && !ignoreApiKeysViaProxy) { 
-        showToast('Please set your Shodan API key in the "API Keys" tab first.', 'error'); 
-        return; 
-    }
-    
-    showProgressBar(); // Show the progress bar at the start
-    network.setOptions({ physics: { enabled: false } });
-    const ipNodes = nodes.get({ filter: n => n.type === 'ip' && n.ip });
-    const totalIPs = ipNodes.length;
-    let successfulEnrichments = 0;
-    
-    console.log(`Found ${totalIPs} IP nodes to enrich with Shodan`);
-    showToast(`Starting Shodan enrichment for ${totalIPs} IPs`, 'info');
-    
-    const batchSize = 5; // Limited by Shodan’s 1 QPS
-    const delayBetweenBatches = 100; // UI breathing room
-    const shodanDelayMs = SHODAN_RATE_LIMIT_MS; // 1000ms per request
-    const totalBatches = Math.ceil(totalIPs / batchSize);
-    const timePerBatchMs = shodanDelayMs * batchSize; // 5s per batch
-    const totalBatchDelays = (totalBatches - 1) * delayBetweenBatches;
-    const estimatedTimeMs = (timePerBatchMs * totalBatches) + totalBatchDelays + 1000;
-    
-    const estimatedSeconds = Math.ceil(estimatedTimeMs / 1000);
-    const estimatedMinutes = Math.floor(estimatedSeconds / 60);
-    const remainingSeconds = estimatedSeconds % 60;
-    const timeEstimateStr = estimatedMinutes > 0 
-        ? `${estimatedMinutes}m ${remainingSeconds}s` 
-        : `${estimatedSeconds}s`;
-    
-    showToast(`Estimated time for Shodan enrichment: ~${timeEstimateStr}`, 'info');
-    document.getElementById('progress-bar').textContent = `Shodan Enrichment: 0/${totalIPs} IPs (0%) - Est. ${timeEstimateStr}`;
-    
-    // Batch updates
-    const newNodes = [];
-    const newEdges = [];
-    let existingDomains = new Map(nodes.get({ filter: n => n.type === 'domain' }).map(n => [n.domain, n.id]));
-    
-    async function processBatch(batch) {
-        for (const node of batch) {
-            if (activeTaskController && activeTaskController.signal.aborted) {
-                return;
-            }
-            try {
-                const baseUrl = ignoreApiKeysViaProxy ? 
-                    `https://api.shodan.io/shodan/host/${node.ip}` : 
-                    `https://api.shodan.io/shodan/host/${node.ip}?key=${shodanApiKey}`;
-                const url = constructUrl(baseUrl, !ignoreApiKeysViaProxy);
-                const response = await fetch(url);
-                if (!response.ok) throw new Error('Failed to fetch Shodan data');
-                const data = await response.json();
 
-                // Process hostnames
-                if (data.hostnames && data.hostnames.length > 0) {
-                    data.hostnames.forEach(hostname => {
-                        let domainId = existingDomains.get(hostname);
-                        if (!domainId) {
-                            domainId = nextId++;
-                            newNodes.push({
-                                id: domainId,
-                                type: 'domain',
-                                label: `Domain: ${hostname}`,
-                                title: `Domain: ${hostname}`,
-                                color: { background: '#60a5fa' },
-                                domain: hostname
-                            });
-                            existingDomains.set(hostname, domainId);
-                        }
-                        const edgeId = `${node.id}-${domainId}-ResolvesTo`;
-                        if (!newEdges.some(e => e.id === edgeId) && !edges.get(edgeId)) {
-                            newEdges.push({ id: edgeId, from: node.id, to: domainId, label: 'Resolves to' });
-                        }
-                    });
-                }
-                successfulEnrichments++;
-            } catch (error) {
-                console.error(`Failed to enrich IP ${node.ip}: ${error.message}`);
-                showToast(`Failed to enrich IP ${node.ip}: ${error.message}`, 'error');
-            }
-            await new Promise(resolve => setTimeout(resolve, shodanDelayMs)); // Respect 1 QPS
-        }
-    }
-    
-    let lastProgressUpdate = 0;
-    const progressUpdateInterval = 1000; // Update UI every 1s
-    
-    const startTime = Date.now();
-    
-    for (let i = 0; i < totalIPs; i += batchSize) {
-        if (activeTaskController && activeTaskController.signal.aborted) {
-            showToast('Shodan enrichment stopped', 'info');
-            break;
-        }
-        
-        const batch = ipNodes.slice(i, Math.min(i + batchSize, totalIPs));
-        console.log(`Processing batch ${Math.floor(i / batchSize) + 1} of ${totalBatches}, IPs ${i} to ${Math.min(i + batchSize - 1, totalIPs - 1)}`);
-        
-        await processBatch(batch);
-        
-        // Apply batched updates
-        if (newNodes.length > 0) {
-            nodes.add(newNodes);
-            newNodes.length = 0;
-        }
-        if (newEdges.length > 0) {
-            edges.add(newEdges);
-            newEdges.length = 0;
-        }
-        
-        const currentTime = Date.now();
-        if (currentTime - lastProgressUpdate >= progressUpdateInterval) {
-            const processedIPs = Math.min(i + batchSize, totalIPs);
-            const progress = ((processedIPs / totalIPs) * 100).toFixed(1);
-            const remainingIps = totalIPs - processedIPs;
-            const remainingTimeMs = Math.max(0, remainingIps * shodanDelayMs);
-            const remainingSeconds = Math.ceil(remainingTimeMs / 1000);
-            const remainingMinutes = Math.floor(remainingSeconds / 60);
-            const remainingSecondsPart = remainingSeconds % 60;
-            const remainingTimeStr = remainingMinutes > 0 
-                ? `${remainingMinutes}m ${remainingSecondsPart}s` 
-                : `${remainingSeconds}s`;
-            
-            document.getElementById('progress-bar').textContent = 
-                `Shodan Enrichment: ${successfulEnrichments}/${totalIPs} IPs (${progress}%) - Est. ${remainingTimeStr} remaining`;
-            lastProgressUpdate = currentTime;
-            updateSelectOptions();
-        }
-        
-        await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
-    }
-    
-    // Final updates
-    if (newNodes.length > 0) nodes.add(newNodes);
-    if (newEdges.length > 0) edges.add(newEdges);
-    updateNodeSizes();
-    updateSelectOptions();
-    updateTheme();
-    await stabilizeNetwork();
-    ensureInteractionSettings();
-    completeProgressBar(); // Complete and hide the progress bar
-    showToast(`Shodan enrichment completed: ${successfulEnrichments}/${totalIPs} IPs enriched`, 'success');
-    
-    if (window.innerWidth <= 768) {
-        const controls = document.getElementById('controls');
-        controls.classList.add('collapsed');
-        document.getElementById('myNetwork').style.display = 'block';
-        network.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
-    }
-}
 
 const throttledSendHttpsRequestMultiple = throttleRequest(async function(targets, type, protocol) {
     for (const target of targets) {
@@ -2880,6 +3039,8 @@ async function enrichAllGoogleDNS() {
     }
 }
 
+
+
 async function importIOCsFromText() {
     const text = document.getElementById('iocText').value.trim();
     if (!text) { showToast('Please enter some text containing IOCs', 'error'); return; }
@@ -2888,6 +3049,8 @@ async function importIOCsFromText() {
     saveStateAfterOperation();
     showToast('IOCs (including emails) import completed', 'success');
 }
+
+
 
 async function importIOCsFromFile() {
     const fileInput = document.getElementById('iocFile');
@@ -2902,6 +3065,8 @@ async function importIOCsFromFile() {
     };
     reader.readAsText(file);
 }
+
+
 
         async function processIOCs(text) {
     // Disable physics for the duration of the import
