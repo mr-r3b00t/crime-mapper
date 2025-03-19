@@ -628,10 +628,11 @@
             <button id="stop-task" onclick="stopActiveTask()">Stop Active Task</button>
         </div>
 
-        <div id="footer">
-            Created by mrr3b00t (@UK_Daniel_Card)
-            © Xservus Limited - v0.23 experimental
-        </div>
+        <!-- Suggested -->
+<footer id="footer">
+    <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
+    <p>© Xservus Limited - v0.24 experimental</p>
+</footer>
     </div>
     <div id="myNetwork"></div>
     <div id="contextMenu" style="display: none;"></div>
@@ -1337,11 +1338,11 @@ function showContextMenu(x, y, value, nodeIds, type) {
         ${isMultiple ? '' : `<button onclick="startLinkCreation(${nodeIds[0]})">Create Link From Here</button>`}
     `;
     
-    // Add type-specific options (only for single selection or all same type)
     const allSameType = nodeIds.every(id => {
-    const node = nodes.get(id);
-    return node && node.type === type;
-});
+        const node = nodes.get(id);
+        return node && node.type === type;
+    });
+    
     if (allSameType) {
         if (type === 'ip') {
             menuHtml += `
@@ -1354,6 +1355,7 @@ function showContextMenu(x, y, value, nodeIds, type) {
         } else if (type === 'domain') {
             menuHtml += `
                 <button onclick="throttledEnrichGoogleDNSMultiple([${nodeIds.map(id => `'${nodes.get(id).domain}'`)}], [${nodeIds}])">Enrich via Google DNS</button>
+                <button onclick="throttledEnrichShodanMultiple([${nodeIds.map(id => `'${nodes.get(id).domain}'`)}], [${nodeIds}])">Enrich via Shodan</button>
                 <button onclick="throttledSendHttpsRequestMultiple([${nodeIds.map(id => `'${nodes.get(id).domain}'`)}], 'domain', 'https')">Send HTTPS Request</button>
                 <button onclick="throttledSendHttpsRequestMultiple([${nodeIds.map(id => `'${nodes.get(id).domain}'`)}], 'domain', 'http')">Send HTTP Request</button>
             `;
@@ -1989,6 +1991,7 @@ const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ip
         if (!response.ok) throw new Error('Failed to fetch Shodan data');
         const data = await response.json();
 
+        // Process open ports
         if (data.ports && data.ports.length > 0) {
             data.ports.forEach(port => {
                 const existingPort = nodes.get({ filter: n => n.type === 'port' && n.portNumber === port.toString() && n.portType === 'TCP' })[0];
@@ -2009,10 +2012,12 @@ const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ip
             });
         }
 
+        // Process hostnames (domains)
         if (data.hostnames && data.hostnames.length > 0) {
             data.hostnames.forEach(hostname => {
                 const existingDomain = nodes.get({ filter: n => n.type === 'domain' && n.domain === hostname })[0];
                 const domainId = existingDomain ? existingDomain.id : nextId++;
+                
                 if (!existingDomain) {
                     nodes.add({ 
                         id: domainId, 
@@ -2024,11 +2029,20 @@ const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ip
                         size: 10
                     });
                 }
+                
                 const edgeId = `${ipNodeId}-${domainId}-ResolvesTo`;
-                if (!edges.get(edgeId)) edges.add({ id: edgeId, from: ipNodeId, to: domainId, label: 'Resolves to' });
+                if (!edges.get(edgeId)) {
+                    edges.add({ 
+                        id: edgeId, 
+                        from: ipNodeId, 
+                        to: domainId, 
+                        label: 'Resolves to' 
+                    });
+                }
             });
         }
 
+        // Process HTTP HTML hash if available
         if (data.data && data.data.some(d => d.http && d.http.html_hash)) {
             const htmlHashData = data.data.find(d => d.http && d.http.html_hash);
             const htmlHash = htmlHashData.http.html_hash;
@@ -2048,30 +2062,69 @@ const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ip
             if (!edges.get(edgeIdHtml)) edges.add({ id: edgeIdHtml, from: ipNodeId, to: htmlHashId, label: 'Has HTML Hash' });
         }
 
-        if (data.data && data.data.some(d => d.ssl && d.ssl.cert && d.ssl.cert.fingerprint && d.ssl.cert.fingerprint.sha256)) {
-            const sslData = data.data.find(d => d.ssl && d.ssl.cert && d.ssl.cert.fingerprint && d.ssl.cert.fingerprint.sha256);
-            const sslFingerprint = sslData.ssl.cert.fingerprint.sha256;
-            const existingSslHash = nodes.get({ filter: n => n.type === 'ssl_hash' && n.fingerprint === sslFingerprint })[0];
-            const sslHashId = existingSslHash ? existingSslHash.id : nextId++;
-            if (!existingSslHash) {
-                nodes.add({ 
-                    id: sslHashId, 
-                    type: 'ssl_hash', 
-                    label: `SSL SHA256: ${sslFingerprint.substring(0, 8)}...`,
-                    title: `SSL Certificate Fingerprint\nSHA256: ${sslFingerprint}`, 
-                    color: { background: '#8b5cf6' },
-                    fingerprint: sslFingerprint 
-                });
+        // Process SSL certificate data including Subject Alternative Names
+        if (data.data && data.data.some(d => d.ssl && d.ssl.cert)) {
+            const sslData = data.data.find(d => d.ssl && d.ssl.cert);
+            if (sslData.ssl.cert) {
+                // Process SHA256 fingerprint
+                if (sslData.ssl.cert.fingerprint && sslData.ssl.cert.fingerprint.sha256) {
+                    const sslFingerprint = sslData.ssl.cert.fingerprint.sha256;
+                    const existingSslHash = nodes.get({ filter: n => n.type === 'ssl_hash' && n.fingerprint === sslFingerprint })[0];
+                    const sslHashId = existingSslHash ? existingSslHash.id : nextId++;
+                    if (!existingSslHash) {
+                        nodes.add({ 
+                            id: sslHashId, 
+                            type: 'ssl_hash', 
+                            label: `SSL SHA256: ${sslFingerprint.substring(0, 8)}...`,
+                            title: `SSL Certificate Fingerprint\nSHA256: ${sslFingerprint}`, 
+                            color: { background: '#8b5cf6' },
+                            fingerprint: sslFingerprint 
+                        });
+                    }
+                    const edgeIdSsl = `${ipNodeId}-${sslHashId}-HasSSLHash`;
+                    if (!edges.get(edgeIdSsl)) edges.add({ id: edgeIdSsl, from: ipNodeId, to: sslHashId, label: 'Has SSL Hash' });
+                }
+
+                // Process Subject Alternative Names (SANs)
+                if (sslData.ssl.cert.subject_alt_name && Array.isArray(sslData.ssl.cert.subject_alt_name)) {
+                    sslData.ssl.cert.subject_alt_name.forEach(san => {
+                        // Skip if SAN is not a valid domain-like string or is just the IP
+                        if (!san || san === ip || !domainRegex.test(san)) return;
+
+                        const existingSanDomain = nodes.get({ filter: n => n.type === 'domain' && n.domain === san })[0];
+                        const sanDomainId = existingSanDomain ? existingSanDomain.id : nextId++;
+                        
+                        if (!existingSanDomain) {
+                            nodes.add({
+                                id: sanDomainId,
+                                type: 'domain',
+                                label: `Domain: ${san}`,
+                                title: `Domain (SAN): ${san}`,
+                                color: { background: '#60a5fa' },
+                                domain: san,
+                                size: 10
+                            });
+                        }
+                        
+                        const edgeId = `${ipNodeId}-${sanDomainId}-CertificateSAN`;
+                        if (!edges.get(edgeId)) {
+                            edges.add({
+                                id: edgeId,
+                                from: ipNodeId,
+                                to: sanDomainId,
+                                label: 'Certificate SAN'
+                            });
+                        }
+                    });
+                }
             }
-            const edgeIdSsl = `${ipNodeId}-${sslHashId}-HasSSLHash`;
-            if (!edges.get(edgeIdSsl)) edges.add({ id: edgeIdSsl, from: ipNodeId, to: sslHashId, label: 'Has SSL Hash' });
         }
 
         updateNodeSizes();
         updateSelectOptions();
         await stabilizeNetwork();
         updateTheme();
-        if (!isBulk) showToast(`IP ${ip} enrichment completed using Shodan with hostnames`, 'success');
+        if (!isBulk) showToast(`IP ${ip} enrichment completed using Shodan with hostnames and SANs`, 'success');
     } catch (error) {
         if (error.name === 'AbortError') {
             showToast(`Enrichment of IP ${ip} was cancelled`, 'info');
