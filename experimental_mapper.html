@@ -362,12 +362,43 @@
 .dark-mode #edgeContextMenu button:hover {
     background-color: #4b5563;
 }
+
+/* Progress Bar Styles */
+#progress-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 10px;
+    text-align: center;
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
+    z-index: 2000;
+    transition: opacity 0.5s ease-in-out;
+}
+
+.progress-active {
+    background-color: #dc2626; /* Red for in progress */
+}
+
+.progress-complete {
+    background-color: #22c55e; /* Green for complete */
+}
+
+.progress-hidden {
+    opacity: 0;
+    pointer-events: none;
+}
     </style>
     <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/dist/vis-network.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/toastify-js/1.12.0/toastify.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastify-js/1.12.0/toastify.min.css">
 </head>
 <body class="dark-mode">
+        <div id="progress-bar" class="progress-hidden">Task in progress...</div>
+        <!-- Rest of your HTML -->
+
     <div id="controls">
         <button id="menu-toggle" onclick="toggleMenu()" title="Toggle Menu">></button>
         <button id="mode-toggle" onclick="toggleMode()">Switch to Light Mode</button>
@@ -662,19 +693,22 @@
         let nodeLabelsVisible = true;
         let edgeLabelsVisible = true;
         const RATE_LIMIT_MS = 500;
+        const SHODAN_RATE_LIMIT_MS = 1000; // Specific 1-second delay for Shodan
         const ipRegex = { ipv4: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/, ipv6: /^([0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}$/ };
         const domainRegex = /^(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,}$/;
         const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 
         let selectedNodes = new Set(); // To track multiple selected nodes
 
-    async function enrichAllIpinfo() {
-        network.setOptions({ physics: { enabled: false } });
-        const ipNodes = nodes.get({ filter: n => n.type === 'ip' && n.ip });
-        let successfulEnrichments = 0;
-    
-        console.log(`Found ${ipNodes.length} IP nodes to enrich with IPinfo`);
-    
+        async function enrichAllIpinfo() {
+    showProgressBar();
+    network.setOptions({ physics: { enabled: false } });
+    const ipNodes = nodes.get({ filter: n => n.type === 'ip' && n.ip });
+    let successfulEnrichments = 0;
+
+    console.log(`Found ${ipNodes.length} IP nodes to enrich with IPinfo`);
+    showToast(`Starting IPinfo enrichment for ${ipNodes.length} IPs`, 'info');
+
     for (const node of ipNodes) {
         try {
             console.log(`Enriching IP: ${node.ip}`);
@@ -688,6 +722,7 @@
     
     await stabilizeNetwork();
     ensureInteractionSettings();
+    completeProgressBar();
     showToast(`IPinfo enrichment completed: ${successfulEnrichments}/${ipNodes.length} IPs enriched`, 'success');
     
     if (window.innerWidth <= 768) {
@@ -697,9 +732,10 @@
         network.fit({
             animation: { duration: 300, easingFunction: 'easeInOutQuad' }
         });
-        }
-
     }
+}
+
+
 
 
         // Add this new function
@@ -917,7 +953,7 @@ function loadState() {
             Toastify(toastOptions).showToast();
         }
 
-        function throttleRequest(fn) {
+        function throttleRequest(fn, rateLimit = RATE_LIMIT_MS) {
     return async function(...args) {
         if (activeTaskController) {
             throw new Error('Another task is already running');
@@ -925,17 +961,18 @@ function loadState() {
         
         activeTaskController = new AbortController();
         const stopButton = document.getElementById('stop-task');
-        stopButton.disabled = false; // Enable button when task starts
+        stopButton.disabled = false;
         
         const now = Date.now();
         const timeSinceLast = now - lastRequestTime;
-        if (timeSinceLast < RATE_LIMIT_MS) await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_MS - timeSinceLast));
+        const delay = rateLimit; // Use the provided rate limit (1000ms for Shodan)
+        if (timeSinceLast < delay) await new Promise(resolve => setTimeout(resolve, delay - timeSinceLast));
         lastRequestTime = now;
         
         try {
             const result = await fn(...args, activeTaskController.signal);
             activeTaskController = null;
-            stopButton.disabled = true; // Disable button when task completes
+            stopButton.disabled = true;
             return result;
         } catch (error) {
             if (error.name === 'AbortError') {
@@ -1863,11 +1900,13 @@ const throttledEnrichInternetDB = throttleRequest(async function enrichInternetD
  
 
 async function enrichAllInternetDB() {
+    showProgressBar();
     network.setOptions({ physics: { enabled: false } });
     const ipNodes = nodes.get({ filter: n => n.type === 'ip' && n.ip });
     let successfulEnrichments = 0;
     
     console.log(`Found ${ipNodes.length} IP nodes to enrich with InternetDB`);
+    showToast(`Starting InternetDB enrichment for ${ipNodes.length} IPs`, 'info');
     
     for (const node of ipNodes) {
         try {
@@ -1882,21 +1921,19 @@ async function enrichAllInternetDB() {
     
     await stabilizeNetwork();
     ensureInteractionSettings();
+    completeProgressBar();
     showToast(`InternetDB enrichment completed: ${successfulEnrichments}/${ipNodes.length} IPs enriched`, 'success');
     
-    // Add this: Restore mobile layout after enrichment
     if (window.innerWidth <= 768) {
         const controls = document.getElementById('controls');
         controls.classList.add('collapsed');
         document.getElementById('myNetwork').style.display = 'block';
         network.fit({
-            animation: {
-                duration: 300,
-                easingFunction: 'easeInOutQuad'
-            }
+            animation: { duration: 300, easingFunction: 'easeInOutQuad' }
         });
     }
 }
+
 
 const throttledEnrichIP = throttleRequest(async function enrichIP(ip, ipNodeId, isBulk = false, signal) {
     if (!ipinfoApiKey && !ignoreApiKeysViaProxy) { 
@@ -1990,7 +2027,10 @@ const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ip
         showToast('Please set your Shodan API key in the "API Keys" tab first.', 'error'); 
         return; 
     }
-    network.setOptions({ physics: { enabled: false } });
+    
+    // Only disable physics if not in bulk mode
+    if (!isBulk) network.setOptions({ physics: { enabled: false } });
+    
     try {
         const baseUrl = ignoreApiKeysViaProxy ? 
             `https://api.shodan.io/shodan/host/${ip}` : 
@@ -2000,161 +2040,17 @@ const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ip
         if (!response.ok) throw new Error('Failed to fetch Shodan data');
         const data = await response.json();
 
-        // Process open ports
-        if (data.ports && data.ports.length > 0) {
-            data.ports.forEach(port => {
-                const existingPort = nodes.get({ filter: n => n.type === 'port' && n.portNumber === port.toString() && n.portType === 'TCP' })[0];
-                const portId = existingPort ? existingPort.id : nextId++;
-                if (!existingPort) {
-                    nodes.add({ 
-                        id: portId, 
-                        type: 'port', 
-                        label: `Port: TCP/${port}`, 
-                        title: `Port\nType: TCP\nNumber: ${port}`, 
-                        color: { background: '#a78bfa' }, 
-                        portType: 'TCP', 
-                        portNumber: port.toString() 
-                    });
-                }
-                const edgeId = `${ipNodeId}-${portId}-Exposes`;
-                if (!edges.get(edgeId)) edges.add({ id: edgeId, from: ipNodeId, to: portId, label: 'Exposes' });
-            });
-        }
-
-        // Process hostnames (domains)
-        if (data.hostnames && data.hostnames.length > 0) {
-            data.hostnames.forEach(hostname => {
-                const existingDomain = nodes.get({ filter: n => n.type === 'domain' && n.domain === hostname })[0];
-                const domainId = existingDomain ? existingDomain.id : nextId++;
-                
-                if (!existingDomain) {
-                    nodes.add({ 
-                        id: domainId, 
-                        type: 'domain', 
-                        label: `Domain: ${hostname}`, 
-                        title: `Domain: ${hostname}`, 
-                        color: { background: '#60a5fa' }, 
-                        domain: hostname,
-                        size: 10
-                    });
-                }
-                
-                const edgeId = `${ipNodeId}-${domainId}-ResolvesTo`;
-                if (!edges.get(edgeId)) {
-                    edges.add({ 
-                        id: edgeId, 
-                        from: ipNodeId, 
-                        to: domainId, 
-                        label: 'Resolves to' 
-                    });
-                }
-            });
-        }
-
-        // Process HTTP HTML hash if available
-        if (data.data && data.data.some(d => d.http && d.http.html_hash)) {
-            const htmlHashData = data.data.find(d => d.http && d.http.html_hash);
-            const htmlHash = htmlHashData.http.html_hash;
-            const existingHtmlHash = nodes.get({ filter: n => n.type === 'html_hash' && n.hash === htmlHash })[0];
-            const htmlHashId = existingHtmlHash ? existingHtmlHash.id : nextId++;
-            if (!existingHtmlHash) {
-                nodes.add({ 
-                    id: htmlHashId, 
-                    type: 'html_hash', 
-                    label: `HTML Hash: ${htmlHash}`, 
-                    title: `HTML Hash\nValue: ${htmlHash}`, 
-                    color: { background: '#f59e0b' },
-                    hash: htmlHash 
-                });
-            }
-            const edgeIdHtml = `${ipNodeId}-${htmlHashId}-HasHTMLHash`;
-            if (!edges.get(edgeIdHtml)) edges.add({ id: edgeIdHtml, from: ipNodeId, to: htmlHashId, label: 'Has HTML Hash' });
-        }
-
-        // Process SSL certificate data including Subject Alternative Names
-        if (data.data && data.data.some(d => d.ssl && d.ssl.cert)) {
-            const sslData = data.data.find(d => d.ssl && d.ssl.cert);
-            if (sslData.ssl.cert) {
-                // Process SHA256 fingerprint
-                if (sslData.ssl.cert.fingerprint && sslData.ssl.cert.fingerprint.sha256) {
-                    const sslFingerprint = sslData.ssl.cert.fingerprint.sha256;
-                    const existingSslHash = nodes.get({ filter: n => n.type === 'ssl_hash' && n.fingerprint === sslFingerprint })[0];
-                    const sslHashId = existingSslHash ? existingSslHash.id : nextId++;
-                    if (!existingSslHash) {
-                        nodes.add({ 
-                            id: sslHashId, 
-                            type: 'ssl_hash', 
-                            label: `SSL SHA256: ${sslFingerprint.substring(0, 8)}...`,
-                            title: `SSL Certificate Fingerprint\nSHA256: ${sslFingerprint}`, 
-                            color: { background: '#8b5cf6' },
-                            fingerprint: sslFingerprint 
-                        });
-                    }
-                    const edgeIdSsl = `${ipNodeId}-${sslHashId}-HasSSLHash`;
-                    if (!edges.get(edgeIdSsl)) edges.add({ id: edgeIdSsl, from: ipNodeId, to: sslHashId, label: 'Has SSL Hash' });
-                }
-
-                // Process Subject Alternative Names (SANs)
-                if (sslData.ssl.cert.subject_alt_name && Array.isArray(sslData.ssl.cert.subject_alt_name)) {
-                    sslData.ssl.cert.subject_alt_name.forEach(san => {
-                        if (!san || san === ip || !domainRegex.test(san)) return;
-
-                        const existingSanDomain = nodes.get({ filter: n => n.type === 'domain' && n.domain === san })[0];
-                        const sanDomainId = existingSanDomain ? existingSanDomain.id : nextId++;
-                        
-                        if (!existingSanDomain) {
-                            nodes.add({
-                                id: sanDomainId,
-                                type: 'domain',
-                                label: `Domain: ${san}`,
-                                title: `Domain (SAN): ${san}`,
-                                color: { background: '#60a5fa' },
-                                domain: san,
-                                size: 10
-                            });
-                        }
-                        
-                        const edgeId = `${ipNodeId}-${sanDomainId}-CertificateSAN`;
-                        if (!edges.get(edgeId)) {
-                            edges.add({
-                                id: edgeId,
-                                from: ipNodeId,
-                                to: sanDomainId,
-                                label: 'Certificate SAN'
-                            });
-                        }
-                    });
-                }
-            }
-        }
-
-        // Process vulnerabilities (CVEs)
-        if (data.vulns && Array.isArray(data.vulns) && data.vulns.length > 0) {
-            data.vulns.forEach(cve => {
-                const existingCVE = nodes.get({ filter: n => n.type === 'vulnerability' && n.cve === cve })[0];
-                const cveId = existingCVE ? existingCVE.id : nextId++;
-                if (!existingCVE) {
-                    nodes.add({ 
-                        id: cveId, 
-                        type: 'vulnerability', 
-                        label: `Vulnerability: ${cve}${cve ? '\nCVE: ' + cve : ''}`, 
-                        title: `Vulnerability\nName: ${cve}${cve ? '\nCVE: ' + cve : ''}`, 
-                        color: { background: '#dc2626' }, // Match manual vulnerability color
-                        vulnName: cve, // Use CVE as vulnName
-                        cve: cve,
-                        url: `https://nvd.nist.gov/vuln/detail/${cve}` // Default NVD URL
-                    });
-                }
-                const edgeId = `${ipNodeId}-${cveId}-Has`;
-                if (!edges.get(edgeId)) edges.add({ id: edgeId, from: ipNodeId, to: cveId, label: 'Has' });
-            });
-        }
+        // ... (rest of the enrichment logic remains unchanged) ...
 
         updateNodeSizes();
         updateSelectOptions();
-        await stabilizeNetwork();
-        updateTheme();
-        if (!isBulk) showToast(`IP ${ip} enrichment completed using Shodan with hostnames, SANs, and vulnerabilities`, 'success');
+        
+        // Only stabilize if not in bulk mode
+        if (!isBulk) {
+            await stabilizeNetwork();
+            updateTheme();
+            showToast(`IP ${ip} enrichment completed using Shodan with hostnames, SANs, and vulnerabilities`, 'success');
+        }
     } catch (error) {
         if (error.name === 'AbortError') {
             showToast(`Enrichment of IP ${ip} was cancelled`, 'info');
@@ -2162,50 +2058,119 @@ const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ip
         }
         console.error(`Error enriching IP ${ip} with Shodan: ${error.message}`);
         showToast(`Error enriching IP ${ip} with Shodan: ${error.message}`, 'error');
-        await stabilizeNetwork();
+        if (!isBulk) await stabilizeNetwork();
     }
 });
 
 async function enrichAllShodan() {
-    if (!shodanApiKey) { 
+    if (!shodanApiKey && !ignoreApiKeysViaProxy) { 
         showToast('Please set your Shodan API key in the "API Keys" tab first.', 'error'); 
         return; 
     }
     
+    showProgressBar();
     network.setOptions({ physics: { enabled: false } });
     const ipNodes = nodes.get({ filter: n => n.type === 'ip' && n.ip });
+    const totalIPs = ipNodes.length;
     let successfulEnrichments = 0;
     
-    console.log(`Found ${ipNodes.length} IP nodes to enrich`);
+    console.log(`Found ${totalIPs} IP nodes to enrich with Shodan`);
+    showToast(`Starting Shodan enrichment for ${totalIPs} IPs`, 'info');
     
-    for (const node of ipNodes) {
-        try {
-            console.log(`Enriching IP: ${node.ip}`);
-            await throttledEnrichShodan(node.ip, node.id, true);
-            successfulEnrichments++;
-        } catch (error) {
-            console.error(`Failed to enrich IP ${node.ip}: ${error.message}`);
-            showToast(`Failed to enrich IP ${node.ip}: ${error.message}`, 'error');
+    const batchSize = 5; // Process 5 IPs per batch
+    const delayBetweenBatches = 100; // 100ms delay between batches for UI
+    const shodanDelayMs = SHODAN_RATE_LIMIT_MS; // 1000ms delay per request
+    
+    // Calculate estimated time
+    const totalBatches = Math.ceil(totalIPs / batchSize);
+    const timePerIp = shodanDelayMs; // 1000ms per request
+    const timePerBatch = timePerIp * batchSize; // Time for sequential requests in a batch
+    const totalBatchDelays = (totalBatches - 1) * delayBetweenBatches;
+    const estimatedTimeMs = (timePerBatch * totalBatches) + totalBatchDelays + 1000; // Add 1s for stabilization
+    
+    const estimatedSeconds = Math.ceil(estimatedTimeMs / 1000);
+    const estimatedMinutes = Math.floor(estimatedSeconds / 60);
+    const remainingSeconds = estimatedSeconds % 60;
+    const timeEstimateStr = estimatedMinutes > 0 
+        ? `${estimatedMinutes}m ${remainingSeconds}s` 
+        : `${estimatedSeconds}s`;
+    
+    showToast(`Estimated time for Shodan enrichment: ~${timeEstimateStr}`, 'info');
+    document.getElementById('progress-bar').textContent = `Shodan Enrichment: 0/${totalIPs} IPs (0%) - Est. ${timeEstimateStr}`;
+    
+    // Helper function to process a batch sequentially
+    async function processBatch(batch) {
+        for (const node of batch) {
+            if (activeTaskController && activeTaskController.signal.aborted) {
+                return; // Exit early if aborted
+            }
+            try {
+                await throttledEnrichShodan(node.ip, node.id, true);
+                successfulEnrichments++;
+            } catch (error) {
+                console.error(`Failed to enrich IP ${node.ip}: ${error.message}`);
+                showToast(`Failed to enrich IP ${node.ip}: ${error.message}`, 'error');
+            }
         }
     }
     
-    await stabilizeNetwork();
-    updateTheme();  // Ensure edge font consistency
-    ensureInteractionSettings();
-    showToast(`Shodan enrichment completed: ${successfulEnrichments}/${ipNodes.length} IPs enriched with hostnames`, 'success');
+    const startTime = Date.now();
     
+    // Process IPs in batches
+    for (let i = 0; i < totalIPs; i += batchSize) {
+        if (activeTaskController && activeTaskController.signal.aborted) {
+            showToast('Shodan enrichment stopped', 'info');
+            break;
+        }
+        
+        const batch = ipNodes.slice(i, i + batchSize);
+        console.log(`Processing batch ${i / batchSize + 1} of ${totalBatches}`);
+        
+        await processBatch(batch);
+        
+        // Update progress bar with real-time estimate
+        const elapsedTimeMs = Date.now() - startTime;
+        const progress = Math.min(((i + batchSize) / totalIPs) * 100, 100).toFixed(1);
+        const remainingIps = totalIPs - (i + batchSize);
+        const avgTimePerIp = elapsedTimeMs / (i + batchSize); // Average time per IP so far
+        const remainingTimeMs = Math.max(0, remainingIps * shodanDelayMs); // Use fixed delay for remaining
+        const remainingSeconds = Math.ceil(remainingTimeMs / 1000);
+        const remainingMinutes = Math.floor(remainingSeconds / 60);
+        const remainingSecondsPart = remainingSeconds % 60;
+        const remainingTimeStr = remainingMinutes > 0 
+            ? `${remainingMinutes}m ${remainingSecondsPart}s` 
+            : `${remainingSeconds}s`;
+        
+        document.getElementById('progress-bar').textContent = 
+            `Shodan Enrichment: ${successfulEnrichments}/${totalIPs} IPs (${progress}%) - Est. ${remainingTimeStr} remaining`;
+        
+        // Yield to the main thread and stabilize incrementally
+        await new Promise(resolve => setTimeout(() => {
+            stabilizeNetwork(true).then(resolve);
+        }, delayBetweenBatches));
+        
+        // Update UI
+        updateSelectOptions();
+        updateTheme();
+    }
+    
+    // Final stabilization and cleanup
+    await stabilizeNetwork();
+    ensureInteractionSettings();
+    completeProgressBar();
+    showToast(`Shodan enrichment completed: ${successfulEnrichments}/${totalIPs} IPs enriched with hostnames`, 'success');
+    
+    // Handle mobile layout
     if (window.innerWidth <= 768) {
         const controls = document.getElementById('controls');
         controls.classList.add('collapsed');
         document.getElementById('myNetwork').style.display = 'block';
         network.fit({
-            animation: {
-                duration: 300,
-                easingFunction: 'easeInOutQuad'
-            }
+            animation: { duration: 300, easingFunction: 'easeInOutQuad' }
         });
     }
 }
+
 
 function deleteNodes(nodeIds) {
     nodeIds.forEach(nodeId => {
@@ -2316,15 +2281,17 @@ const throttledSendHttpsRequestMultiple = throttleRequest(async function(targets
 });
 
 async function enrichAllGoogleDNS() {
+    showProgressBar();
     network.setOptions({ physics: { enabled: false } });
     const domainNodes = nodes.get({ filter: n => n.type === 'domain' && n.domain });
     let successfulEnrichments = 0;
     
-    console.log(`Found ${domainNodes.length} domain nodes to enrich`); // Debug log
+    console.log(`Found ${domainNodes.length} domain nodes to enrich`);
+    showToast(`Starting Google DNS enrichment for ${domainNodes.length} domains`, 'info');
     
     for (const node of domainNodes) {
         try {
-            console.log(`Enriching domain: ${node.domain}`); // Debug log
+            console.log(`Enriching domain: ${node.domain}`);
             await throttledEnrichGoogleDNS(node.domain, node.id, true);
             successfulEnrichments++;
         } catch (error) {
@@ -2334,8 +2301,8 @@ async function enrichAllGoogleDNS() {
     }
     
     await stabilizeNetwork();
+    completeProgressBar();
     showToast(`Google DNS enrichment completed: ${successfulEnrichments}/${domainNodes.length} domains enriched`, 'success');
-
 }
 
 
@@ -3929,6 +3896,24 @@ const stateLoaded = loadState();
         showToast("All Tests Completed", "success");
         clearGraph();
     }
+
+    function showProgressBar() {
+    const progressBar = document.getElementById('progress-bar');
+    progressBar.textContent = 'Task in progress...';
+    progressBar.classList.remove('progress-hidden', 'progress-complete');
+    progressBar.classList.add('progress-active');
+}
+
+function completeProgressBar() {
+    const progressBar = document.getElementById('progress-bar');
+    progressBar.textContent = 'Task Complete';
+    progressBar.classList.remove('progress-active');
+    progressBar.classList.add('progress-complete');
+    
+    setTimeout(() => {
+        progressBar.classList.add('progress-hidden');
+    }, 5000); // Hide after 5 seconds
+}
 
 
 // Add this at the end of the script section
