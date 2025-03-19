@@ -6,10 +6,145 @@
     <title>Network Graph</title>
     <style>
 
+#menu-toggle {
+    padding: 6px 12px;
+    background-color: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background-color var(--transition), transform var(--transition);
+    width: 100%; /* Match other buttons */
+    box-sizing: border-box;
+    margin: 0;
+}
+
+#controls.collapsed #menu-toggle {
+    width: 100%; /* Ensure it fits the collapsed width */
+    display: block; /* Always visible when collapsed */
+}
+
+.light-mode #menu-toggle {
+    background-color: #3b82f6; /* Ensure light mode is blue */
+}
+
+#menu-toggle:hover {
+    background-color: #2563eb; /* Darker blue for hover in light mode */
+}
+
+.dark-mode #menu-toggle:hover {
+    background-color: #3b82f6; /* Slightly darker blue for hover in dark mode */
+}
+/* Specific styling for summary button to match other buttons */
+#summary-button {
+    padding: 6px 12px;
+    background-color: #6b7280;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background-color var(--transition);
+    width: 100%; /* Makes it match the width of other buttons */
+    box-sizing: border-box; /* Ensures padding doesn't affect width */
+    margin: 0; /* Resets any unwanted margins */
+}
+
+/* Ensure consistent hover behavior */
+#summary-button:hover {
+    background-color: #4b5563;
+}
+
+/* Match dark mode styling with other buttons */
+.dark-mode #summary-button {
+    background-color: #9ca3af;
+}
+
+/* When controls are collapsed, hide summary button consistently */
+#controls.collapsed #summary-button {
+    display: none;
+}
+
+.light-mode #summary-button {
+    background-color: #6b7280;
+}
+
+.dark-mode #summary-button {
+    background-color: #9ca3af;
+}
+
+#summary-button:hover {
+    background-color: #4b5563;
+}
+
+/* Modal styles */
+#summary-modal {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: var(--shadow-light);
+    z-index: 2000;
+    max-width: 500px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.dark-mode #summary-modal {
+    background-color: #2d3748;
+    box-shadow: var(--shadow-dark);
+    color: #e2e8f0;
+}
+
+#summary-modal table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+#summary-modal th, #summary-modal td {
+    padding: 8px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.dark-mode #summary-modal th, .dark-mode #summary-modal td {
+    border-bottom: 1px solid var(--border-dark);
+}
+
+#summary-modal th {
+    background-color: #f9fafb;
+}
+
+.dark-mode #summary-modal th {
+    background-color: #374151;
+}
+
+#summary-modal .close-button {
+    float: right;
+    background: none;
+    border: none;
+    font-size: 16px;
+    cursor: pointer;
+    color: #1f2a44;
+}
+
+.dark-mode #summary-modal .close-button {
+    color: #e2e8f0;
+}
+
 /* Ensure nodes maintain consistent size regardless of label */
 #myNetwork .vis-network canvas {
     overflow: visible; /* Prevent label clipping */
 }
+
+
 
 .vis-network .vis-label {
     display: flex;
@@ -124,13 +259,15 @@
     width: 300px;
 }
 
-/* Header area for buttons */
 #controls-header {
     padding: 10px;
     display: flex;
     flex-direction: column;
-    gap: 10px; /* Space between buttons */
+    gap: 10px;
+    align-items: stretch;
 }
+
+
 
 /* Menu toggle button */
 #menu-toggle {
@@ -141,7 +278,7 @@
 
 
 /* Top buttons - no absolute positioning */
-#mode-toggle, #pause-toggle, #reset-layout {
+#mode-toggle, #pause-toggle, #reset-layout, #summary-button {
     padding: 6px 12px;
     background-color: #6b7280;
     color: white;
@@ -150,8 +287,38 @@
     font-size: 12px;
     cursor: pointer;
     transition: background-color var(--transition);
+    width: 100%; /* Full width for consistency */
+    box-sizing: border-box;
+    margin: 0; /* Prevent unwanted margins */
+}
+/* Hover states */
+#mode-toggle:hover, #pause-toggle:hover, #reset-layout:hover, #summary-button:hover {
+    background-color: #4b5563;
 }
 
+/* Dark mode states */
+.dark-mode #mode-toggle,
+.dark-mode #pause-toggle,
+.dark-mode #reset-layout,
+.dark-mode #summary-button {
+    background-color: #9ca3af;
+}
+
+/* Paused state for pause-toggle */
+#pause-toggle.paused {
+    background-color: #ef4444;
+}
+
+/* Hide all but menu-toggle when collapsed */
+#controls.collapsed #mode-toggle,
+#controls.collapsed #pause-toggle,
+#controls.collapsed #reset-layout,
+#controls.collapsed #summary-button,
+#controls.collapsed .tab-buttons,
+#controls.collapsed .tab-content,
+#controls.collapsed #footer {
+    display: none;
+}
 .light-mode #pause-toggle, .light-mode #reset-layout {
     background-color: #6b7280;
 }
@@ -554,6 +721,7 @@
                 <input type="file" id="importFile" accept=".json">
                 <button onclick="importGraph()">Import from JSON</button>
                 <button onclick="clearGraph()">Clear Graph</button>
+                <button id="summary-button" onclick="showGraphSummary()">Graph Summary</button>
             </div>
         </div>
         <div id="api-keys" class="tab-content">
@@ -674,6 +842,19 @@
 </footer>
     </div>
     <div id="myNetwork"></div>
+    <div id="summary-modal">
+        <button class="close-button" onclick="hideGraphSummary()">×</button>
+        <h3>Graph Summary</h3>
+        <table id="summary-table">
+            <thead>
+                <tr>
+                    <th>Type</th>
+                    <th>Count</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
     <div id="contextMenu" style="display: none;"></div>
     <div id="edgeContextMenu" style="display: none;"></div>
 
@@ -4315,6 +4496,92 @@ function completeProgressBar() {
     setTimeout(() => {
         progressBar.classList.add('progress-hidden');
     }, 5000); // Hide after 5 seconds
+}
+
+function showGraphSummary() {
+    // Get all nodes and count by type
+    const typeCounts = {};
+    nodes.forEach(node => {
+        typeCounts[node.type] = (typeCounts[node.type] || 0) + 1;
+    });
+    
+    // Build the table
+    const tbody = document.querySelector('#summary-table tbody');
+    tbody.innerHTML = ''; // Clear existing content
+    
+    const types = Object.keys(typeCounts).sort();
+    types.forEach(type => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${type.charAt(0).toUpperCase() + type.slice(1)}</td>
+            <td>${typeCounts[type]}</td>
+        `;
+        tbody.appendChild(row);
+    });
+    
+    // Add total row
+    const totalRow = document.createElement('tr');
+    totalRow.innerHTML = `
+        <td><strong>Total</strong></td>
+        <td><strong>${nodes.length}</strong></td>
+    `;
+    tbody.appendChild(totalRow);
+    
+    // Show the modal
+    document.getElementById('summary-modal').style.display = 'block';
+    
+    // Optional: Add an overlay to dim the background
+    if (!document.getElementById('modal-overlay')) {
+        const overlay = document.createElement('div');
+        overlay.id = 'modal-overlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1999;
+        `;
+        document.body.appendChild(overlay);
+    }
+}
+
+function hideGraphSummary() {
+    document.getElementById('summary-modal').style.display = 'none';
+    const overlay = document.getElementById('modal-overlay');
+    if (overlay) overlay.remove();
+}
+
+// Close modal when clicking outside
+document.addEventListener('click', (event) => {
+    const modal = document.getElementById('summary-modal');
+    if (modal.style.display === 'block' && !modal.contains(event.target) && event.target.id !== 'summary-button') {
+        hideGraphSummary();
+    }
+});
+
+function toggleMenu() {
+    const controls = document.getElementById('controls');
+    const menuToggle = document.getElementById('menu-toggle');
+    
+    controls.classList.toggle('collapsed');
+    
+    if (controls.classList.contains('collapsed')) {
+        menuToggle.textContent = '>'; // Points right when collapsed
+        menuToggle.style.transform = 'rotate(0deg)'; // Normal orientation
+    } else {
+        menuToggle.textContent = '<'; // Points left when expanded
+        menuToggle.style.transform = 'rotate(0deg)'; // No rotation needed, just text change
+    }
+    
+    // Adjust network view
+    network.fit({
+        animation: {
+            duration: 300,
+            easingFunction: 'easeInOutQuad'
+        }
+    });
 }
 
 
