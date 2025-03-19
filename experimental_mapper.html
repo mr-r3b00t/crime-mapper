@@ -838,7 +838,7 @@
         <!-- Suggested -->
 <footer id="footer">
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.253 experimental</p>
+    <p>© Xservus Limited - v0.254 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
@@ -921,7 +921,14 @@
     let existingCities = new Map(nodes.get({ filter: n => n.type === 'city' }).map(n => [n.city, n.id]));
     let existingOrgs = new Map(nodes.get({ filter: n => n.type === 'organization' }).map(n => [n.organization, n.id]));
     let existingCountries = new Map(nodes.get({ filter: n => n.type === 'country' }).map(n => [n.country, n.id]));
-    
+    // Map for privacy types to ensure single instance
+    let existingPrivacyTypes = new Map([
+        ['vpn', null], ['proxy', null], ['tor', null], ['relay', null], ['hosting', null]
+    ].map(([type]) => {
+        const existing = nodes.get({ filter: n => n.type === type })[0];
+        return [type, existing ? existing.id : null];
+    }));
+
     // Define privacy types consistently
     const privacyTypes = [
         { key: 'vpn', label: 'VPN', color: '#9333ea' },
@@ -946,66 +953,120 @@
                     return response.json();
                 })
                 .then(data => {
-                    const asn = data.asn?.asn || 'Unknown ASN';
-                    const city = data.city || 'Unknown City';
-                    const companyName = data.company?.name || 'Unknown Company';
-                    const country = data.country || 'Unknown Country';
-                    const privacy = data.privacy || { vpn: false, proxy: false, tor: false, relay: false, hosting: false };
+                    const ipNodeId = node.id; // Store the IP node's ID for linking
 
                     // ASN
+                    const asn = data.asn?.asn || 'Unknown ASN';
                     let asnId = existingAsns.get(asn);
                     if (!asnId) {
                         asnId = nextId++;
-                        newNodes.push({ id: asnId, type: 'asn', label: `ASN: ${asn}`, title: `ASN: ${asn}`, color: { background: '#a3e635' }, asn });
+                        newNodes.push({ 
+                            id: asnId, 
+                            type: 'asn', 
+                            label: `ASN: ${asn}`, 
+                            title: `ASN: ${asn}`, 
+                            color: { background: '#a3e635' }, 
+                            asn 
+                        });
                         existingAsns.set(asn, asnId);
                     }
-                    newEdges.push({ id: `${node.id}-${asnId}-AssignedTo`, from: node.id, to: asnId, label: 'Assigned to' });
+                    newEdges.push({ 
+                        id: `${ipNodeId}-${asnId}-AssignedTo`, 
+                        from: ipNodeId, 
+                        to: asnId, 
+                        label: 'Assigned to' 
+                    });
 
                     // City
+                    const city = data.city || 'Unknown City';
                     let cityId = existingCities.get(city);
                     if (!cityId) {
                         cityId = nextId++;
-                        newNodes.push({ id: cityId, type: 'city', label: `City: ${city}`, title: `City: ${city}`, color: { background: '#f97316' }, city });
+                        newNodes.push({ 
+                            id: cityId, 
+                            type: 'city', 
+                            label: `City: ${city}`, 
+                            title: `City: ${city}`, 
+                            color: { background: '#f97316' }, 
+                            city 
+                        });
                         existingCities.set(city, cityId);
                     }
-                    newEdges.push({ id: `${node.id}-${cityId}-LocatedIn`, from: node.id, to: cityId, label: 'Located in' });
+                    newEdges.push({ 
+                        id: `${ipNodeId}-${cityId}-LocatedIn`, 
+                        from: ipNodeId, 
+                        to: cityId, 
+                        label: 'Located in' 
+                    });
 
                     // Organization
+                    const companyName = data.company?.name || 'Unknown Company';
                     let orgId = existingOrgs.get(companyName);
                     if (!orgId) {
                         orgId = nextId++;
-                        newNodes.push({ id: orgId, type: 'organization', label: `Organization: ${companyName}`, title: `Company: ${companyName}`, color: { background: '#facc15' }, organization: companyName });
+                        newNodes.push({ 
+                            id: orgId, 
+                            type: 'organization', 
+                            label: `Organization: ${companyName}`, 
+                            title: `Company: ${companyName}`, 
+                            color: { background: '#facc15' }, 
+                            organization: companyName 
+                        });
                         existingOrgs.set(companyName, orgId);
                     }
-                    newEdges.push({ id: `${node.id}-${orgId}-BelongsTo`, from: node.id, to: orgId, label: 'Belongs to' });
+                    newEdges.push({ 
+                        id: `${ipNodeId}-${orgId}-BelongsTo`, 
+                        from: ipNodeId, 
+                        to: orgId, 
+                        label: 'Belongs to' 
+                    });
 
                     // Country
+                    const country = data.country || 'Unknown Country';
                     let countryId = existingCountries.get(country);
                     if (!countryId) {
                         countryId = nextId++;
-                        newNodes.push({ id: countryId, type: 'country', label: `Country: ${country}`, title: `Country: ${country}`, color: { background: '#34d399' }, country });
+                        newNodes.push({ 
+                            id: countryId, 
+                            type: 'country', 
+                            label: `Country: ${country}`, 
+                            title: `Country: ${country}`, 
+                            color: { background: '#34d399' }, 
+                            country 
+                        });
                         existingCountries.set(country, countryId);
                     }
-                    newEdges.push({ id: `${node.id}-${countryId}-LocatedIn`, from: node.id, to: countryId, label: 'Located in' });
+                    newEdges.push({ 
+                        id: `${ipNodeId}-${countryId}-LocatedIn`, 
+                        from: ipNodeId, 
+                        to: countryId, 
+                        label: 'Located in' 
+                    });
 
                     // Privacy Types (VPN, Proxy, Tor, Relay, Hosting)
+                    const privacy = data.privacy || { vpn: false, proxy: false, tor: false, relay: false, hosting: false };
                     privacyTypes.forEach(privacyType => {
                         if (privacy[privacyType.key]) {
-                            const existingPrivacy = nodes.get({ filter: n => n.type === privacyType.key && n.value === node.ip })[0];
-                            const privacyNodeId = existingPrivacy ? existingPrivacy.id : nextId++;
-                            if (!existingPrivacy) {
+                            let privacyNodeId = existingPrivacyTypes.get(privacyType.key);
+                            if (!privacyNodeId) {
+                                privacyNodeId = nextId++;
                                 newNodes.push({ 
                                     id: privacyNodeId, 
-                                    type: privacyType.key, 
-                                    label: `${privacyType.label}: ${node.ip}`, 
-                                    title: `${privacyType.label} for IP: ${node.ip}`, 
-                                    color: { background: privacyType.color }, 
-                                    value: node.ip 
+                                    type: privacyType.key, // Use specific type (vpn, proxy, etc.)
+                                    label: privacyType.label, // Just the type name (e.g., "VPN")
+                                    title: privacyType.label, // Same as label for simplicity
+                                    color: { background: privacyType.color }
                                 });
+                                existingPrivacyTypes.set(privacyType.key, privacyNodeId);
                             }
-                            const edgeId = `${node.id}-${privacyNodeId}-Uses`;
+                            const edgeId = `${ipNodeId}-${privacyNodeId}-Uses`;
                             if (!newEdges.some(e => e.id === edgeId) && !edges.get(edgeId)) {
-                                newEdges.push({ id: edgeId, from: node.id, to: privacyNodeId, label: 'Uses' });
+                                newEdges.push({ 
+                                    id: edgeId, 
+                                    from: ipNodeId, 
+                                    to: privacyNodeId, 
+                                    label: 'Uses' 
+                                });
                             }
                         }
                     });
@@ -2269,10 +2330,13 @@ const throttledEnrichInternetDB = throttleRequest(async function enrichInternetD
 async function enrichAllShodan() {
     // Initialize maps for deduplication
     let existingPorts = new Map(nodes.get({ filter: n => n.type === 'port' }).map(n => [`${n.portType}/${n.portNumber}`, n.id]));
-    let existingVulns = new Map(nodes.get({ filter: n => n.type === 'vulnerability' }).map(n => [n.cve, n.id]));
     let existingDomains = new Map(nodes.get({ filter: n => n.type === 'domain' }).map(n => [n.domain, n.id]));
     let existingSslHashes = new Map(nodes.get({ filter: n => n.type === 'ssl_hash' }).map(n => [n.fingerprint, n.id]));
     let existingHtmlHashes = new Map(nodes.get({ filter: n => n.type === 'html_hash' }).map(n => [n.hash, n.id]));
+    let existingOs = new Map(nodes.get({ filter: n => n.type === 'os' }).map(n => [n.os, n.id]));
+    let existingProducts = new Map(nodes.get({ filter: n => n.type === 'product' }).map(n => [n.product, n.id]));
+    let existingHttpHashes = new Map(nodes.get({ filter: n => n.type === 'http_hash' }).map(n => [n.hash, n.id]));
+    let existingTitles = new Map(nodes.get({ filter: n => n.type === 'http_title' }).map(n => [n.title, n.id]));
 
     if (!shodanApiKey && !ignoreApiKeysViaProxy) { 
         showToast('Please set your Shodan API key in the "API Keys" tab first.', 'error'); 
@@ -2281,10 +2345,11 @@ async function enrichAllShodan() {
     
     // Show progress bar at the start
     showProgressBar();
+    const progressBar = document.getElementById('progress-bar');
     network.setOptions({ physics: { enabled: false } });
     const ipNodes = nodes.get({ filter: n => n.type === 'ip' && n.ip });
     const totalIPs = ipNodes.length;
-    let successfulEnrichments = 0;
+    let processedIPsCounter = 0; // Track processed IPs
     
     console.log(`Found ${totalIPs} IP nodes to enrich with Shodan`);
     showToast(`Starting Shodan enrichment for ${totalIPs} IPs`, 'info');
@@ -2305,7 +2370,6 @@ async function enrichAllShodan() {
         : `${estimatedSeconds}s`;
     
     showToast(`Estimated time for Shodan enrichment: ~${timeEstimateStr}`, 'info');
-    const progressBar = document.getElementById('progress-bar');
     progressBar.textContent = `Shodan Enrichment: 0/${totalIPs} IPs (0%) - Est. ${timeEstimateStr}`;
     
     const newNodes = [];
@@ -2413,55 +2477,123 @@ async function enrichAllShodan() {
                     });
                 }
 
-                // Vulnerabilities - Only create if vulnerabilities exist
-                if (data.vulns && Object.keys(data.vulns).length > 0) {
-                    Object.keys(data.vulns).forEach(cve => {
-                        let cveId = existingVulns.get(cve);
-                        if (!cveId) {
-                            cveId = nextId++;
-                            newNodes.push({
-                                id: cveId,
-                                type: 'vulnerability',
-                                label: `Vulnerability: ${cve}`,
-                                title: `Vulnerability\nCVE: ${cve}`,
-                                color: { background: '#dc2626' },
-                                vulnName: cve,
-                                cve: cve,
-                                url: `https://nvd.nist.gov/vuln/detail/${cve}`
-                            });
-                            existingVulns.set(cve, cveId);
-                        }
-                        const edgeId = `${node.id}-${cveId}-Has`;
-                        if (!newEdges.some(e => e.id === edgeId) && !edges.get(edgeId)) {
-                            newEdges.push({ id: edgeId, from: node.id, to: cveId, label: 'Has' });
-                        }
-                    });
-                }
-
-                // SSL and HTML Hashes
+                // Process nested data array
                 if (data.data && data.data.length > 0) {
                     for (const banner of data.data) {
-                        if (banner.ssl && banner.ssl.cert && banner.ssl.cert.fingerprint && banner.ssl.cert.fingerprint.sha256) {
-                            const fingerprint = banner.ssl.cert.fingerprint.sha256;
-                            let sslId = existingSslHashes.get(fingerprint);
-                            if (!sslId) {
-                                sslId = nextId++;
+                        // Vulnerabilities
+                        if (banner.vulns && Object.keys(banner.vulns).length > 0) {
+                            console.log(`Vulnerabilities for ${node.ip} in banner:`, banner.vulns);
+                            Object.keys(banner.vulns).forEach(cve => {
+                                const cveId = nextId++;
                                 newNodes.push({
-                                    id: sslId,
-                                    type: 'ssl_hash',
-                                    label: `SSL Hash: ${fingerprint.substring(0, 8)}...`,
-                                    title: `SSL Certificate Fingerprint\nSHA256: ${fingerprint}`,
-                                    color: { background: '#8b5cf6' },
-                                    fingerprint: fingerprint
+                                    id: cveId,
+                                    type: 'vulnerability',
+                                    label: `Vulnerability: ${cve}`,
+                                    title: `Vulnerability\nCVE: ${cve}`,
+                                    color: { background: '#dc2626' },
+                                    vulnName: cve,
+                                    cve: cve,
+                                    url: `https://nvd.nist.gov/vuln/detail/${cve}`
                                 });
-                                existingSslHashes.set(fingerprint, sslId);
+                                const edgeId = `${node.id}-${cveId}-Has`;
+                                newEdges.push({ 
+                                    id: edgeId, 
+                                    from: node.id, 
+                                    to: cveId, 
+                                    label: 'Has' 
+                                });
+                            });
+                        }
+
+                        // Operating System
+                        if (banner.os) {
+                            let osId = existingOs.get(banner.os);
+                            if (!osId) {
+                                osId = nextId++;
+                                newNodes.push({
+                                    id: osId,
+                                    type: 'os',
+                                    label: `OS: ${banner.os}`,
+                                    title: `Operating System: ${banner.os}`,
+                                    color: { background: '#10b981' },
+                                    os: banner.os
+                                });
+                                existingOs.set(banner.os, osId);
                             }
-                            const edgeId = `${node.id}-${sslId}-Uses`;
+                            const edgeId = `${node.id}-${osId}-Runs`;
                             if (!newEdges.some(e => e.id === edgeId) && !edges.get(edgeId)) {
-                                newEdges.push({ id: edgeId, from: node.id, to: sslId, label: 'Uses' });
+                                newEdges.push({ id: edgeId, from: node.id, to: osId, label: 'Runs' });
                             }
                         }
 
+                        // Products
+                        if (banner.product) {
+                            let productId = existingProducts.get(banner.product);
+                            if (!productId) {
+                                productId = nextId++;
+                                newNodes.push({
+                                    id: productId,
+                                    type: 'product',
+                                    label: `Product: ${banner.product}`,
+                                    title: `Product: ${banner.product}`,
+                                    color: { background: '#ec4899' },
+                                    product: banner.product
+                                });
+                                existingProducts.set(banner.product, productId);
+                            }
+                            const edgeId = `${node.id}-${productId}-Uses`;
+                            if (!newEdges.some(e => e.id === edgeId) && !edges.get(edgeId)) {
+                                newEdges.push({ id: edgeId, from: node.id, to: productId, label: 'Uses' });
+                            }
+                        }
+
+                        // HTTP Hash (from HTTP headers)
+                        if (banner.http) {
+                            const httpHeaders = JSON.stringify(banner.http);
+                            const httpHash = await sha256(httpHeaders);
+                            if (httpHash) {
+                                let httpHashId = existingHttpHashes.get(httpHash);
+                                if (!httpHashId) {
+                                    httpHashId = nextId++;
+                                    newNodes.push({
+                                        id: httpHashId,
+                                        type: 'http_hash',
+                                        label: `HTTP Hash: ${httpHash.substring(0, 8)}...`,
+                                        title: `HTTP Headers Hash\nSHA256: ${httpHash}`,
+                                        color: { background: '#f97316' },
+                                        hash: httpHash
+                                    });
+                                    existingHttpHashes.set(httpHash, httpHashId);
+                                }
+                                const edgeId = `${node.id}-${httpHashId}-Serves`;
+                                if (!newEdges.some(e => e.id === edgeId) && !edges.get(edgeId)) {
+                                    newEdges.push({ id: edgeId, from: node.id, to: httpHashId, label: 'Serves' });
+                                }
+                            }
+                        }
+
+                        // HTTP Title
+                        if (banner.http && banner.http.html_title) {
+                            let titleId = existingTitles.get(banner.http.html_title);
+                            if (!titleId) {
+                                titleId = nextId++;
+                                newNodes.push({
+                                    id: titleId,
+                                    type: 'http_title',
+                                    label: `Title: ${banner.http.html_title}`,
+                                    title: `HTTP Title: ${banner.http.html_title}`,
+                                    color: { background: '#3b82f6' },
+                                    title: banner.http.html_title
+                                });
+                                existingTitles.set(banner.http.html_title, titleId);
+                            }
+                            const edgeId = `${node.id}-${titleId}-HasTitle`;
+                            if (!newEdges.some(e => e.id === edgeId) && !edges.get(edgeId)) {
+                                newEdges.push({ id: edgeId, from: node.id, to: titleId, label: 'Has Title' });
+                            }
+                        }
+
+                        // HTML Hash
                         if (banner.html && typeof banner.html === 'string' && banner.html.trim().length > 0) {
                             const htmlHash = await sha256(banner.html);
                             if (htmlHash) {
@@ -2484,96 +2616,135 @@ async function enrichAllShodan() {
                                 }
                             }
                         }
+
+                        // SSL Hash
+                        if (banner.ssl && banner.ssl.cert && banner.ssl.cert.fingerprint && banner.ssl.cert.fingerprint.sha256) {
+                            const fingerprint = banner.ssl.cert.fingerprint.sha256;
+                            let sslId = existingSslHashes.get(fingerprint);
+                            if (!sslId) {
+                                sslId = nextId++;
+                                newNodes.push({
+                                    id: sslId,
+                                    type: 'ssl_hash',
+                                    label: `SSL Hash: ${fingerprint.substring(0, 8)}...`,
+                                    title: `SSL Certificate Fingerprint\nSHA256: ${fingerprint}`,
+                                    color: { background: '#8b5cf6' },
+                                    fingerprint: fingerprint
+                                });
+                                existingSslHashes.set(fingerprint, sslId);
+                            }
+                            const edgeId = `${node.id}-${sslId}-Uses`;
+                            if (!newEdges.some(e => e.id === edgeId) && !edges.get(edgeId)) {
+                                newEdges.push({ id: edgeId, from: node.id, to: sslId, label: 'Uses' });
+                            }
+                        }
                     }
                 }
-
-                successfulEnrichments++;
             } catch (error) {
                 console.error(`Failed to enrich IP ${node.ip}: ${error.message}`);
                 showToast(`Failed to enrich IP ${node.ip}: ${error.message}`, 'error');
             }
+            processedIPsCounter++; // Increment regardless of success
             await new Promise(resolve => setTimeout(resolve, shodanDelayMs));
         }
         return true; // Indicate successful completion
     }
     
     let lastProgressUpdate = 0;
-    const progressUpdateInterval = 1000;
+    const progressUpdateInterval = 500; // Update every half second for smoother feedback
     const startTime = Date.now();
-    
-    for (let i = 0; i < totalIPs; i += batchSize) {
-        if (activeTaskController && activeTaskController.signal.aborted) {
-            progressBar.textContent = `Shodan Enrichment: Stopped at ${successfulEnrichments}/${totalIPs} IPs`;
-            progressBar.classList.remove('progress-active');
-            progressBar.classList.add('progress-complete');
-            setTimeout(() => {
-                progressBar.classList.add('progress-hidden');
-            }, 3000); // Hide after 3 seconds for stopped state
-            showToast('Shodan enrichment stopped', 'info');
-            break;
-        }
-        
-        const batch = ipNodes.slice(i, Math.min(i + batchSize, totalIPs));
-        console.log(`Processing batch ${Math.floor(i / batchSize) + 1} of ${totalBatches}, IPs ${i} to ${Math.min(i + batchSize - 1, totalIPs - 1)}`);
-        
-        const batchSuccess = await processBatch(batch);
-        
-        if (batchSuccess) {
-            if (newNodes.length > 0) {
-                nodes.add(newNodes);
-                newNodes.length = 0;
+    let isTaskComplete = false;
+
+    try {
+        for (let i = 0; i < totalIPs; i += batchSize) {
+            if (activeTaskController && activeTaskController.signal.aborted) {
+                progressBar.textContent = `Shodan Enrichment: Stopped at ${processedIPsCounter}/${totalIPs} IPs Processed`;
+                break;
             }
-            if (newEdges.length > 0) {
-                edges.add(newEdges);
-                newEdges.length = 0;
+            
+            const batch = ipNodes.slice(i, Math.min(i + batchSize, totalIPs));
+            console.log(`Processing batch ${Math.floor(i / batchSize) + 1} of ${totalBatches}, IPs ${i} to ${Math.min(i + batchSize - 1, totalIPs - 1)}`);
+            
+            const batchSuccess = await processBatch(batch);
+            
+            if (batchSuccess) {
+                if (newNodes.length > 0) {
+                    nodes.add(newNodes);
+                    newNodes.length = 0;
+                }
+                if (newEdges.length > 0) {
+                    edges.add(newEdges);
+                    newEdges.length = 0;
+                }
             }
-        }
-        
-        const currentTime = Date.now();
-        if (currentTime - lastProgressUpdate >= progressUpdateInterval || i + batchSize >= totalIPs) {
+            
+            const currentTime = Date.now();
             const processedIPs = Math.min(i + batchSize, totalIPs);
             const progress = ((processedIPs / totalIPs) * 100).toFixed(1);
-            const elapsedTimeMs = currentTime - startTime;
-            const processedTimePerIp = elapsedTimeMs / processedIPs;
-            const remainingIps = totalIPs - processedIPs;
-            const remainingTimeMs = Math.max(0, remainingIps * processedTimePerIp); // Dynamic estimate
-            const remainingSeconds = Math.ceil(remainingTimeMs / 1000);
-            const remainingMinutes = Math.floor(remainingSeconds / 60);
-            const remainingSecondsPart = remainingSeconds % 60;
-            const remainingTimeStr = remainingMinutes > 0 
-                ? `${remainingMinutes}m ${remainingSecondsPart}s` 
-                : `${remainingSeconds}s`;
             
-            progressBar.textContent = `Shodan Enrichment: ${successfulEnrichments}/${totalIPs} IPs (${progress}%) - Est. ${remainingTimeStr} remaining`;
-            lastProgressUpdate = currentTime;
-            updateSelectOptions();
+            // Update progress bar
+            if (currentTime - lastProgressUpdate >= progressUpdateInterval || processedIPs === totalIPs) {
+                const elapsedTimeMs = currentTime - startTime;
+                const timePerIp = processedIPsCounter > 0 ? elapsedTimeMs / processedIPsCounter : 0;
+                const remainingIPs = totalIPs - processedIPsCounter;
+                const remainingTimeMs = remainingIPs * timePerIp;
+                const remainingSeconds = Math.ceil(remainingTimeMs / 1000);
+                const remainingMinutes = Math.floor(remainingSeconds / 60);
+                const remainingSecondsPart = remainingSeconds % 60;
+                const remainingTimeStr = remainingMinutes > 0 
+                    ? `${remainingMinutes}m ${remainingSecondsPart}s` 
+                    : `${remainingSeconds}s`;
+                
+                progressBar.textContent = `Shodan Enrichment: ${processedIPsCounter}/${totalIPs} IPs (${progress}%) - Est. ${remainingTimeStr} remaining`;
+                lastProgressUpdate = currentTime;
+                updateSelectOptions();
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, delayBetweenBatches)); // Allow UI updates
+        }
+
+        // Mark task as complete only after all batches are processed
+        isTaskComplete = !(activeTaskController && activeTaskController.signal.aborted);
+    } finally {
+        // Final updates - ensure these complete before hiding progress bar
+        if (newNodes.length > 0) await nodes.add(newNodes);
+        if (newEdges.length > 0) await edges.add(newEdges);
+        updateNodeSizes();
+        updateSelectOptions();
+        updateTheme();
+        
+        // Wait for stabilization and ensure it’s complete before hiding
+        await stabilizeNetwork();
+        ensureInteractionSettings();
+
+        // Update progress bar based on task completion
+        if (isTaskComplete) {
+            progressBar.textContent = `Shodan Enrichment: ${processedIPsCounter}/${totalIPs} IPs (100%) - Complete`;
+            showToast(`Shodan enrichment completed: ${processedIPsCounter}/${totalIPs} IPs processed`, 'success');
+        } else {
+            progressBar.textContent = `Shodan Enrichment: Stopped at ${processedIPsCounter}/${totalIPs} IPs Processed`;
+            showToast('Shodan enrichment stopped', 'info');
         }
         
-        await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
-    }
-    
-    if (newNodes.length > 0) nodes.add(newNodes);
-    if (newEdges.length > 0) edges.add(newEdges);
-    updateNodeSizes();
-    updateSelectOptions();
-    updateTheme();
-    await stabilizeNetwork();
-    ensureInteractionSettings();
-    
-    // Ensure progress bar completes even if stopped early
-    if (!(activeTaskController && activeTaskController.signal.aborted)) {
-        completeProgressBar();
-        showToast(`Shodan enrichment completed: ${successfulEnrichments}/${totalIPs} IPs enriched`, 'success');
-    }
-    
-    if (window.innerWidth <= 768) {
-        const controls = document.getElementById('controls');
-        controls.classList.add('collapsed');
-        document.getElementById('myNetwork').style.display = 'block';
+        // Transition to complete state and hide only after all operations are fully done
+        progressBar.classList.remove('progress-active');
+        progressBar.classList.add('progress-complete');
+        
+        // Delay hiding until after all rendering is complete
+        await new Promise(resolve => setTimeout(resolve, 100)); // Small buffer for UI
+        setTimeout(() => {
+            progressBar.classList.add('progress-hidden');
+        }, 3000); // Hide after 3 seconds
         network.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
+
+        if (window.innerWidth <= 768) {
+            const controls = document.getElementById('controls');
+            controls.classList.add('collapsed');
+            document.getElementById('myNetwork').style.display = 'block';
+            network.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
+        }
     }
 }
-
 
 async function enrichAllInternetDB() {
     showProgressBar();
