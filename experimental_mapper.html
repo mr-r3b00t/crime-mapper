@@ -639,7 +639,7 @@
         <!-- Suggested -->
 <footer id="footer">
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.25 experimental</p>
+    <p>© Xservus Limited - v0.251 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
@@ -659,8 +659,9 @@
         let isPhysicsPaused = false;
         let lastRequestTime = 0;
         let activeTaskController = null;
+        let nodeLabelsVisible = true;
+        let edgeLabelsVisible = true;
         const RATE_LIMIT_MS = 500;
-
         const ipRegex = { ipv4: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/, ipv6: /^([0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}$/ };
         const domainRegex = /^(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,}$/;
         const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
@@ -738,25 +739,26 @@ function stopActiveTask() {
 
 
 
+// Update the saveState function to save label visibility
 function saveState() {
     const state = {
         nodes: nodes.get(),
         edges: edges.get(),
         nextId: nextId,
         isDarkMode: isDarkMode,
-        isPhysicsPaused: isPhysicsPaused
+        isPhysicsPaused: isPhysicsPaused,
+        nodeLabelsVisible: nodeLabelsVisible,
+        edgeLabelsVisible: edgeLabelsVisible
     };
     
     try {
         const stateString = JSON.stringify(state);
-        // Check approximate size in bytes (rough estimate)
-        if (stateString.length > 4 * 1024 * 1024) { // 4MB threshold
+        if (stateString.length > 4 * 1024 * 1024) {
             console.warn('State too large for localStorage');
             showToast('Warning: Graph too large to save automatically', 'warning');
             return false;
         }
         localStorage.setItem('networkGraphState', stateString);
-        showToast('State saved successfully', 'success'); // Added toast for successful save
         return true;
     } catch (e) {
         console.error('Error saving state:', e);
@@ -845,43 +847,35 @@ function loadState() {
     }
 
     try {
-        console.log('Loading saved state...');
         const state = JSON.parse(savedState);
-        
-        // Validate state object
         if (!state.nodes || !state.edges) {
             console.error('Invalid state format: missing nodes or edges');
             return false;
         }
 
-        // Clear existing data
         nodes.clear();
         edges.clear();
         
-        // Load nodes with error checking
         state.nodes.forEach(node => {
-            if (!node.id || !node.type) {
-                console.warn('Skipping invalid node:', node);
-                return;
-            }
+            if (!node.id || !node.type) return;
             nodes.add(node);
         });
         
-        // Load edges with error checking
         state.edges.forEach(edge => {
-            if (!edge.from || !edge.to) {
-                console.warn('Skipping invalid edge:', edge);
-                return;
-            }
+            if (!edge.from || !edge.to) return;
             edges.add(edge);
         });
         
-        // Set other state properties
         nextId = state.nextId || 1;
         isDarkMode = state.isDarkMode !== undefined ? state.isDarkMode : true;
         isPhysicsPaused = state.isPhysicsPaused || false;
+        nodeLabelsVisible = state.nodeLabelsVisible !== undefined ? state.nodeLabelsVisible : true;
+        edgeLabelsVisible = state.edgeLabelsVisible !== undefined ? state.edgeLabelsVisible : true;
         
-        // Apply UI updates
+        // Update checkbox states
+        document.getElementById('showNodeLabels').checked = nodeLabelsVisible;
+        document.getElementById('showEdgeLabels').checked = edgeLabelsVisible;
+        
         updateTheme();
         const pauseButton = document.getElementById('pause-toggle');
         pauseButton.textContent = isPhysicsPaused ? 'Resume Physics' : 'Pause Physics';
@@ -889,19 +883,11 @@ function loadState() {
         network.setOptions({ physics: { enabled: !isPhysicsPaused } });
         ensureInteractionSettings();
         
-        console.log('State loaded successfully:', {
-            nodes: nodes.length,
-            edges: edges.length,
-            nextId: nextId,
-            isDarkMode: isDarkMode,
-            isPhysicsPaused: isPhysicsPaused
-        });
-        
         return true;
     } catch (e) {
         console.error('Error loading state:', e);
         showToast('Failed to load saved state: ' + e.message, 'error');
-        localStorage.removeItem('networkGraphState'); // Clear corrupt state
+        localStorage.removeItem('networkGraphState');
         return false;
     }
 }
@@ -977,27 +963,34 @@ function loadState() {
 
         let container = document.getElementById('myNetwork');
         let data = { nodes: nodes, edges: edges };
+
         let options = {
     nodes: {
-        shape: 'dot',  // Changed from 'circle' to 'dot' for consistent sizing
-        size: 10,      // Base size for all nodes
+        shape: 'dot',
+        size: 10,
         font: { 
-            size: 12, 
-            color: '#e2e8f0', 
-            multi: true 
+            size: nodeLabelsVisible ? 12 : 0,
+            color: '#e2e8f0',
+            multi: true,
+            align: 'center',
+            vadjust: 0
         },
         scaling: {
             min: 10,
             max: 125,
-            label: { enabled: false } // Disable label-based scaling
+            label: { enabled: false }
         },
-        // Add these to prevent label influence
         fixed: {
             x: false,
             y: false
         },
         shapeProperties: {
             useBorderWithImage: false
+        },
+        chosen: {
+            label: function(values, id, selected, hovering) {
+                values.size = nodeLabelsVisible ? 12 : 0;
+            }
         },
         color: {
             hover: {
@@ -1011,18 +1004,23 @@ function loadState() {
         }
     },
     edges: { 
-        arrows: { to: { enabled: true, scaleFactor: 0.5 } }, 
+        arrows: { to: { enabled: true, scaleFactor: 0.5 } },
         font: { 
-            size: 12, 
-            color: '#e2e8f0',  // Light gray for dark mode
-            strokeWidth: 0,    // No outline
-            strokeColor: 'transparent'  // Ensure no stroke color
+            size: edgeLabelsVisible ? 12 : 0,
+            color: '#e2e8f0',
+            strokeWidth: 0,
+            strokeColor: 'transparent'
         },
         smooth: true,
         width: 1,
+        chosen: {
+            label: function(values, id, selected, hovering) {
+                values.size = edgeLabelsVisible ? 12 : 0;
+            }
+        },
         color: { 
-            color: '#94a3b8',  // Default edge color in dark mode
-            highlight: '#60a5fa'  // Highlight color
+            color: '#94a3b8',
+            highlight: '#60a5fa'
         }
     },
     physics: { 
@@ -1311,6 +1309,7 @@ function editEdgeLabel(edgeId) {
         edges.update({
             id: edgeId,
             label: newLabel.trim() === '' ? undefined : newLabel.trim()
+            
         });
         updateEdgeSelectOptions();
         stabilizeNetwork();
@@ -2517,55 +2516,43 @@ async function importIOCsFromFile() {
         }
         
         function updateTheme() {
- if (isDarkMode) {
- document.body.classList.remove('light-mode');
- document.body.classList.add('dark-mode');
- options.nodes.font = {
- size: 12,
- color: '#e2e8f0',
- multi: true,
- align: 'center',
- vadjust: 0
- };
- options.nodes.color = {
- border: '#94a3b8',
- background: '#4b5563',
- hover: { border: '#60a5fa', background: '#4b5563' },
- highlight: { border: '#60a5fa', background: '#4b5563' }
- };
- options.edges.font = {
- size: 12,
- color: '#e2e8f0',
- strokeWidth: 0,
- strokeColor: 'transparent'
- };
- options.edges.color = { color: '#94a3b8', highlight: '#60a5fa' };
- } else {
- document.body.classList.remove('dark-mode');
- document.body.classList.add('light-mode');
- options.nodes.font = {
- size: 12,
- color: '#1f2a44',
- multi: true,
- align: 'center',
- vadjust: 0
- };
- options.nodes.color = {
- border: '#6b7280',
- background: '#ffffff',
- hover: { border: '#3b82f6', background: '#e5e7eb' },
- highlight: { border: '#3b82f6', background: '#e5e7eb' }
- };
- options.edges.font = {
- size: 12,
- color: '#1f2a44',
- strokeWidth: 0,
- strokeColor: 'transparent'
- };
- options.edges.color = { color: '#6b7280', highlight: '#3b82f6' };
- }
- network.setOptions(options);
- ensureInteractionSettings();
+    if (isDarkMode) {
+        document.body.classList.remove('light-mode');
+        document.body.classList.add('dark-mode');
+        options.nodes.font = {
+            size: nodeLabelsVisible ? 12 : 0,
+            color: '#e2e8f0',
+            multi: true,
+            align: 'center',
+            vadjust: 0
+        };
+        options.edges.font = {
+            size: edgeLabelsVisible ? 12 : 0,
+            color: '#e2e8f0',
+            strokeWidth: 0,
+            strokeColor: 'transparent'
+        };
+    } else {
+        document.body.classList.remove('dark-mode');
+        document.body.classList.add('light-mode');
+        options.nodes.font = {
+            size: nodeLabelsVisible ? 12 : 0,
+            color: '#1f2a44',
+            multi: true,
+            align: 'center',
+            vadjust: 0
+        };
+        options.edges.font = {
+            size: edgeLabelsVisible ? 12 : 0,
+            color: '#1f2a44',
+            strokeWidth: 0,
+            strokeColor: 'transparent'
+        };
+    }
+    network.setOptions(options);
+    updateLabelVisibility();
+    ensureInteractionSettings();
+    network.redraw();
 }
 
 function toggleMode() { 
@@ -3219,7 +3206,13 @@ function addNode() {
             let to = document.getElementById('toNode').value; 
             let label = document.getElementById('edgeLabel').value;
             if (!from || !to || from === to) return showToast('Please select different nodes', 'error');
-            edges.add({ id: `edge_${from}_${to}_${Date.now()}`, from: parseInt(from), to: parseInt(to), label: label || undefined });
+            edges.add({ 
+        id: `edge_${from}_${to}_${Date.now()}`, 
+        from: parseInt(from), 
+        to: parseInt(to), 
+        label: label || '',
+        originalLabel: label || ''  // Add this line
+    });
             updateNodeSizes(); 
             updateEdgeSelectOptions(); 
             document.getElementById('edgeLabel').value = ''; 
@@ -3535,6 +3528,7 @@ function updateNodeSizes(affectedNodeIds = null) {
     reader.readAsText(file);
 }
 
+
 document.addEventListener('keypress', event => {
             if (event.key === 'Enter') {
                 event.preventDefault();
@@ -3549,46 +3543,141 @@ document.addEventListener('keypress', event => {
             }
         });
 
-function toggleNodeLabels() {
-    const showLabels = document.getElementById('showNodeLabels').checked;
+   
+        function toggleNodeLabels() {
+    nodeLabelsVisible = document.getElementById('showNodeLabels').checked;
+    
+    // Update each node individually while preserving original labels
+    nodes.forEach(node => {
+        // Ensure original label is stored
+        if (!node.hasOwnProperty('originalLabel')) {
+            node.originalLabel = node.label || '';
+        }
+        
+        nodes.update({
+            id: node.id,
+            label: nodeLabelsVisible ? node.originalLabel : '',  // Toggle between original and empty
+            font: {
+                size: nodeLabelsVisible ? 12 : 0,
+                color: isDarkMode ? '#e2e8f0' : '#1f2a44',
+                multi: true,
+                align: 'center',
+                vadjust: 0,
+                strokeWidth: 0
+            }
+        });
+    });
+    
+    // Update global network options
     network.setOptions({
         nodes: {
             font: {
-                size: showLabels ? 12 : 0  // Show labels with size 12 or hide by setting to 0
+                size: nodeLabelsVisible ? 12 : 0,
+                color: isDarkMode ? '#e2e8f0' : '#1f2a44',
+                multi: true,
+                align: 'center',
+                vadjust: 0,
+                strokeWidth: 0
             },
-            labelHighlightBold: showLabels
-        }
-    });
-}
-
-function toggleEdgeLabels() {
-    const showLabels = document.getElementById('showEdgeLabels').checked;
-    network.setOptions({
-        edges: {
-            font: {
-                size: showLabels ? 12 : 0  // Show labels with size 12 or hide by setting to 0
+            chosen: {
+                label: function(values, id, selected, hovering) {
+                    values.size = nodeLabelsVisible ? 12 : 0;
+                }
             }
         }
     });
+    
+    // Force a full network refresh
+    network.setData({ nodes: nodes, edges: edges });  // Reset data to force update
+    network.stabilize(100);
+    network.redraw();
+    saveStateAfterOperation();
+}
+
+  
+
+function toggleEdgeLabels() {
+    edgeLabelsVisible = document.getElementById('showEdgeLabels').checked;
+    
+    // Update each edge individually while preserving original labels
+    edges.forEach(edge => {
+        // Ensure original label is stored
+        if (!edge.hasOwnProperty('originalLabel')) {
+            edge.originalLabel = edge.label || '';
+        }
+        
+        edges.update({
+            id: edge.id,
+            label: edgeLabelsVisible ? edge.originalLabel : '',  // Toggle between original and empty
+            font: {
+                size: edgeLabelsVisible ? 12 : 0,
+                color: isDarkMode ? '#e2e8f0' : '#1f2a44',
+                strokeWidth: 0,
+                strokeColor: 'transparent',
+                align: 'middle',
+                multi: true
+            }
+        });
+    });
+    
+    // Update global network options
+    network.setOptions({
+        edges: {
+            font: {
+                size: edgeLabelsVisible ? 12 : 0,
+                color: isDarkMode ? '#e2e8f0' : '#1f2a44',
+                strokeWidth: 0,
+                strokeColor: 'transparent',
+                align: 'middle',
+                multi: true
+            },
+            chosen: {
+                label: function(values, id, selected, hovering) {
+                    values.size = edgeLabelsVisible ? 12 : 0;
+                }
+            }
+        }
+    });
+    
+    // Force a full network refresh
+    network.setData({ nodes: nodes, edges: edges });  // Reset data to force update
+    network.stabilize(100);
+    network.redraw();
+    saveStateAfterOperation();
+}
+
+function updateLabelVisibility() {
+    network.setOptions({
+        nodes: {
+            font: {
+                size: nodeLabelsVisible ? 12 : 0,
+                color: isDarkMode ? '#e2e8f0' : '#1f2a44'
+            }
+        },
+        edges: {
+            font: {
+                size: edgeLabelsVisible ? 12 : 0,
+                color: isDarkMode ? '#e2e8f0' : '#1f2a44'
+            }
+        }
+    });
+    network.redraw();
 }
 
 function toggleIsolatedNodes() {
     const hideIsolated = document.getElementById('hideIsolatedNodes').checked;
     
-    // Get all nodes and their connections
     nodes.forEach(node => {
         const connections = edges.get({
             filter: edge => edge.from === node.id || edge.to === node.id
         });
         
-        // Update node visibility based on whether it has connections
         nodes.update({
             id: node.id,
             hidden: hideIsolated && connections.length === 0
         });
     });
     
-    // Stabilize network after visibility changes
     stabilizeNetwork().then(() => {
         network.fit({
             animation: {
@@ -3600,6 +3689,13 @@ function toggleIsolatedNodes() {
     
     saveStateAfterOperation();
 }
+
+
+
+
+
+
+
 
 // Password toggle functionality
 document.querySelectorAll('.toggle-password').forEach(button => {
@@ -3819,7 +3915,6 @@ window.addEventListener('beforeunload', function() {
         console.error('Before unload save failed:', e);
     }
 });
-
 
     </script>
 </body>
