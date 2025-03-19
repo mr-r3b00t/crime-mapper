@@ -396,7 +396,11 @@
                     <option value="technology">Technology</option>
                     <option value="device">Device</option>
                     <option value="malware">Malware</option>
+                    <option value="vulnerability">Vulnerability</option>
                 </select>
+                <input type="text" id="addVulnNameInput" placeholder="Vulnerability Name" style="display: none;">
+                <input type="text" id="addVulnCVEInput" placeholder="CVE (optional)" style="display: none;">
+                <input type="text" id="addVulnUrlInput" placeholder="URL (optional)" style="display: none;">
                 <input type="text" id="addNameInput" placeholder="Name">
                 <input type="email" id="addEmailInput" placeholder="Email (optional)">
                 <input type="text" id="addIpInput" placeholder="IP Address" style="display: none;">
@@ -449,7 +453,11 @@
                     <option value="technology">Technology</option>
                     <option value="device">Device</option>
                     <option value="malware">Malware</option>
+                    <option value="vulnerability">Vulnerability</option>
                 </select>
+                <input type="text" id="editVulnNameInput" placeholder="Vulnerability Name" style="display: none;">
+                <input type="text" id="editVulnCVEInput" placeholder="CVE (optional)" style="display: none;">
+                <input type="text" id="editVulnUrlInput" placeholder="URL (optional)" style="display: none;">
                 <input type="text" id="editNameInput" placeholder="Name">
                 <input type="email" id="editEmailInput" placeholder="Email (optional)">
                 <input type="text" id="editIpInput" placeholder="IP Address" style="display: none;">
@@ -631,7 +639,7 @@
         <!-- Suggested -->
 <footer id="footer">
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.24 experimental</p>
+    <p>© Xservus Limited - v0.25 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
@@ -1778,7 +1786,7 @@ const throttledEnrichInternetDB = throttleRequest(async function enrichInternetD
         if (!response.ok) throw new Error('Failed to fetch InternetDB data');
         const data = await response.json();
 
-        // Process open ports
+        // Process open ports (unchanged)
         if (data.ports && data.ports.length > 0) {
             data.ports.forEach(port => {
                 const existingPort = nodes.get({ filter: n => n.type === 'port' && n.portNumber === port.toString() && n.portType === 'TCP' })[0];
@@ -1799,7 +1807,7 @@ const throttledEnrichInternetDB = throttleRequest(async function enrichInternetD
             });
         }
 
-        // Process hostnames
+        // Process hostnames (unchanged)
         if (data.hostnames && data.hostnames.length > 0) {
             data.hostnames.forEach(hostname => {
                 const existingDomain = nodes.get({ filter: n => n.type === 'domain' && n.domain === hostname })[0];
@@ -1819,7 +1827,7 @@ const throttledEnrichInternetDB = throttleRequest(async function enrichInternetD
             });
         }
 
-        // Process vulnerabilities (CVEs)
+        // Process vulnerabilities (CVEs) - Updated to match new definition
         if (data.cves && data.cves.length > 0) {
             data.cves.forEach(cve => {
                 const existingCVE = nodes.get({ filter: n => n.type === 'vulnerability' && n.cve === cve })[0];
@@ -1828,10 +1836,12 @@ const throttledEnrichInternetDB = throttleRequest(async function enrichInternetD
                     nodes.add({ 
                         id: cveId, 
                         type: 'vulnerability', 
-                        label: cve, 
-                        title: `Vulnerability: ${cve}`, 
-                        color: { background: '#ef4444' }, 
-                        cve: cve 
+                        label: `Vulnerability: ${cve}${cve ? '\nCVE: ' + cve : ''}`, 
+                        title: `Vulnerability\nName: ${cve}${cve ? '\nCVE: ' + cve : ''}`, 
+                        color: { background: '#dc2626' }, // Match manual vulnerability color
+                        vulnName: cve, // Use CVE as vulnName since it's the primary identifier from InternetDB
+                        cve: cve,
+                        url: `https://nvd.nist.gov/vuln/detail/${cve}` // Add NVD URL as default
                     });
                 }
                 const edgeId = `${ipNodeId}-${cveId}-Has`;
@@ -2088,7 +2098,6 @@ const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ip
                 // Process Subject Alternative Names (SANs)
                 if (sslData.ssl.cert.subject_alt_name && Array.isArray(sslData.ssl.cert.subject_alt_name)) {
                     sslData.ssl.cert.subject_alt_name.forEach(san => {
-                        // Skip if SAN is not a valid domain-like string or is just the IP
                         if (!san || san === ip || !domainRegex.test(san)) return;
 
                         const existingSanDomain = nodes.get({ filter: n => n.type === 'domain' && n.domain === san })[0];
@@ -2120,11 +2129,33 @@ const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ip
             }
         }
 
+        // Process vulnerabilities (CVEs)
+        if (data.vulns && Array.isArray(data.vulns) && data.vulns.length > 0) {
+            data.vulns.forEach(cve => {
+                const existingCVE = nodes.get({ filter: n => n.type === 'vulnerability' && n.cve === cve })[0];
+                const cveId = existingCVE ? existingCVE.id : nextId++;
+                if (!existingCVE) {
+                    nodes.add({ 
+                        id: cveId, 
+                        type: 'vulnerability', 
+                        label: `Vulnerability: ${cve}${cve ? '\nCVE: ' + cve : ''}`, 
+                        title: `Vulnerability\nName: ${cve}${cve ? '\nCVE: ' + cve : ''}`, 
+                        color: { background: '#dc2626' }, // Match manual vulnerability color
+                        vulnName: cve, // Use CVE as vulnName
+                        cve: cve,
+                        url: `https://nvd.nist.gov/vuln/detail/${cve}` // Default NVD URL
+                    });
+                }
+                const edgeId = `${ipNodeId}-${cveId}-Has`;
+                if (!edges.get(edgeId)) edges.add({ id: edgeId, from: ipNodeId, to: cveId, label: 'Has' });
+            });
+        }
+
         updateNodeSizes();
         updateSelectOptions();
         await stabilizeNetwork();
         updateTheme();
-        if (!isBulk) showToast(`IP ${ip} enrichment completed using Shodan with hostnames and SANs`, 'success');
+        if (!isBulk) showToast(`IP ${ip} enrichment completed using Shodan with hostnames, SANs, and vulnerabilities`, 'success');
     } catch (error) {
         if (error.name === 'AbortError') {
             showToast(`Enrichment of IP ${ip} was cancelled`, 'info');
@@ -2779,6 +2810,9 @@ function setHierarchicalLayout() {
 
         document.getElementById('addEntityType').addEventListener('change', function() {
             let type = this.value;
+            document.getElementById('addVulnNameInput').style.display = type === 'vulnerability' ? 'block' : 'none';
+            document.getElementById('addVulnCVEInput').style.display = type === 'vulnerability' ? 'block' : 'none';
+            document.getElementById('addVulnUrlInput').style.display = type === 'vulnerability' ? 'block' : 'none';
             document.getElementById('addNameInput').style.display = type === 'contact' ? 'block' : 'none';
             document.getElementById('addEmailInput').style.display = type === 'contact' ? 'block' : 'none';
             document.getElementById('addIpInput').style.display = type === 'ip' ? 'block' : 'none';
@@ -2807,6 +2841,23 @@ function setHierarchicalLayout() {
     };
     
     const configs = {
+        vulnerability: { 
+            fields: ['vulnName'], 
+            optionalFields: ['cve', 'url'], 
+            color: '#dc2626', // Red color for vulnerabilities
+            label: v => {
+                let label = `Vulnerability: ${v.vulnName}`;
+                if (v.cve) label += `\nCVE: ${v.cve}`;
+                if (v.url) label += `\nURL: ${v.url}`;
+                return label;
+            }, 
+            title: v => {
+                let title = `Vulnerability\nName: ${v.vulnName}`;
+                if (v.cve) title += `\nCVE: ${v.cve}`;
+                if (v.url) title += `\nURL: ${v.url}`;
+                return title;
+            }
+        },
         contact: { 
             fields: ['name'], 
             optionalFields: ['email'], 
@@ -2942,6 +2993,11 @@ function addNode() {
     
     // Collect inputs based on entity type
     const inputs = {
+        vulnerability: { 
+            vulnName: document.getElementById('addVulnNameInput').value.trim(),
+            cve: document.getElementById('addVulnCVEInput').value.trim(),
+            url: document.getElementById('addVulnUrlInput').value.trim()
+        },
         contact: { 
             name: document.getElementById('addNameInput').value.trim(),
             email: document.getElementById('addEmailInput').value.trim()
@@ -3000,6 +3056,9 @@ function addNode() {
             (type === 'technology' && n.techName === inputs[type].techName && n.techVersion === inputs[type].techVersion) ||
             (type === 'device' && n.deviceCategory === inputs[type].deviceCategory && n.deviceName === inputs[type].deviceName) ||
             (type === 'malware' && n.malwareName === inputs[type].malwareName && n.malwareType === inputs[type].malwareType)
+            (type === 'vulnerability' && n.vulnName === inputs[type].vulnName && 
+             (!inputs[type].cve || n.cve === inputs[type].cve) && 
+             (!inputs[type].url || n.url === inputs[type].url))
         )
     });
 
@@ -3042,7 +3101,11 @@ function addNode() {
                 bank: { accountNumber: document.getElementById('editAccountNumberInput').value, sortCode: document.getElementById('editSortCodeInput').value },
                 technology: { techName: document.getElementById('editTechNameInput').value, techVersion: document.getElementById('editTechVersionInput').value },
                 device: { deviceCategory: document.getElementById('editDeviceCategory').value, deviceName: document.getElementById('editDeviceNameInput').value },
-                malware: { malwareName: document.getElementById('editMalwareNameInput').value, malwareType: document.getElementById('editMalwareType').value }
+                malware: { malwareName: document.getElementById('editMalwareNameInput').value, malwareType: document.getElementById('editMalwareType').value },
+                vulnerability: {vulnName: document.getElementById('editVulnNameInput').value.trim(),
+            cve: document.getElementById('editVulnCVEInput').value.trim(),
+            url: document.getElementById('editVulnUrlInput').value.trim()
+            }
             };
             const updatedNodeData = createNodeData(type, inputs[type]);
             if (updatedNodeData) {
@@ -3103,6 +3166,11 @@ function addNode() {
                     document.getElementById('editMalwareNameInput').value = node.malwareName || '';
                     document.getElementById('editMalwareType').value = node.malwareType || 'Wiper';
                     break;
+                case 'vulnerability':
+                    document.getElementById('editVulnNameInput').value = node.vulnName || '';
+                    document.getElementById('editVulnCVEInput').value = node.cve || '';
+                    document.getElementById('editVulnUrlInput').value = node.url || '';
+                    break;
             }
             document.getElementById('editNameInput').style.display = node.type === 'contact' ? 'block' : 'none';
             document.getElementById('editEmailInput').style.display = node.type === 'contact' ? 'block' : 'none';
@@ -3120,6 +3188,9 @@ function addNode() {
             document.getElementById('editDeviceNameInput').style.display = node.type === 'device' ? 'block' : 'none';
             document.getElementById('editMalwareNameInput').style.display = node.type === 'malware' ? 'block' : 'none';
             document.getElementById('editMalwareType').style.display = node.type === 'malware' ? 'block' : 'none';
+            document.getElementById('editVulnNameInput').style.display = node.type === 'vulnerability' ? 'block' : 'none';
+            document.getElementById('editVulnCVEInput').style.display = node.type === 'vulnerability' ? 'block' : 'none';
+            document.getElementById('editVulnUrlInput').style.display = node.type === 'vulnerability' ? 'block' : 'none';
         }
 
         function clearAddInputs() {
@@ -3127,6 +3198,9 @@ function addNode() {
             document.getElementById('addDeviceCategory').value = 'Server';
             document.getElementById('addMalwareType').value = 'Wiper';
             document.getElementById('addPortType').value = 'TCP';
+            document.getElementById('addVulnNameInput').value = '';
+            document.getElementById('addVulnCVEInput').value = '';
+            document.getElementById('addVulnUrlInput').value = '';
         }
 
         function clearEditInputs() {
@@ -3134,6 +3208,9 @@ function addNode() {
             document.getElementById('editDeviceCategory').value = 'Server';
             document.getElementById('editMalwareType').value = 'Wiper';
             document.getElementById('editPortType').value = 'TCP';
+            document.getElementById('editVulnNameInput').value = '';
+            document.getElementById('editVulnCVEInput').value = '';
+            document.getElementById('editVulnUrlInput').value = '';
         }
 
         
@@ -3234,7 +3311,7 @@ function updateNodeSizes(affectedNodeIds = null) {
                     organization: node.organization, portType: node.portType, portNumber: node.portNumber, address: node.address, 
                     accountNumber: node.accountNumber, sortCode: node.sortCode, techName: node.techName, techVersion: node.techVersion, 
                     deviceCategory: node.deviceCategory, deviceName: node.deviceName, malwareName: node.malwareName, malwareType: node.malwareType, 
-                    country: node.country, asn: node.asn, city: node.city, value: node.value 
+                    country: node.country, asn: node.asn, city: node.city, value: node.value, vulnName: node.vulnName, cve: node.cve, url: node.url 
                 })), 
                 edges: edges.get().map(edge => ({ id: edge.id, from: edge.from, to: edge.to, label: edge.label })) 
             };
@@ -3396,6 +3473,15 @@ function updateNodeSizes(affectedNodeIds = null) {
                         nodeData.color.background = '#8b5cf6';
                         nodeData.fingerprint = node.fingerprint;
                         break;
+                        case 'vulnerability':
+                        if (!node.vulnName) return;
+                        nodeData.label = `Vulnerability: ${node.vulnName}${node.cve ? '\nCVE: ' + node.cve : ''}${node.url ? '\nURL: ' + node.url : ''}`;
+                        nodeData.title = `Vulnerability\nName: ${node.vulnName}${node.cve ? '\nCVE: ' + node.cve : ''}${node.url ? '\nURL: ' + node.url : ''}`;
+                        nodeData.color.background = '#dc2626';
+                        nodeData.vulnName = node.vulnName;
+                        if (node.cve) nodeData.cve = node.cve;
+                        if (node.url) nodeData.url = node.url;
+                        break;
                     default:
                         return;
                 }
@@ -3416,7 +3502,10 @@ function updateNodeSizes(affectedNodeIds = null) {
                     (nodeData.deviceCategory && nodeData.deviceName && n.deviceCategory === nodeData.deviceCategory && n.deviceName === nodeData.deviceName) ||
                     (nodeData.malwareName && nodeData.malwareType && n.malwareName === nodeData.malwareName && n.malwareType === nodeData.malwareType) ||
                     (nodeData.hash && n.hash === nodeData.hash) ||
-                    (nodeData.fingerprint && n.fingerprint === nodeData.fingerprint)
+                    (nodeData.fingerprint && n.fingerprint === nodeData.fingerprint) ||
+                    (nodeData.vulnName && n.vulnName === nodeData.vulnName && 
+                     (!nodeData.cve || n.cve === nodeData.cve) && 
+                     (!nodeData.url || n.url === nodeData.url))
                 ) }).length) {
                     nodes.add(nodeData);
                 }
