@@ -2488,7 +2488,7 @@ async function enrichAllShodan() {
         return; 
     }
     
-    showProgressBar();
+    showProgressBar(); // Show the progress bar at the start
     network.setOptions({ physics: { enabled: false } });
     const ipNodes = nodes.get({ filter: n => n.type === 'ip' && n.ip });
     const totalIPs = ipNodes.length;
@@ -2519,7 +2519,6 @@ async function enrichAllShodan() {
     const newNodes = [];
     const newEdges = [];
     let existingDomains = new Map(nodes.get({ filter: n => n.type === 'domain' }).map(n => [n.domain, n.id]));
-    // Add other node type mappings as needed based on throttledEnrichShodan
     
     async function processBatch(batch) {
         for (const node of batch) {
@@ -2535,7 +2534,7 @@ async function enrichAllShodan() {
                 if (!response.ok) throw new Error('Failed to fetch Shodan data');
                 const data = await response.json();
 
-                // Simplified example - add full logic from throttledEnrichShodan
+                // Process hostnames
                 if (data.hostnames && data.hostnames.length > 0) {
                     data.hostnames.forEach(hostname => {
                         let domainId = existingDomains.get(hostname);
@@ -2622,7 +2621,7 @@ async function enrichAllShodan() {
     updateTheme();
     await stabilizeNetwork();
     ensureInteractionSettings();
-    completeProgressBar();
+    completeProgressBar(); // Complete and hide the progress bar
     showToast(`Shodan enrichment completed: ${successfulEnrichments}/${totalIPs} IPs enriched`, 'success');
     
     if (window.innerWidth <= 768) {
@@ -2630,101 +2629,6 @@ async function enrichAllShodan() {
         controls.classList.add('collapsed');
         document.getElementById('myNetwork').style.display = 'block';
         network.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
-    }
-}
-
-function deleteNodes(nodeIds) {
-    nodeIds.forEach(nodeId => {
-        const node = nodes.get(nodeId);
-        if (node) {
-            edges.remove(edges.get({ filter: edge => edge.from === nodeId || edge.to === nodeId }));
-            nodes.remove({ id: nodeId });
-        }
-    });
-    selectedNodes.clear();
-    network.selectNodes([]);
-    updateSelectOptions();
-    updateNodeSizes();
-    stabilizeNetwork();
-    saveStateAfterOperation();
-    showToast(`${nodeIds.length} node${nodeIds.length > 1 ? 's' : ''} deleted`, 'success');
-    hideContextMenu();
-}
-
-const throttledEnrichIPMultiple = throttleRequest(async function(ipValues, nodeIds) {
-    for (let i = 0; i < ipValues.length; i++) {
-        await throttledEnrichIP(ipValues[i], nodeIds[i], true);
-    }
-    showToast(`Enriched ${ipValues.length} IPs with IPinfo`, 'success');
-});
-
-const throttledEnrichShodanMultiple = throttleRequest(async function(ipValues, nodeIds) {
-    for (let i = 0; i < ipValues.length; i++) {
-        await throttledEnrichShodan(ipValues[i], nodeIds[i], true);
-    }
-    showToast(`Enriched ${ipValues.length} IPs with Shodan (including hostnames)`, 'success');
-});
-
-const throttledEnrichInternetDBMultiple = throttleRequest(async function(ipValues, nodeIds) {
-    for (let i = 0; i < ipValues.length; i++) {
-        await throttledEnrichInternetDB(ipValues[i], nodeIds[i], true);
-    }
-    showToast(`Enriched ${ipValues.length} IPs with InternetDB`, 'success');
-});
-
-async function enrichGoogleDNS(domain, domainNodeId, isBulk = false, signal) {
-    network.setOptions({ physics: { enabled: false } });
-    try {
-        const url = constructUrl(`https://dns.google.com/resolve?name=${domain}`);
-        const response = await fetch(url, { signal });
-        if (!response.ok) throw new Error('Failed to fetch Google DNS data');
-        const data = await response.json();
-
-        if (data.Answer) {
-            data.Answer.forEach(answer => {
-                if (answer.type === 1) {
-                    const ip = answer.data;
-                    const existingIP = nodes.get({ filter: n => n.type === 'ip' && n.ip === ip })[0];
-                    const ipId = existingIP ? existingIP.id : nextId++;
-                    
-                    if (!existingIP) {
-                        nodes.add({ 
-                            id: ipId, 
-                            type: 'ip', 
-                            label: `IP: ${ip}`,
-                            title: `IP Address: ${ip}`, 
-                            color: { background: '#f87171' }, 
-                            ip: ip,
-                            size: 20
-                        });
-                    }
-                    
-                    const edgeId = `${domainNodeId}-${ipId}-ResolvesTo`;
-                    if (!edges.get(edgeId)) {
-                        edges.add({ 
-                            id: edgeId, 
-                            from: domainNodeId,
-                            to: ipId,
-                            label: 'Resolves to' 
-                        });
-                    }
-                }
-            });
-        }
-
-        updateNodeSizes();
-        if (!isBulk) {
-            await stabilizeNetwork();
-            showToast(`Domain ${domain} enrichment completed using Google DNS`, 'success');
-        }
-    } catch (error) {
-        if (error.name === 'AbortError') {
-            showToast(`Enrichment of domain ${domain} was cancelled`, 'info');
-            return;
-        }
-        console.error(`Error enriching domain ${domain} with Google DNS: ${error.message}`);
-        showToast(`Error enriching domain ${domain} with Google DNS: ${error.message}`, 'error');
-        if (!isBulk) await stabilizeNetwork();
     }
 }
 
