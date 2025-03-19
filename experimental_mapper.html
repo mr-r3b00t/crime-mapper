@@ -2521,44 +2521,68 @@ async function importIOCsFromFile() {
         document.body.classList.add('dark-mode');
         options.nodes.font = {
             size: nodeLabelsVisible ? 12 : 0,
-            color: '#e2e8f0',
+            color: '#e2e8f0',  // Light color for dark mode
             multi: true,
             align: 'center',
-            vadjust: 0
+            vadjust: 0,
+            strokeWidth: 0
         };
         options.edges.font = {
             size: edgeLabelsVisible ? 12 : 0,
-            color: '#e2e8f0',
+            color: '#e2e8f0',  // Light color for dark mode
             strokeWidth: 0,
-            strokeColor: 'transparent'
+            strokeColor: 'transparent',
+            align: 'middle',
+            multi: true
         };
     } else {
         document.body.classList.remove('dark-mode');
         document.body.classList.add('light-mode');
         options.nodes.font = {
             size: nodeLabelsVisible ? 12 : 0,
-            color: '#1f2a44',
+            color: '#1f2a44',  // Dark color for light mode
             multi: true,
             align: 'center',
-            vadjust: 0
+            vadjust: 0,
+            strokeWidth: 0
         };
         options.edges.font = {
             size: edgeLabelsVisible ? 12 : 0,
-            color: '#1f2a44',
+            color: '#1f2a44',  // Dark color for light mode
             strokeWidth: 0,
-            strokeColor: 'transparent'
+            strokeColor: 'transparent',
+            align: 'middle',
+            multi: true
         };
     }
+
+    // Update all existing nodes and edges with the new font settings
+    nodes.forEach(node => {
+        nodes.update({
+            id: node.id,
+            font: options.nodes.font
+        });
+    });
+    
+    edges.forEach(edge => {
+        edges.update({
+            id: edge.id,
+            font: options.edges.font
+        });
+    });
+
+    // Apply the options to the network and force a redraw
     network.setOptions(options);
     updateLabelVisibility();
     ensureInteractionSettings();
+    network.setData({ nodes: nodes, edges: edges });  // Force data refresh
     network.redraw();
 }
 
-function toggleMode() { 
- isDarkMode = !isDarkMode; 
- updateTheme(); 
- document.getElementById('mode-toggle').textContent = isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode';
+function toggleMode() {
+    isDarkMode = !isDarkMode;
+    updateTheme();
+    document.getElementById('mode-toggle').textContent = isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode';
 }
 
         function togglePhysics() {
