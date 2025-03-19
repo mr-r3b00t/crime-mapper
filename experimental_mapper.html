@@ -838,7 +838,7 @@
         <!-- Suggested -->
 <footer id="footer">
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.251 experimental</p>
+    <p>© Xservus Limited - v0.252 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
@@ -1634,15 +1634,18 @@ function removeEdgeDirect(edgeId) {
 }
 
 function showContextMenu(x, y, value, nodeIds, type) {
+    // Ensure nodeIds is an array
+    const nodesArray = Array.isArray(nodeIds) ? nodeIds : [nodeIds];
     const menu = document.getElementById('contextMenu');
-    const isMultiple = nodeIds.length > 1;
+    const isMultiple = nodesArray.length > 1;
     
     let menuHtml = `
-        <button onclick="deleteNodes([${nodeIds}])">Delete ${isMultiple ? 'Selected Nodes' : 'Node'}</button>
-        ${isMultiple ? '' : `<button onclick="startLinkCreation(${nodeIds[0]})">Create Link From Here</button>`}
+        <button onclick="deleteNodes([${nodesArray.map(id => `'${id}'`).join(',')}])">Delete ${isMultiple ? 'Selected Nodes' : 'Node'}</button>
+        ${isMultiple ? '' : `<button onclick="startLinkCreation('${nodesArray[0]}')">Create Link From Here</button>`}
     `;
     
-    const allSameType = nodeIds.every(id => {
+    // Check if all selected nodes are of the same type
+    const allSameType = nodesArray.every(id => {
         const node = nodes.get(id);
         return node && node.type === type;
     });
@@ -1650,18 +1653,18 @@ function showContextMenu(x, y, value, nodeIds, type) {
     if (allSameType) {
         if (type === 'ip') {
             menuHtml += `
-                <button onclick="throttledEnrichIPMultiple([${nodeIds.map(id => `'${nodes.get(id).ip}'`)}], [${nodeIds}])">Enrich via IPINFO</button>
-                <button onclick="throttledEnrichShodanMultiple([${nodeIds.map(id => `'${nodes.get(id).ip}'`)}], [${nodeIds}])">Enrich via Shodan</button>
-                <button onclick="throttledEnrichInternetDBMultiple([${nodeIds.map(id => `'${nodes.get(id).ip}'`)}], [${nodeIds}])">Enrich via InternetDB</button>
-                <button onclick="throttledSendHttpsRequestMultiple([${nodeIds.map(id => `'${nodes.get(id).ip}'`)}], 'ip', 'https')">Send HTTPS Request</button>
-                <button onclick="throttledSendHttpsRequestMultiple([${nodeIds.map(id => `'${nodes.get(id).ip}'`)}], 'ip', 'http')">Send HTTP Request</button>
+                <button onclick="throttledEnrichIPMultiple([${nodesArray.map(id => `'${nodes.get(id).ip}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via IPINFO</button>
+                <button onclick="throttledEnrichShodanMultiple([${nodesArray.map(id => `'${nodes.get(id).ip}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via Shodan</button>
+                <button onclick="throttledEnrichInternetDBMultiple([${nodesArray.map(id => `'${nodes.get(id).ip}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via InternetDB</button>
+                <button onclick="throttledSendHttpsRequestMultiple([${nodesArray.map(id => `'${nodes.get(id).ip}'`).join(',')}], 'ip', 'https')">Send HTTPS Request</button>
+                <button onclick="throttledSendHttpsRequestMultiple([${nodesArray.map(id => `'${nodes.get(id).ip}'`).join(',')}], 'ip', 'http')">Send HTTP Request</button>
             `;
         } else if (type === 'domain') {
             menuHtml += `
-                <button onclick="throttledEnrichGoogleDNSMultiple([${nodeIds.map(id => `'${nodes.get(id).domain}'`)}], [${nodeIds}])">Enrich via Google DNS</button>
-                <button onclick="throttledEnrichShodanMultiple([${nodeIds.map(id => `'${nodes.get(id).domain}'`)}], [${nodeIds}])">Enrich via Shodan</button>
-                <button onclick="throttledSendHttpsRequestMultiple([${nodeIds.map(id => `'${nodes.get(id).domain}'`)}], 'domain', 'https')">Send HTTPS Request</button>
-                <button onclick="throttledSendHttpsRequestMultiple([${nodeIds.map(id => `'${nodes.get(id).domain}'`)}], 'domain', 'http')">Send HTTP Request</button>
+                <button onclick="throttledEnrichGoogleDNSMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via Google DNS</button>
+                <button onclick="throttledEnrichShodanMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via Shodan</button>
+                <button onclick="throttledSendHttpsRequestMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], 'domain', 'https')">Send HTTPS Request</button>
+                <button onclick="throttledSendHttpsRequestMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], 'domain', 'http')">Send HTTP Request</button>
             `;
         }
     }
@@ -1675,6 +1678,95 @@ function showContextMenu(x, y, value, nodeIds, type) {
 }
 
 let linkFromNode = null;
+
+function saveState() {
+    try {
+        const state = {
+            nodes: nodes.get().map(node => ({
+                id: node.id,
+                type: node.type,
+                label: node.label,
+                title: node.title,
+                color: node.color,
+                x: node.x,
+                y: node.y,
+                size: node.size,
+                // Include all relevant node properties
+                name: node.name,
+                email: node.email,
+                ip: node.ip,
+                domain: node.domain,
+                organization: node.organization,
+                portType: node.portType,
+                portNumber: node.portNumber,
+                address: node.address,
+                accountNumber: node.accountNumber,
+                sortCode: node.sortCode,
+                techName: node.techName,
+                techVersion: node.techVersion,
+                deviceCategory: node.deviceCategory,
+                deviceName: node.deviceName,
+                malwareName: node.malwareName,
+                malwareType: node.malwareType,
+                country: node.country,
+                asn: node.asn,
+                city: node.city,
+                value: node.value,
+                vulnName: node.vulnName,
+                cve: node.cve,
+                url: node.url,
+                originalLabel: node.originalLabel // Preserve original label
+            })),
+            edges: edges.get().map(edge => ({
+                id: edge.id,
+                from: edge.from,
+                to: edge.to,
+                label: edge.label,
+                originalLabel: edge.originalLabel // Preserve original label
+            })),
+            nextId: nextId,
+            isDarkMode: isDarkMode,
+            isPhysicsPaused: isPhysicsPaused,
+            nodeLabelsVisible: nodeLabelsVisible,
+            edgeLabelsVisible: edgeLabelsVisible
+        };
+
+        localStorage.setItem('networkGraphState', JSON.stringify(state));
+        console.log('State saved successfully');
+    } catch (e) {
+        console.error('Failed to save state:', e);
+        showToast('Failed to save state: ' + e.message, 'error');
+    }
+}
+
+function deleteNodes(nodeIds) {
+    // Ensure nodeIds is an array
+    const idsToDelete = Array.isArray(nodeIds) ? nodeIds : [nodeIds];
+
+    idsToDelete.forEach(nodeId => {
+        const node = nodes.get(nodeId);
+        if (!node) {
+            showToast(`Node ${nodeId} not found`, 'error');
+            return;
+        }
+
+        // Remove all edges connected to this node
+        const connectedEdges = edges.get({
+            filter: edge => edge.from === nodeId || edge.to === nodeId
+        });
+        edges.remove(connectedEdges.map(edge => edge.id));
+
+        // Remove the node
+        nodes.remove({ id: nodeId });
+    });
+
+    // Update UI and network
+    updateSelectOptions();
+    updateNodeSizes();
+    stabilizeNetwork();
+    saveStateAfterOperation();
+    showToast(`${idsToDelete.length > 1 ? 'Nodes' : 'Node'} deleted`, 'success');
+}
 
 function startLinkCreation(nodeId) {
     linkFromNode = nodeId;
