@@ -897,11 +897,11 @@
     console.log(`Found ${totalIPs} IP nodes to enrich with IPinfo`);
     showToast(`Starting IPinfo enrichment for ${totalIPs} IPs`, 'info');
     
-    const batchSize = 50; // Higher batch size for parallelism
-    const delayBetweenBatches = 200; // 200ms (~250 QPS), adjustable
+    const batchSize = 50;
+    const delayBetweenBatches = 200;
     const totalBatches = Math.ceil(totalIPs / batchSize);
-    const assumedRequestTimeMs = 100; // Assume ~100ms per request for estimation
-    const timePerBatchMs = assumedRequestTimeMs; // Parallel requests, so batch time ≈ single request
+    const assumedRequestTimeMs = 100;
+    const timePerBatchMs = assumedRequestTimeMs;
     const totalBatchDelays = (totalBatches - 1) * delayBetweenBatches;
     const estimatedTimeMs = (timePerBatchMs * totalBatches) + totalBatchDelays + 1000;
     
@@ -915,7 +915,6 @@
     showToast(`Estimated time for IPinfo enrichment: ~${timeEstimateStr}`, 'info');
     document.getElementById('progress-bar').textContent = `IPinfo Enrichment: 0/${totalIPs} IPs (0%) - Est. ${timeEstimateStr}`;
     
-    // Batch updates
     const newNodes = [];
     const newEdges = [];
     let existingAsns = new Map(nodes.get({ filter: n => n.type === 'asn' }).map(n => [n.asn, n.id]));
@@ -923,6 +922,15 @@
     let existingOrgs = new Map(nodes.get({ filter: n => n.type === 'organization' }).map(n => [n.organization, n.id]));
     let existingCountries = new Map(nodes.get({ filter: n => n.type === 'country' }).map(n => [n.country, n.id]));
     
+    // Define privacy types consistently
+    const privacyTypes = [
+        { key: 'vpn', label: 'VPN', color: '#9333ea' },
+        { key: 'proxy', label: 'Proxy', color: '#f43f5e' },
+        { key: 'tor', label: 'Tor', color: '#64748b' },
+        { key: 'relay', label: 'Relay', color: '#eab308' },
+        { key: 'hosting', label: 'Hosting', color: '#14b8a6' }
+    ];
+
     async function processBatch(batch) {
         const promises = batch.map(node => {
             if (activeTaskController && activeTaskController.signal.aborted) {
@@ -980,13 +988,27 @@
                     }
                     newEdges.push({ id: `${node.id}-${countryId}-LocatedIn`, from: node.id, to: countryId, label: 'Located in' });
 
-                    // Privacy (simplified example)
-                    if (privacy.vpn) {
-                        const vpnId = nextId++;
-                        newNodes.push({ id: vpnId, type: 'vpn', label: `VPN: ${node.ip}`, title: `VPN for IP: ${node.ip}`, color: { background: '#9333ea' }, value: node.ip });
-                        newEdges.push({ id: `${node.id}-${vpnId}-Uses`, from: node.id, to: vpnId, label: 'Uses' });
-                    }
-                    // Add other privacy types as needed
+                    // Privacy Types (VPN, Proxy, Tor, Relay, Hosting)
+                    privacyTypes.forEach(privacyType => {
+                        if (privacy[privacyType.key]) {
+                            const existingPrivacy = nodes.get({ filter: n => n.type === privacyType.key && n.value === node.ip })[0];
+                            const privacyNodeId = existingPrivacy ? existingPrivacy.id : nextId++;
+                            if (!existingPrivacy) {
+                                newNodes.push({ 
+                                    id: privacyNodeId, 
+                                    type: privacyType.key, 
+                                    label: `${privacyType.label}: ${node.ip}`, 
+                                    title: `${privacyType.label} for IP: ${node.ip}`, 
+                                    color: { background: privacyType.color }, 
+                                    value: node.ip 
+                                });
+                            }
+                            const edgeId = `${node.id}-${privacyNodeId}-Uses`;
+                            if (!newEdges.some(e => e.id === edgeId) && !edges.get(edgeId)) {
+                                newEdges.push({ id: edgeId, from: node.id, to: privacyNodeId, label: 'Uses' });
+                            }
+                        }
+                    });
 
                     successfulEnrichments++;
                 })
@@ -1000,8 +1022,7 @@
     }
     
     let lastProgressUpdate = 0;
-    const progressUpdateInterval = 1000; // Update UI every 1s
-    
+    const progressUpdateInterval = 1000;
     const startTime = Date.now();
     
     for (let i = 0; i < totalIPs; i += batchSize) {
@@ -1029,7 +1050,7 @@
             const processedIPs = Math.min(i + batchSize, totalIPs);
             const progress = ((processedIPs / totalIPs) * 100).toFixed(1);
             const remainingIPs = totalIPs - processedIPs;
-            const remainingTimeMs = Math.max(0, remainingIPs * assumedRequestTimeMs); // Rough estimate
+            const remainingTimeMs = Math.max(0, remainingIPs * assumedRequestTimeMs);
             const remainingSeconds = Math.ceil(remainingTimeMs / 1000);
             const remainingMinutes = Math.floor(remainingSeconds / 60);
             const remainingSecondsPart = remainingSeconds % 60;
@@ -2392,7 +2413,7 @@ async function enrichAllShodan() {
                     });
                 }
 
-                // Vulnerabilities
+                // Vulnerabilities - Only create if vulnerabilities exist
                 if (data.vulns && Object.keys(data.vulns).length > 0) {
                     Object.keys(data.vulns).forEach(cve => {
                         let cveId = existingVulns.get(cve);
