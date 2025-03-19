@@ -4580,6 +4580,163 @@ function toggleMenu() {
     });
 }
 
+const throttledEnrichGoogleDNS = throttleRequest(async function enrichGoogleDNS(domain, domainNodeId, isBulk = false, signal) {
+    network.setOptions({ physics: { enabled: false } });
+    try {
+        const url = constructUrl(`https://dns.google.com/resolve?name=${domain}&type=A`);
+        const response = await fetch(url, { signal });
+        if (!response.ok) throw new Error('Failed to fetch Google DNS data');
+        const data = await response.json();
+
+        if (data.Answer) {
+            data.Answer.forEach(answer => {
+                if (answer.type === 1) { // Type A record (IPv4)
+                    const ip = answer.data;
+                    const existingIP = nodes.get({ filter: n => n.type === 'ip' && n.ip === ip })[0];
+                    const ipId = existingIP ? existingIP.id : nextId++;
+                    if (!existingIP) {
+                        nodes.add({
+                            id: ipId,
+                            type: 'ip',
+                            label: `IP: ${ip}`,
+                            title: `IP Address: ${ip}`,
+                            color: { background: '#f87171' },
+                            ip: ip,
+                            size: 20
+                        });
+                    }
+                    const edgeId = `${domainNodeId}-${ipId}-ResolvesTo`;
+                    if (!edges.get(edgeId)) {
+                        edges.add({
+                            id: edgeId,
+                            from: domainNodeId,
+                            to: ipId,
+                            label: 'Resolves to'
+                        });
+                    }
+                }
+            });
+        }
+
+        updateNodeSizes();
+        updateSelectOptions();
+        await stabilizeNetwork();
+        if (!isBulk) showToast(`Domain ${domain} enrichment completed using Google DNS`, 'success');
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            showToast(`Enrichment of domain ${domain} was cancelled`, 'info');
+            return;
+        }
+        console.error(`Error enriching domain ${domain} with Google DNS: ${error.message}`);
+        showToast(`Error enriching domain ${domain}: ${error.message}`, 'error');
+        await stabilizeNetwork();
+    }
+}, RATE_LIMIT_MS); // Use the default rate limit (500ms)
+
+
+const throttledEnrichGoogleDNSMultiple = throttleRequest(async function enrichGoogleDNSMultiple(domains, nodeIds) {
+    if (!Array.isArray(domains) || !Array.isArray(nodeIds) || domains.length !== nodeIds.length) {
+        showToast('Invalid input for multiple domain enrichment', 'error');
+        return;
+    }
+
+    for (let i = 0; i < domains.length; i++) {
+        if (activeTaskController && activeTaskController.signal.aborted) {
+            showToast('Google DNS enrichment stopped', 'info');
+            break;
+        }
+        await throttledEnrichGoogleDNS(domains[i], nodeIds[i], true); // isBulk = true
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    showToast(`Enriched ${domains.length} domains with Google DNS`, 'success');
+}, RATE_LIMIT_MS);
+
+const throttledEnrichIPMultiple = throttleRequest(async function enrichIPMultiple(ips, nodeIds) {
+    if (!Array.isArray(ips) || !Array.isArray(nodeIds) || ips.length !== nodeIds.length) {
+        showToast('Invalid input for multiple IP enrichment', 'error');
+        return;
+    }
+
+    if (!ipinfoApiKey && !ignoreApiKeysViaProxy) {
+        showToast('Please set your IPinfo API key in the "API Keys" tab first.', 'error');
+        return;
+    }
+
+    for (let i = 0; i < ips.length; i++) {
+        if (activeTaskController && activeTaskController.signal.aborted) {
+            showToast('IPinfo enrichment stopped', 'info');
+            break;
+        }
+        await throttledEnrichIP(ips[i], nodeIds[i], true); // isBulk = true
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    showToast(`Enriched ${ips.length} IPs with IPinfo`, 'success');
+}, RATE_LIMIT_MS);
+
+const throttledEnrichShodanMultiple = throttleRequest(async function enrichShodanMultiple(targets, nodeIds) {
+    if (!Array.isArray(targets) || !Array.isArray(nodeIds) || targets.length !== nodeIds.length) {
+        showToast('Invalid input for multiple Shodan enrichment', 'error');
+        return;
+    }
+
+    if (!shodanApiKey && !ignoreApiKeysViaProxy) {
+        showToast('Please set your Shodan API key in the "API Keys" tab first.', 'error');
+        return;
+    }
+
+    for (let i = 0; i < targets.length; i++) {
+        if (activeTaskController && activeTaskController.signal.aborted) {
+            showToast('Shodan enrichment stopped', 'info');
+            break;
+        }
+        await throttledEnrichShodan(targets[i], nodeIds[i], true); // isBulk = true
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    showToast(`Enriched ${targets.length} targets with Shodan`, 'success');
+}, SHODAN_RATE_LIMIT_MS); // Use Shodan-specific rate limit (1000ms)
+
+const throttledEnrichInternetDBMultiple = throttleRequest(async function enrichInternetDBMultiple(ips, nodeIds) {
+    if (!Array.isArray(ips) || !Array.isArray(nodeIds) || ips.length !== nodeIds.length) {
+        showToast('Invalid input for multiple InternetDB enrichment', 'error');
+        return;
+    }
+
+    for (let i = 0; i < ips.length; i++) {
+        if (activeTaskController && activeTaskController.signal.aborted) {
+            showToast('InternetDB enrichment stopped', 'info');
+            break;
+        }
+        await throttledEnrichInternetDB(ips[i], nodeIds[i], true); // isBulk = true
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    showToast(`Enriched ${ips.length} IPs with InternetDB`, 'success');
+}, RATE_LIMIT_MS);
+
+
+function stopActiveTask() {
+    if (activeTaskController) {
+        activeTaskController.abort();
+        activeTaskController = null;
+        document.getElementById('stop-task').disabled = true;
+        showToast('Active task stopped', 'info');
+        network.setOptions({ physics: { enabled: !isPhysicsPaused } });
+        stabilizeNetwork();
+    } else {
+        showToast('No active task to stop', 'info');
+    }
+}
 
 // Add this at the end of the script section
 window.addEventListener('beforeunload', function() {
