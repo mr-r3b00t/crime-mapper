@@ -844,7 +844,7 @@
         <!-- Suggested -->
 <footer id="footer">
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.257 experimental</p>
+    <p>© Xservus Limited - v0.258 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
@@ -3239,6 +3239,7 @@ async function enrichAllInternetDB() {
     }
 }
 
+
 const throttledEnrichIP = throttleRequest(async function enrichIP(ip, ipNodeId, isBulk = false, signal) {
     if (!ipinfoApiKey && !ignoreApiKeysViaProxy) { 
         showToast('Please set your IPinfo API key in the "API Keys" tab first.', 'error'); 
@@ -3253,37 +3254,27 @@ const throttledEnrichIP = throttleRequest(async function enrichIP(ip, ipNodeId, 
         const response = await fetch(url, { signal });
         if (!response.ok) throw new Error('Failed to fetch IP info');
         const data = await response.json();
+        
         const asn = data.asn?.asn || 'Unknown ASN';
         const city = data.city || 'Unknown City';
         const companyName = data.company?.name || 'Unknown Company';
         const country = data.country || 'Unknown Country';
         const privacy = data.privacy || { vpn: false, proxy: false, tor: false, relay: false, hosting: false };
 
-        // Define the helper function with correct parameters
-        function linkOrCreateNode(type, key, value, labelType, title, color, edgeLabel) {
-            const existingNode = nodes.get({ filter: n => n.type === type && n[key] === value })[0];
-            const targetId = existingNode ? existingNode.id : nextId++;
-            if (!existingNode) {
-                nodes.add({ 
-                    id: targetId, 
-                    type: type, 
-                    label: `${labelType}: ${value}`, // Use labelType for "Type: value" format
-                    title: title, 
-                    color: { background: color }, 
-                    [key]: value 
-                });
-            }
-            const edgeId = `${ipNodeId}-${targetId}-${edgeLabel}`;
-            if (!edges.get(edgeId)) {
-                edges.add({ id: edgeId, from: ipNodeId, to: targetId, label: edgeLabel });
-            }
-        }
-
-        // Use the function with correct type labels
-        linkOrCreateNode('asn', 'asn', asn, 'ASN', `ASN: ${asn}`, '#a3e635', 'Assigned to');
-        linkOrCreateNode('city', 'city', city, 'City', `City: ${city}`, '#f97316', 'Located in');
-        linkOrCreateNode('organization', 'organization', companyName, 'Organization', `Company: ${companyName}`, '#facc15', 'Belongs to');
-        linkOrCreateNode('country', 'country', country, 'Country', `Country: ${country}`, '#34d399', 'Located in');
+        const newNodes = [];
+        const newEdges = [];
+        
+        // Pre-collect existing nodes for deduplication
+        let existingAsns = new Map(nodes.get({ filter: n => n.type === 'asn' }).map(n => [n.asn, n.id]));
+        let existingCities = new Map(nodes.get({ filter: n => n.type === 'city' }).map(n => [n.city, n.id]));
+        let existingOrgs = new Map(nodes.get({ filter: n => n.type === 'organization' }).map(n => [n.organization, n.id]));
+        let existingCountries = new Map(nodes.get({ filter: n => n.type === 'country' }).map(n => [n.country, n.id]));
+        let existingPrivacyTypes = new Map([
+            ['vpn', null], ['proxy', null], ['tor', null], ['relay', null], ['hosting', null]
+        ].map(([type]) => {
+            const existing = nodes.get({ filter: n => n.type === type })[0];
+            return [type, existing ? existing.id : null];
+        }));
 
         const privacyTypes = [
             { key: 'vpn', label: 'VPN', color: '#9333ea' },
@@ -3292,24 +3283,96 @@ const throttledEnrichIP = throttleRequest(async function enrichIP(ip, ipNodeId, 
             { key: 'relay', label: 'Relay', color: '#eab308' },
             { key: 'hosting', label: 'Hosting', color: '#14b8a6' }
         ];
+
+        // ASN
+        let asnId = existingAsns.get(asn);
+        if (!asnId) {
+            asnId = nextId++;
+            newNodes.push({ 
+                id: asnId, 
+                type: 'asn', 
+                label: `ASN: ${asn}`, 
+                title: `ASN: ${asn}`, 
+                color: { background: '#a3e635' }, 
+                asn 
+            });
+            existingAsns.set(asn, asnId);
+        }
+        newEdges.push({ id: `${ipNodeId}-${asnId}-AssignedTo`, from: ipNodeId, to: asnId, label: 'Assigned to' });
+
+        // City
+        let cityId = existingCities.get(city);
+        if (!cityId) {
+            cityId = nextId++;
+            newNodes.push({ 
+                id: cityId, 
+                type: 'city', 
+                label: `City: ${city}`, 
+                title: `City: ${city}`, 
+                color: { background: '#f97316' }, 
+                city 
+            });
+            existingCities.set(city, cityId);
+        }
+        newEdges.push({ id: `${ipNodeId}-${cityId}-LocatedIn`, from: ipNodeId, to: cityId, label: 'Located in' });
+
+        // Organization
+        let orgId = existingOrgs.get(companyName);
+        if (!orgId) {
+            orgId = nextId++;
+            newNodes.push({ 
+                id: orgId, 
+                type: 'organization', 
+                label: `Organization: ${companyName}`, 
+                title: `Company: ${companyName}`, 
+                color: { background: '#facc15' }, 
+                organization: companyName 
+            });
+            existingOrgs.set(companyName, orgId);
+        }
+        newEdges.push({ id: `${ipNodeId}-${orgId}-BelongsTo`, from: ipNodeId, to: orgId, label: 'Belongs to' });
+
+        // Country
+        let countryId = existingCountries.get(country);
+        if (!countryId) {
+            countryId = nextId++;
+            newNodes.push({ 
+                id: countryId, 
+                type: 'country', 
+                label: `Country: ${country}`, 
+                title: `Country: ${country}`, 
+                color: { background: '#34d399' }, 
+                country 
+            });
+            existingCountries.set(country, countryId);
+        }
+        newEdges.push({ id: `${ipNodeId}-${countryId}-LocatedIn`, from: ipNodeId, to: countryId, label: 'Located in' });
+
+        // Privacy Types
         privacyTypes.forEach(privacyType => {
             if (privacy[privacyType.key]) {
-                const existingPrivacy = nodes.get({ filter: n => n.type === privacyType.key })[0];
-                const privacyNodeId = existingPrivacy ? existingPrivacy.id : nextId++;
-                if (!existingPrivacy) {
-                    nodes.add({ 
+                let privacyNodeId = existingPrivacyTypes.get(privacyType.key);
+                if (!privacyNodeId) {
+                    privacyNodeId = nextId++;
+                    newNodes.push({ 
                         id: privacyNodeId, 
                         type: privacyType.key, 
-                        label: `${privacyType.label}: ${ip}`, 
-                        title: `${privacyType.label} for IP: ${ip}`, 
-                        color: { background: privacyType.color },
-                        value: ip 
+                        label: privacyType.label, 
+                        title: privacyType.label, 
+                        color: { background: privacyType.color }
                     });
+                    existingPrivacyTypes.set(privacyType.key, privacyNodeId);
                 }
                 const edgeId = `${ipNodeId}-${privacyNodeId}-Uses`;
-                if (!edges.get(edgeId)) edges.add({ id: edgeId, from: ipNodeId, to: privacyNodeId, label: 'Uses' });
+                if (!edges.get(edgeId) && !newEdges.some(e => e.id === edgeId)) {
+                    newEdges.push({ id: edgeId, from: ipNodeId, to: privacyNodeId, label: 'Uses' });
+                }
             }
         });
+
+        // Batch update
+        if (newNodes.length > 0) nodes.add(newNodes);
+        if (newEdges.length > 0) edges.add(newEdges);
 
         updateNodeSizes();
         updateSelectOptions();
@@ -3324,7 +3387,7 @@ const throttledEnrichIP = throttleRequest(async function enrichIP(ip, ipNodeId, 
         showToast(`Error enriching IP ${ip}: ${error.message}`, 'error');
         await stabilizeNetwork();
     }
-});
+}, RATE_LIMIT_MS);
 
 const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ipNodeId, isBulk = false, signal) {
     if (!shodanApiKey && !ignoreApiKeysViaProxy) { 
