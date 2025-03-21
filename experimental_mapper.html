@@ -813,6 +813,12 @@
                     Hide Nodes Without Links
                 </label>
             </div>
+            <div class="input-group">
+                <h3>Node Size Layouts</h3>
+                <button onclick="setNodeSizeLayout('incoming')">Size by Incoming Links</button>
+                <button onclick="setNodeSizeLayout('outgoing')">Size by Outgoing Links</button>
+                <button onclick="setNodeSizeLayout('both')">Size by All Links</button>
+            </div>
         </div>
          <!-- Buy Me a Coffee Button -->
          <div style="text-align: center; padding: 10px;">
@@ -1145,6 +1151,55 @@
     }
 }
 
+
+function setNodeSizeLayout(mode) {
+    // Disable physics to prevent layout interference
+    network.setOptions({ physics: { enabled: false } });
+
+    // Calculate connections for each node
+    nodes.forEach(node => {
+        const incomingEdges = edges.get({ filter: edge => edge.to === node.id }).length;
+        const outgoingEdges = edges.get({ filter: edge => edge.from === node.id }).length;
+        let newSize;
+
+        switch (mode) {
+            case 'incoming':
+                newSize = Math.min(10 + incomingEdges * 5, 120); // Min 10, max 120, 5px per incoming link
+                break;
+            case 'outgoing':
+                newSize = Math.min(10 + outgoingEdges * 5, 120); // Min 10, max 120, 5px per outgoing link
+                break;
+            case 'both':
+                newSize = Math.min(10 + (incomingEdges + outgoingEdges) * 5, 120); // Min 10, max 120, 5px per link
+                break;
+            default:
+                console.warn('Invalid node size layout mode:', mode);
+                return;
+        }
+
+        // Update node size
+        nodes.update({
+            id: node.id,
+            size: newSize,
+            widthConstraint: false, // Ensure no constraints interfere
+            heightConstraint: false
+        });
+    });
+
+    // Stabilize and fit the network
+    stabilizeNetwork().then(() => {
+        network.fit({
+            animation: {
+                duration: 500,
+                easingFunction: 'easeInOutQuad'
+            }
+        });
+        showToast(`Node sizes adjusted based on ${mode} links`, 'success');
+    });
+
+    // Save the state after adjustment
+    saveStateAfterOperation();
+}
 
 
 // Function to trigger save after key operations
