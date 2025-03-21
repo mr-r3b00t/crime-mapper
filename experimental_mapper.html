@@ -844,7 +844,7 @@
         <!-- Suggested -->
 <footer id="footer">
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.255 experimental</p>
+    <p>© Xservus Limited - v0.256 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
@@ -2423,13 +2423,24 @@ const throttledEnrichInternetDB = throttleRequest(async function enrichInternetD
         if (!response.ok) throw new Error('Failed to fetch InternetDB data');
         const data = await response.json();
 
-        // Process open ports (unchanged)
+        // Deduplication maps
+        const existingPorts = new Map(nodes.get({ filter: n => n.type === 'port' }).map(n => [`${n.portType}/${n.portNumber}`, n.id]));
+        const existingDomains = new Map(nodes.get({ filter: n => n.type === 'domain' }).map(n => [n.domain, n.id]));
+        const existingVulns = new Map(nodes.get({ filter: n => n.type === 'vulnerability' }).map(n => [n.cve, n.id]));
+        const existingTags = new Map(nodes.get({ filter: n => n.type === 'tag' }).map(n => [n.tag, n.id]));
+        const existingCPEs = new Map(nodes.get({ filter: n => n.type === 'cpe' }).map(n => [n.cpe, n.id]));
+
+        const newNodes = [];
+        const newEdges = [];
+
+        // Ports (existing logic with deduplication)
         if (data.ports && data.ports.length > 0) {
             data.ports.forEach(port => {
-                const existingPort = nodes.get({ filter: n => n.type === 'port' && n.portNumber === port.toString() && n.portType === 'TCP' })[0];
-                const portId = existingPort ? existingPort.id : nextId++;
-                if (!existingPort) {
-                    nodes.add({ 
+                const portKey = `TCP/${port}`;
+                let portId = existingPorts.get(portKey);
+                if (!portId) {
+                    portId = nextId++;
+                    newNodes.push({ 
                         id: portId, 
                         type: 'port', 
                         label: `TCP/${port}`, 
@@ -2438,19 +2449,22 @@ const throttledEnrichInternetDB = throttleRequest(async function enrichInternetD
                         portType: 'TCP', 
                         portNumber: port.toString() 
                     });
+                    existingPorts.set(portKey, portId);
                 }
                 const edgeId = `${ipNodeId}-${portId}-Exposes`;
-                if (!edges.get(edgeId)) edges.add({ id: edgeId, from: ipNodeId, to: portId, label: 'Exposes' });
+                if (!edges.get(edgeId) && !newEdges.some(e => e.id === edgeId)) {
+                    newEdges.push({ id: edgeId, from: ipNodeId, to: portId, label: 'Exposes' });
+                }
             });
         }
 
-        // Process hostnames (unchanged)
+        // Hostnames (existing logic with deduplication)
         if (data.hostnames && data.hostnames.length > 0) {
             data.hostnames.forEach(hostname => {
-                const existingDomain = nodes.get({ filter: n => n.type === 'domain' && n.domain === hostname })[0];
-                const domainId = existingDomain ? existingDomain.id : nextId++;
-                if (!existingDomain) {
-                    nodes.add({ 
+                let domainId = existingDomains.get(hostname);
+                if (!domainId) {
+                    domainId = nextId++;
+                    newNodes.push({ 
                         id: domainId, 
                         type: 'domain', 
                         label: hostname, 
@@ -2458,33 +2472,89 @@ const throttledEnrichInternetDB = throttleRequest(async function enrichInternetD
                         color: { background: '#60a5fa' }, 
                         domain: hostname 
                     });
+                    existingDomains.set(hostname, domainId);
                 }
                 const edgeId = `${ipNodeId}-${domainId}-ResolvesTo`;
-                if (!edges.get(edgeId)) edges.add({ id: edgeId, from: ipNodeId, to: domainId, label: 'Resolves to' });
+                if (!edges.get(edgeId) && !newEdges.some(e => e.id === edgeId)) {
+                    newEdges.push({ id: edgeId, from: ipNodeId, to: domainId, label: 'Resolves to' });
+                }
             });
         }
 
-        // Process vulnerabilities (CVEs) - Updated to match new definition
+        // Vulnerabilities (existing logic with deduplication)
         if (data.cves && data.cves.length > 0) {
             data.cves.forEach(cve => {
-                const existingCVE = nodes.get({ filter: n => n.type === 'vulnerability' && n.cve === cve })[0];
-                const cveId = existingCVE ? existingCVE.id : nextId++;
-                if (!existingCVE) {
-                    nodes.add({ 
+                let cveId = existingVulns.get(cve);
+                if (!cveId) {
+                    cveId = nextId++;
+                    newNodes.push({ 
                         id: cveId, 
                         type: 'vulnerability', 
-                        label: `Vulnerability: ${cve}${cve ? '\nCVE: ' + cve : ''}`, 
-                        title: `Vulnerability\nName: ${cve}${cve ? '\nCVE: ' + cve : ''}`, 
-                        color: { background: '#dc2626' }, // Match manual vulnerability color
-                        vulnName: cve, // Use CVE as vulnName since it's the primary identifier from InternetDB
+                        label: `Vulnerability: ${cve}`, 
+                        title: `Vulnerability\nName: ${cve}\nCVE: ${cve}`, 
+                        color: { background: '#dc2626' }, 
+                        vulnName: cve, 
                         cve: cve,
-                        url: `https://nvd.nist.gov/vuln/detail/${cve}` // Add NVD URL as default
+                        url: `https://nvd.nist.gov/vuln/detail/${cve}`
                     });
+                    existingVulns.set(cve, cveId);
                 }
                 const edgeId = `${ipNodeId}-${cveId}-Has`;
-                if (!edges.get(edgeId)) edges.add({ id: edgeId, from: ipNodeId, to: cveId, label: 'Has' });
+                if (!edges.get(edgeId) && !newEdges.some(e => e.id === edgeId)) {
+                    newEdges.push({ id: edgeId, from: ipNodeId, to: cveId, label: 'Has' });
+                }
             });
         }
+
+        // Tags (new)
+        if (data.tags && data.tags.length > 0) {
+            data.tags.forEach(tag => {
+                let tagId = existingTags.get(tag);
+                if (!tagId) {
+                    tagId = nextId++;
+                    newNodes.push({
+                        id: tagId,
+                        type: 'tag',
+                        label: `Tag: ${tag}`,
+                        title: `Tag: ${tag}`,
+                        color: { background: '#6d28d9' },
+                        tag: tag
+                    });
+                    existingTags.set(tag, tagId);
+                }
+                const edgeId = `${ipNodeId}-${tagId}-Tagged`;
+                if (!edges.get(edgeId) && !newEdges.some(e => e.id === edgeId)) {
+                    newEdges.push({ id: edgeId, from: ipNodeId, to: tagId, label: 'Tagged' });
+                }
+            });
+        }
+
+        // CPEs (new)
+        if (data.cpes && data.cpes.length > 0) {
+            data.cpes.forEach(cpe => {
+                let cpeId = existingCPEs.get(cpe);
+                if (!cpeId) {
+                    cpeId = nextId++;
+                    newNodes.push({
+                        id: cpeId,
+                        type: 'cpe',
+                        label: `CPE: ${cpe.split(':')[3] || cpe}`,
+                        title: `CPE: ${cpe}`,
+                        color: { background: '#0d9488' },
+                        cpe: cpe
+                    });
+                    existingCPEs.set(cpe, cpeId);
+                }
+                const edgeId = `${ipNodeId}-${cpeId}-Runs`;
+                if (!edges.get(edgeId) && !newEdges.some(e => e.id === edgeId)) {
+                    newEdges.push({ id: edgeId, from: ipNodeId, to: cpeId, label: 'Runs' });
+                }
+            });
+        }
+
+        // Batch update
+        if (newNodes.length > 0) nodes.add(newNodes);
+        if (newEdges.length > 0) edges.add(newEdges);
 
         updateNodeSizes();
         updateSelectOptions();
@@ -2942,11 +3012,11 @@ async function enrichAllInternetDB() {
     console.log(`Found ${totalIPs} IP nodes to enrich with InternetDB`);
     showToast(`Starting InternetDB enrichment for ${totalIPs} IPs`, 'info');
     
-    const batchSize = 50; // Parallel batch size
-    const delayBetweenBatches = 200; // 200ms (~250 QPS), adjustable
+    const batchSize = 50;
+    const delayBetweenBatches = 200;
     const totalBatches = Math.ceil(totalIPs / batchSize);
-    const assumedRequestTimeMs = 100; // Assume ~100ms per request for estimation
-    const timePerBatchMs = assumedRequestTimeMs; // Parallel requests
+    const assumedRequestTimeMs = 100;
+    const timePerBatchMs = assumedRequestTimeMs;
     const totalBatchDelays = (totalBatches - 1) * delayBetweenBatches;
     const estimatedTimeMs = (timePerBatchMs * totalBatches) + totalBatchDelays + 1000;
     
@@ -2960,12 +3030,15 @@ async function enrichAllInternetDB() {
     showToast(`Estimated time for InternetDB enrichment: ~${timeEstimateStr}`, 'info');
     document.getElementById('progress-bar').textContent = `InternetDB Enrichment: 0/${totalIPs} IPs (0%) - Est. ${timeEstimateStr}`;
     
-    // Batch updates
+    // Deduplication maps
+    const existingPorts = new Map(nodes.get({ filter: n => n.type === 'port' }).map(n => [`${n.portType}/${n.portNumber}`, n.id]));
+    const existingDomains = new Map(nodes.get({ filter: n => n.type === 'domain' }).map(n => [n.domain, n.id]));
+    const existingVulns = new Map(nodes.get({ filter: n => n.type === 'vulnerability' }).map(n => [n.cve, n.id]));
+    const existingTags = new Map(nodes.get({ filter: n => n.type === 'tag' }).map(n => [n.tag, n.id]));
+    const existingCPEs = new Map(nodes.get({ filter: n => n.type === 'cpe' }).map(n => [n.cpe, n.id]));
+    
     const newNodes = [];
     const newEdges = [];
-    let existingPorts = new Map(nodes.get({ filter: n => n.type === 'port' }).map(n => [`${n.portType}/${n.portNumber}`, n.id]));
-    let existingDomains = new Map(nodes.get({ filter: n => n.type === 'domain' }).map(n => [n.domain, n.id]));
-    let existingVulns = new Map(nodes.get({ filter: n => n.type === 'vulnerability' }).map(n => [n.cve, n.id]));
     
     async function processBatch(batch) {
         const promises = batch.map(node => {
@@ -3052,6 +3125,52 @@ async function enrichAllInternetDB() {
                         });
                     }
 
+                    // Tags
+                    if (data.tags && data.tags.length > 0) {
+                        data.tags.forEach(tag => {
+                            let tagId = existingTags.get(tag);
+                            if (!tagId) {
+                                tagId = nextId++;
+                                newNodes.push({
+                                    id: tagId,
+                                    type: 'tag',
+                                    label: `Tag: ${tag}`,
+                                    title: `Tag: ${tag}`,
+                                    color: { background: '#6d28d9' },
+                                    tag: tag
+                                });
+                                existingTags.set(tag, tagId);
+                            }
+                            const edgeId = `${node.id}-${tagId}-Tagged`;
+                            if (!newEdges.some(e => e.id === edgeId) && !edges.get(edgeId)) {
+                                newEdges.push({ id: edgeId, from: node.id, to: tagId, label: 'Tagged' });
+                            }
+                        });
+                    }
+
+                    // CPEs
+                    if (data.cpes && data.cpes.length > 0) {
+                        data.cpes.forEach(cpe => {
+                            let cpeId = existingCPEs.get(cpe);
+                            if (!cpeId) {
+                                cpeId = nextId++;
+                                newNodes.push({
+                                    id: cpeId,
+                                    type: 'cpe',
+                                    label: `CPE: ${cpe.split(':')[3] || cpe}`,
+                                    title: `CPE: ${cpe}`,
+                                    color: { background: '#0d9488' },
+                                    cpe: cpe
+                                });
+                                existingCPEs.set(cpe, cpeId);
+                            }
+                            const edgeId = `${node.id}-${cpeId}-Runs`;
+                            if (!newEdges.some(e => e.id === edgeId) && !edges.get(edgeId)) {
+                                newEdges.push({ id: edgeId, from: node.id, to: cpeId, label: 'Runs' });
+                            }
+                        });
+                    }
+
                     successfulEnrichments++;
                 })
                 .catch(error => {
@@ -3064,8 +3183,7 @@ async function enrichAllInternetDB() {
     }
     
     let lastProgressUpdate = 0;
-    const progressUpdateInterval = 1000; // Update UI every 1s
-    
+    const progressUpdateInterval = 1000;
     const startTime = Date.now();
     
     for (let i = 0; i < totalIPs; i += batchSize) {
@@ -3926,7 +4044,7 @@ function setHierarchicalLayout() {
             document.getElementById('addMalwareType').style.display = type === 'malware' ? 'block' : 'none';
         });
 
-        function createNodeData(type, values) {
+function createNodeData(type, values) {
     const nodeData = { 
         id: nextId++, 
         size: 10,
@@ -4070,6 +4188,18 @@ function setHierarchicalLayout() {
             color: '#14b8a6', 
             label: v => `Hosting: ${v.value}`, 
             title: v => `Hosting for IP: ${v.value}` 
+        },
+        tag: { 
+            fields: ['tag'], 
+            color: '#6d28d9', // Purple for tags
+            label: v => `Tag: ${v.tag}`, 
+            title: v => `Tag: ${v.tag}` 
+        },
+        cpe: { 
+            fields: ['cpe'], 
+            color: '#0d9488', // Teal for CPEs
+            label: v => `CPE: ${v.cpe.split(':')[3] || v.cpe}`, // Show vendor or full CPE
+            title: v => `CPE: ${v.cpe}` 
         }
     };
 
