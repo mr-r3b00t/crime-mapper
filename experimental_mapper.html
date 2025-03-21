@@ -5797,6 +5797,82 @@ const throttledEnrichInternetDBMultiple = throttleRequest(async function enrichI
     }
 }, RATE_LIMIT_MS); // Use default rate limit of 500ms
 
+// Add these functions within your <script> tag, ideally near other layout-related functions like setOrganicLayout()
+
+    function setNodeSizeLayout(mode) {
+    // Disable physics to prevent interference during resizing
+    network.setOptions({ physics: { enabled: false } });
+    
+    // Get all nodes
+    const allNodes = nodes.get();
+    
+    // Calculate sizes based on mode
+    allNodes.forEach(node => {
+        let connectionCount = 0;
+        
+        switch (mode) {
+            case 'incoming':
+                // Count edges where this node is the target (to)
+                connectionCount = edges.get({
+                    filter: edge => edge.to === node.id
+                }).length;
+                break;
+                
+            case 'outgoing':
+                // Count edges where this node is the source (from)
+                connectionCount = edges.get({
+                    filter: edge => edge.from === node.id
+                }).length;
+                break;
+                
+            case 'both':
+                // Count all edges connected to this node
+                connectionCount = edges.get({
+                    filter: edge => edge.from === node.id || edge.to === node.id
+                }).length;
+                break;
+                
+            default:
+                console.warn('Invalid mode for setNodeSizeLayout:', mode);
+                return;
+        }
+        
+        // Calculate new size: minimum 10, increases by 10 per connection, max 120
+        const newSize = Math.min(10 + connectionCount * 10, 120);
+        
+        // Update node with new size
+        nodes.update({
+            id: node.id,
+            size: newSize,
+            widthConstraint: false,  // Remove any width constraints
+            heightConstraint: false  // Remove any height constraints
+        });
+    });
+    
+    // Stabilize and fit the network after resizing
+    stabilizeNetwork().then(() => {
+        network.fit({
+            animation: {
+                duration: 300,
+                easingFunction: 'easeInOutQuad'
+            }
+        });
+        
+        // Save the updated state
+        saveStateAfterOperation();
+        
+        // Show confirmation
+        const modeText = {
+            'incoming': 'Incoming Links',
+            'outgoing': 'Outgoing Links',
+            'both': 'All Links'
+        }[mode];
+        showToast(`Node sizes updated based on ${modeText}`, 'success');
+    });
+}
+
+
+
 // Add this at the end of the script section
 window.addEventListener('beforeunload', function() {
     try {
