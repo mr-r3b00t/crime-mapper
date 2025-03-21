@@ -844,7 +844,7 @@
         <!-- Suggested -->
 <footer id="footer">
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.258 experimental</p>
+    <p>© Xservus Limited - v0.259 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
@@ -2121,29 +2121,6 @@ function cancelLinkCreation() {
     }
 }
 
-function deleteNode(nodeId) {
-            const node = nodes.get(nodeId);
-            if (!node) {
-                showToast('Node not found', 'error');
-                return;
-            }
-
-            // Remove all edges connected to this node
-            const connectedEdges = edges.get({
-                filter: edge => edge.from === nodeId || edge.to === nodeId
-            });
-            edges.remove(connectedEdges.map(edge => edge.id));
-
-            // Remove the node
-            nodes.remove({ id: nodeId });
-
-            // Update UI and network
-            updateSelectOptions();
-            updateNodeSizes();
-            stabilizeNetwork();
-            saveStateAfterOperation();
-            showToast(`Node "${node.label.split('\n')[0]}" deleted`, 'success');
-        }
 
         function hideContextMenu() {
             document.getElementById('contextMenu').style.display = 'none';
@@ -5871,7 +5848,90 @@ const throttledEnrichInternetDBMultiple = throttleRequest(async function enrichI
     });
 }
 
+const throttledSendHttpsRequestMultiple = throttleRequest(async function sendHttpsRequestMultiple(targets, type, protocol) {
+    if (!Array.isArray(targets)) {
+        showToast('Invalid input for multiple HTTPS requests', 'error');
+        return;
+    }
 
+    showProgressBar();
+    network.setOptions({ physics: { enabled: false } });
+    const totalTargets = targets.length;
+    let successfulRequests = 0;
+
+    showToast(`Starting ${protocol.toUpperCase()} requests for ${totalTargets} ${type}s`, 'info');
+    document.getElementById('progress-bar').textContent = `${protocol.toUpperCase()} Requests: 0/${totalTargets} ${type}s (0%)`;
+
+    for (let i = 0; i < totalTargets; i++) {
+        if (activeTaskController && activeTaskController.signal.aborted) {
+            showToast(`${protocol.toUpperCase()} requests stopped`, 'info');
+            document.getElementById('progress-bar').textContent = `${protocol.toUpperCase()} Requests: Stopped at ${successfulRequests}/${totalTargets} ${type}s`;
+            break;
+        }
+
+        const target = targets[i];
+        const url = constructUrl(`${protocol}://${target}`);
+        
+        try {
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Origin': window.location.origin
+                },
+                mode: 'cors',
+                credentials: 'omit',
+                signal: activeTaskController?.signal
+            });
+
+            const status = response.status;
+            const statusText = response.statusText;
+            successfulRequests++;
+
+            const progress = ((successfulRequests / totalTargets) * 100).toFixed(1);
+            document.getElementById('progress-bar').textContent = 
+                `${protocol.toUpperCase()} Requests: ${successfulRequests}/${totalTargets} ${type}s (${progress}%)`;
+
+            showToast(`${protocol.toUpperCase()} request to ${target}: ${status} ${statusText}`, 'success');
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                break;
+            }
+            showToast(`${protocol.toUpperCase()} request to ${target} failed: ${error.message}`, 'error');
+        }
+
+        // Small delay between requests to avoid overwhelming the proxy/server
+        await new Promise(resolve => setTimeout(resolve, 200));
+    }
+
+    await stabilizeNetwork();
+    ensureInteractionSettings();
+
+    if (!(activeTaskController && activeTaskController.signal.aborted)) {
+        completeProgressBar();
+        showToast(`${protocol.toUpperCase()} requests completed: ${successfulRequests}/${totalTargets} successful`, 'success');
+    }
+
+    if (window.innerWidth <= 768) {
+        const controls = document.getElementById('controls');
+        controls.classList.add('collapsed');
+        document.getElementById('myNetwork').style.display = 'block';
+        network.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
+    }
+}, RATE_LIMIT_MS);
+
+
+function stopActiveTask() {
+    if (activeTaskController) {
+        activeTaskController.abort();
+        showToast('Active task stopped', 'info');
+        document.getElementById('stop-task').disabled = true;
+        activeTaskController = null;
+        completeProgressBar();
+    } else {
+        showToast('No active task to stop', 'warning');
+    }
+}
 
 // Add this at the end of the script section
 window.addEventListener('beforeunload', function() {
