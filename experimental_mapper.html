@@ -900,9 +900,6 @@
     const totalIPs = ipNodes.length;
     let successfulEnrichments = 0;
     
-    console.log(`Found ${totalIPs} IP nodes to enrich with IPinfo`);
-    showToast(`Starting IPinfo enrichment for ${totalIPs} IPs`, 'info');
-    
     const batchSize = 50;
     const delayBetweenBatches = 200;
     const totalBatches = Math.ceil(totalIPs / batchSize);
@@ -927,7 +924,6 @@
     let existingCities = new Map(nodes.get({ filter: n => n.type === 'city' }).map(n => [n.city, n.id]));
     let existingOrgs = new Map(nodes.get({ filter: n => n.type === 'organization' }).map(n => [n.organization, n.id]));
     let existingCountries = new Map(nodes.get({ filter: n => n.type === 'country' }).map(n => [n.country, n.id]));
-    // Map for privacy types to ensure single instance
     let existingPrivacyTypes = new Map([
         ['vpn', null], ['proxy', null], ['tor', null], ['relay', null], ['hosting', null]
     ].map(([type]) => {
@@ -935,7 +931,6 @@
         return [type, existing ? existing.id : null];
     }));
 
-    // Define privacy types consistently
     const privacyTypes = [
         { key: 'vpn', label: 'VPN', color: '#9333ea' },
         { key: 'proxy', label: 'Proxy', color: '#f43f5e' },
@@ -959,10 +954,14 @@
                     return response.json();
                 })
                 .then(data => {
-                    const ipNodeId = node.id; // Store the IP node's ID for linking
+                    const ipNodeId = node.id;
+                    const asn = data.asn?.asn || 'Unknown ASN';
+                    const city = data.city || 'Unknown City';
+                    const companyName = data.company?.name || 'Unknown Company';
+                    const country = data.country || 'Unknown Country';
+                    const privacy = data.privacy || { vpn: false, proxy: false, tor: false, relay: false, hosting: false };
 
                     // ASN
-                    const asn = data.asn?.asn || 'Unknown ASN';
                     let asnId = existingAsns.get(asn);
                     if (!asnId) {
                         asnId = nextId++;
@@ -976,15 +975,12 @@
                         });
                         existingAsns.set(asn, asnId);
                     }
-                    newEdges.push({ 
-                        id: `${ipNodeId}-${asnId}-AssignedTo`, 
-                        from: ipNodeId, 
-                        to: asnId, 
-                        label: 'Assigned to' 
-                    });
+                    const asnEdgeId = `${ipNodeId}-${asnId}-AssignedTo`;
+                    if (!edges.get(asnEdgeId) && !newEdges.some(e => e.id === asnEdgeId)) {
+                        newEdges.push({ id: asnEdgeId, from: ipNodeId, to: asnId, label: 'Assigned to' });
+                    }
 
                     // City
-                    const city = data.city || 'Unknown City';
                     let cityId = existingCities.get(city);
                     if (!cityId) {
                         cityId = nextId++;
@@ -998,15 +994,12 @@
                         });
                         existingCities.set(city, cityId);
                     }
-                    newEdges.push({ 
-                        id: `${ipNodeId}-${cityId}-LocatedIn`, 
-                        from: ipNodeId, 
-                        to: cityId, 
-                        label: 'Located in' 
-                    });
+                    const cityEdgeId = `${ipNodeId}-${cityId}-LocatedIn`;
+                    if (!edges.get(cityEdgeId) && !newEdges.some(e => e.id === cityEdgeId)) {
+                        newEdges.push({ id: cityEdgeId, from: ipNodeId, to: cityId, label: 'Located in' });
+                    }
 
                     // Organization
-                    const companyName = data.company?.name || 'Unknown Company';
                     let orgId = existingOrgs.get(companyName);
                     if (!orgId) {
                         orgId = nextId++;
@@ -1020,15 +1013,12 @@
                         });
                         existingOrgs.set(companyName, orgId);
                     }
-                    newEdges.push({ 
-                        id: `${ipNodeId}-${orgId}-BelongsTo`, 
-                        from: ipNodeId, 
-                        to: orgId, 
-                        label: 'Belongs to' 
-                    });
+                    const orgEdgeId = `${ipNodeId}-${orgId}-BelongsTo`;
+                    if (!edges.get(orgEdgeId) && !newEdges.some(e => e.id === orgEdgeId)) {
+                        newEdges.push({ id: orgEdgeId, from: ipNodeId, to: orgId, label: 'Belongs to' });
+                    }
 
                     // Country
-                    const country = data.country || 'Unknown Country';
                     let countryId = existingCountries.get(country);
                     if (!countryId) {
                         countryId = nextId++;
@@ -1042,15 +1032,12 @@
                         });
                         existingCountries.set(country, countryId);
                     }
-                    newEdges.push({ 
-                        id: `${ipNodeId}-${countryId}-LocatedIn`, 
-                        from: ipNodeId, 
-                        to: countryId, 
-                        label: 'Located in' 
-                    });
+                    const countryEdgeId = `${ipNodeId}-${countryId}-LocatedIn`;
+                    if (!edges.get(countryEdgeId) && !newEdges.some(e => e.id === countryEdgeId)) {
+                        newEdges.push({ id: countryEdgeId, from: ipNodeId, to: countryId, label: 'Located in' });
+                    }
 
-                    // Privacy Types (VPN, Proxy, Tor, Relay, Hosting)
-                    const privacy = data.privacy || { vpn: false, proxy: false, tor: false, relay: false, hosting: false };
+                    // Privacy Types
                     privacyTypes.forEach(privacyType => {
                         if (privacy[privacyType.key]) {
                             let privacyNodeId = existingPrivacyTypes.get(privacyType.key);
@@ -1058,21 +1045,16 @@
                                 privacyNodeId = nextId++;
                                 newNodes.push({ 
                                     id: privacyNodeId, 
-                                    type: privacyType.key, // Use specific type (vpn, proxy, etc.)
-                                    label: privacyType.label, // Just the type name (e.g., "VPN")
-                                    title: privacyType.label, // Same as label for simplicity
+                                    type: privacyType.key, 
+                                    label: privacyType.label, 
+                                    title: privacyType.label, 
                                     color: { background: privacyType.color }
                                 });
                                 existingPrivacyTypes.set(privacyType.key, privacyNodeId);
                             }
-                            const edgeId = `${ipNodeId}-${privacyNodeId}-Uses`;
-                            if (!newEdges.some(e => e.id === edgeId) && !edges.get(edgeId)) {
-                                newEdges.push({ 
-                                    id: edgeId, 
-                                    from: ipNodeId, 
-                                    to: privacyNodeId, 
-                                    label: 'Uses' 
-                                });
+                            const privacyEdgeId = `${ipNodeId}-${privacyNodeId}-Uses`;
+                            if (!edges.get(privacyEdgeId) && !newEdges.some(e => e.id === privacyEdgeId)) {
+                                newEdges.push({ id: privacyEdgeId, from: ipNodeId, to: privacyNodeId, label: 'Uses' });
                             }
                         }
                     });
@@ -1099,8 +1081,6 @@
         }
         
         const batch = ipNodes.slice(i, Math.min(i + batchSize, totalIPs));
-        console.log(`Processing batch ${Math.floor(i / batchSize) + 1} of ${totalBatches}, IPs ${i} to ${Math.min(i + batchSize - 1, totalIPs - 1)}`);
-        
         await processBatch(batch);
         
         if (newNodes.length > 0) {
@@ -1151,54 +1131,112 @@
     }
 }
 
-
-function setNodeSizeLayout(mode) {
-    // Disable physics to prevent layout interference
+async function enrichAllGoogleDNS() {
+    showProgressBar();
     network.setOptions({ physics: { enabled: false } });
+    const domainNodes = nodes.get({ filter: n => n.type === 'domain' && n.domain });
+    const totalDomains = domainNodes.length;
+    let successfulEnrichments = 0;
 
-    // Calculate connections for each node
-    nodes.forEach(node => {
-        const incomingEdges = edges.get({ filter: edge => edge.to === node.id }).length;
-        const outgoingEdges = edges.get({ filter: edge => edge.from === node.id }).length;
-        let newSize;
+    if (totalDomains === 0) {
+        showToast('No domains found to enrich', 'info');
+        completeProgressBar();
+        return;
+    }
 
-        switch (mode) {
-            case 'incoming':
-                newSize = Math.min(10 + incomingEdges * 5, 120); // Min 10, max 120, 5px per incoming link
-                break;
-            case 'outgoing':
-                newSize = Math.min(10 + outgoingEdges * 5, 120); // Min 10, max 120, 5px per outgoing link
-                break;
-            case 'both':
-                newSize = Math.min(10 + (incomingEdges + outgoingEdges) * 5, 120); // Min 10, max 120, 5px per link
-                break;
-            default:
-                console.warn('Invalid node size layout mode:', mode);
-                return;
+    console.log(`Found ${totalDomains} domain nodes to enrich with Google DNS`);
+    showToast(`Starting Google DNS enrichment for ${totalDomains} domains`, 'info');
+
+    const batchSize = 50; // Consistent with other bulk enrichment functions
+    const delayBetweenBatches = 200; // Consistent with other bulk functions
+    const totalBatches = Math.ceil(totalDomains / batchSize);
+    const assumedRequestTimeMs = 100; // Estimated time per request
+    const timePerBatchMs = assumedRequestTimeMs * batchSize;
+    const totalBatchDelays = (totalBatches - 1) * delayBetweenBatches;
+    const estimatedTimeMs = (timePerBatchMs * totalBatches) + totalBatchDelays + 1000;
+
+    const estimatedSeconds = Math.ceil(estimatedTimeMs / 1000);
+    const estimatedMinutes = Math.floor(estimatedSeconds / 60);
+    const remainingSeconds = estimatedSeconds % 60;
+    const timeEstimateStr = estimatedMinutes > 0 
+        ? `${estimatedMinutes}m ${remainingSeconds}s` 
+        : `${estimatedSeconds}s`;
+
+    showToast(`Estimated time for Google DNS enrichment: ~${timeEstimateStr}`, 'info');
+    document.getElementById('progress-bar').textContent = `Google DNS Enrichment: 0/${totalDomains} Domains (0%) - Est. ${timeEstimateStr}`;
+
+    async function processBatch(batch) {
+        const promises = batch.map(node => {
+            if (activeTaskController && activeTaskController.signal.aborted) {
+                return Promise.resolve(null);
+            }
+            return throttledEnrichGoogleDNS(node.domain, node.id, true) // isBulk = true
+                .then(() => successfulEnrichments++)
+                .catch(error => {
+                    console.error(`Failed to enrich domain ${node.domain}: ${error.message}`);
+                    showToast(`Failed to enrich domain ${node.domain}: ${error.message}`, 'error');
+                    return null;
+                });
+        });
+        await Promise.all(promises);
+    }
+
+    let lastProgressUpdate = 0;
+    const progressUpdateInterval = 1000;
+    const startTime = Date.now();
+
+    for (let i = 0; i < totalDomains; i += batchSize) {
+        if (activeTaskController && activeTaskController.signal.aborted) {
+            showToast('Google DNS enrichment stopped', 'info');
+            document.getElementById('progress-bar').textContent = `Google DNS Enrichment: Stopped at ${successfulEnrichments}/${totalDomains} Domains`;
+            break;
         }
 
-        // Update node size
-        nodes.update({
-            id: node.id,
-            size: newSize,
-            widthConstraint: false, // Ensure no constraints interfere
-            heightConstraint: false
-        });
-    });
+        const batch = domainNodes.slice(i, Math.min(i + batchSize, totalDomains));
+        console.log(`Processing batch ${Math.floor(i / batchSize) + 1} of ${totalBatches}, Domains ${i} to ${Math.min(i + batchSize - 1, totalDomains - 1)}`);
 
-    // Stabilize and fit the network
-    stabilizeNetwork().then(() => {
-        network.fit({
-            animation: {
-                duration: 500,
-                easingFunction: 'easeInOutQuad'
-            }
-        });
-        showToast(`Node sizes adjusted based on ${mode} links`, 'success');
-    });
+        await processBatch(batch);
 
-    // Save the state after adjustment
-    saveStateAfterOperation();
+        const currentTime = Date.now();
+        if (currentTime - lastProgressUpdate >= progressUpdateInterval || i + batchSize >= totalDomains) {
+            const processedDomains = Math.min(i + batchSize, totalDomains);
+            const progress = ((processedDomains / totalDomains) * 100).toFixed(1);
+            const remainingDomains = totalDomains - processedDomains;
+            const remainingTimeMs = Math.max(0, remainingDomains * assumedRequestTimeMs);
+            const remainingSeconds = Math.ceil(remainingTimeMs / 1000);
+            const remainingMinutes = Math.floor(remainingSeconds / 60);
+            const remainingSecondsPart = remainingSeconds % 60;
+            const remainingTimeStr = remainingMinutes > 0 
+                ? `${remainingMinutes}m ${remainingSecondsPart}s` 
+                : `${remainingSeconds}s`;
+
+            document.getElementById('progress-bar').textContent = 
+                `Google DNS Enrichment: ${successfulEnrichments}/${totalDomains} Domains (${progress}%) - Est. ${remainingTimeStr} remaining`;
+            lastProgressUpdate = currentTime;
+            updateSelectOptions();
+        }
+
+        await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    ensureInteractionSettings();
+
+    if (!(activeTaskController && activeTaskController.signal.aborted)) {
+        completeProgressBar();
+        showToast(`Google DNS enrichment completed: ${successfulEnrichments}/${totalDomains} domains enriched`, 'success');
+    } else {
+        showToast(`Google DNS enrichment stopped: ${successfulEnrichments}/${totalDomains} domains processed`, 'info');
+    }
+
+    if (window.innerWidth <= 768) {
+        const controls = document.getElementById('controls');
+        controls.classList.add('collapsed');
+        document.getElementById('myNetwork').style.display = 'block';
+        network.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
+    }
 }
 
 
@@ -3239,7 +3277,6 @@ async function enrichAllInternetDB() {
     }
 }
 
-
 const throttledEnrichIP = throttleRequest(async function enrichIP(ip, ipNodeId, isBulk = false, signal) {
     if (!ipinfoApiKey && !ignoreApiKeysViaProxy) { 
         showToast('Please set your IPinfo API key in the "API Keys" tab first.', 'error'); 
@@ -3284,69 +3321,35 @@ const throttledEnrichIP = throttleRequest(async function enrichIP(ip, ipNodeId, 
             { key: 'hosting', label: 'Hosting', color: '#14b8a6' }
         ];
 
-        // ASN
-        let asnId = existingAsns.get(asn);
-        if (!asnId) {
-            asnId = nextId++;
-            newNodes.push({ 
-                id: asnId, 
-                type: 'asn', 
-                label: `ASN: ${asn}`, 
-                title: `ASN: ${asn}`, 
-                color: { background: '#a3e635' }, 
-                asn 
-            });
-            existingAsns.set(asn, asnId);
-        }
-        newEdges.push({ id: `${ipNodeId}-${asnId}-AssignedTo`, from: ipNodeId, to: asnId, label: 'Assigned to' });
+        // Helper function to add node and edge with unique ID
+        const addNodeAndEdge = (type, key, value, labelPrefix, title, color, edgeLabel) => {
+            let targetId = existingAsns.get(value) || existingCities.get(value) || existingOrgs.get(value) || existingCountries.get(value);
+            if (!targetId) {
+                targetId = nextId++;
+                newNodes.push({ 
+                    id: targetId, 
+                    type: type, 
+                    label: `${labelPrefix}: ${value}`, 
+                    title: title, 
+                    color: { background: color }, 
+                    [key]: value 
+                });
+                if (type === 'asn') existingAsns.set(value, targetId);
+                else if (type === 'city') existingCities.set(value, targetId);
+                else if (type === 'organization') existingOrgs.set(value, targetId);
+                else if (type === 'country') existingCountries.set(value, targetId);
+            }
+            const edgeId = `${ipNodeId}-${targetId}-${edgeLabel}`;
+            if (!edges.get(edgeId) && !newEdges.some(e => e.id === edgeId)) {
+                newEdges.push({ id: edgeId, from: ipNodeId, to: targetId, label: edgeLabel });
+            }
+        };
 
-        // City
-        let cityId = existingCities.get(city);
-        if (!cityId) {
-            cityId = nextId++;
-            newNodes.push({ 
-                id: cityId, 
-                type: 'city', 
-                label: `City: ${city}`, 
-                title: `City: ${city}`, 
-                color: { background: '#f97316' }, 
-                city 
-            });
-            existingCities.set(city, cityId);
-        }
-        newEdges.push({ id: `${ipNodeId}-${cityId}-LocatedIn`, from: ipNodeId, to: cityId, label: 'Located in' });
-
-        // Organization
-        let orgId = existingOrgs.get(companyName);
-        if (!orgId) {
-            orgId = nextId++;
-            newNodes.push({ 
-                id: orgId, 
-                type: 'organization', 
-                label: `Organization: ${companyName}`, 
-                title: `Company: ${companyName}`, 
-                color: { background: '#facc15' }, 
-                organization: companyName 
-            });
-            existingOrgs.set(companyName, orgId);
-        }
-        newEdges.push({ id: `${ipNodeId}-${orgId}-BelongsTo`, from: ipNodeId, to: orgId, label: 'Belongs to' });
-
-        // Country
-        let countryId = existingCountries.get(country);
-        if (!countryId) {
-            countryId = nextId++;
-            newNodes.push({ 
-                id: countryId, 
-                type: 'country', 
-                label: `Country: ${country}`, 
-                title: `Country: ${country}`, 
-                color: { background: '#34d399' }, 
-                country 
-            });
-            existingCountries.set(country, countryId);
-        }
-        newEdges.push({ id: `${ipNodeId}-${countryId}-LocatedIn`, from: ipNodeId, to: countryId, label: 'Located in' });
+        // Add nodes and edges
+        addNodeAndEdge('asn', 'asn', asn, 'ASN', `ASN: ${asn}`, '#a3e635', 'Assigned to');
+        addNodeAndEdge('city', 'city', city, 'City', `City: ${city}`, '#f97316', 'Located in');
+        addNodeAndEdge('organization', 'organization', companyName, 'Organization', `Company: ${companyName}`, '#facc15', 'Belongs to');
+        addNodeAndEdge('country', 'country', country, 'Country', `Country: ${country}`, '#34d399', 'Located in');
 
         // Privacy Types
         privacyTypes.forEach(privacyType => {
@@ -3388,6 +3391,7 @@ const throttledEnrichIP = throttleRequest(async function enrichIP(ip, ipNodeId, 
         await stabilizeNetwork();
     }
 }, RATE_LIMIT_MS);
+
 
 const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ipNodeId, isBulk = false, signal) {
     if (!shodanApiKey && !ignoreApiKeysViaProxy) { 
