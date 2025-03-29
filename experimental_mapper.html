@@ -718,6 +718,7 @@
             <div class="input-group">
                 <h3>Export/Import</h3>
                 <button onclick="exportGraph()">Export to JSON</button>
+                <button onclick="exportGraphAsImage()">Export to Image (PNG)</button>
                 <input type="file" id="importFile" accept=".json">
                 <button onclick="importGraph()">Import from JSON</button>
                 <button onclick="clearGraph()">Clear Graph</button>
@@ -5747,6 +5748,31 @@ window.addEventListener('beforeunload', function() {
         console.error('Before unload save failed:', e);
     }
 });
+
+function exportGraphAsImage() {
+    const canvas = document.querySelector('#myNetwork canvas');
+    if (!canvas) {
+        showToast('Canvas not found', 'error');
+        return;
+    }
+
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hour = String(now.getHours()).padStart(2, '0');
+    const minute = String(now.getMinutes()).padStart(2, '0');
+    const filename = `graph-${year}${month}${day}-${hour}${minute}.png`;
+
+    const imageURI = canvas.toDataURL('image/png');
+
+    const link = document.createElement('a');
+    link.href = imageURI;
+    link.download = filename;
+    link.click();
+
+    showToast(`Exported Graph as ${filename}`, 'success');
+}
 
     </script>
 </body>
