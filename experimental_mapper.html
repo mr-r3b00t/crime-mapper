@@ -2055,9 +2055,19 @@ function deleteNodes(nodeIds) {
     showToast(`${idsToDelete.length > 1 ? 'Nodes' : 'Node'} deleted`, 'success');
 }
 
+
+
+
 const throttledSearchShodanHtmlHash = throttleRequest(async function searchShodanHtmlHash(htmlHashNodeId, htmlHash, signal) {
-    if (!shodanApiKey && !ignoreApiKeysViaProxy) {
+    if (!shodanApiKey) {
         showToast('Please set your Shodan API key in the "API Keys" tab first.', 'error');
+        return;
+    }
+
+    // Validate htmlHash
+    const hashNum = parseInt(htmlHash);
+    if (!Number.isInteger(hashNum)) {
+        showToast(`Invalid HTML Hash: ${htmlHash}. Must be an integer.`, 'error');
         return;
     }
 
@@ -2066,15 +2076,33 @@ const throttledSearchShodanHtmlHash = throttleRequest(async function searchShoda
     document.getElementById('progress-bar').textContent = `Searching Shodan for IPs with HTML Hash ${htmlHash.substring(0, 8)}...`;
 
     try {
-        // Construct the Shodan search URL with the html_hash filter
-        const baseUrl = ignoreApiKeysViaProxy
-            ? `https://api.shodan.io/shodan/host/search?query=http.html_hash:${htmlHash}`
-            : `https://api.shodan.io/shodan/host/search?key=${shodanApiKey}&query=http.html_hash:${htmlHash}`;
-        const url = constructUrl(baseUrl, !ignoreApiKeysViaProxy);
+        // Construct the URL to match the Bash script exactly
+        const query = `http.html_hash:${hashNum}`; // No encoding here yet
+        const baseUrl = `https://api.shodan.io/shodan/host/search?key=${shodanApiKey}&query=${query}`;
+        const url = routeViaProxy ? `${corsProxyUrl}/${baseUrl}` : baseUrl;
 
-        const response = await fetch(url, { signal });
-        if (!response.ok) throw new Error(`Failed to fetch Shodan data: ${response.statusText}`);
+        console.log('Search Shodan Base URL (before proxy):', baseUrl);
+        console.log('Search Shodan Final URL:', url);
+        console.log('routeViaProxy:', routeViaProxy, 'corsProxyUrl:', corsProxyUrl);
+
+        const response = await fetch(url, {
+            method: 'GET',
+            signal: signal,
+            headers: {
+                'Accept': 'application/json' // Ensure JSON response
+            }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.log('Search Shodan Status:', response.status, response.statusText);
+            console.log('Search Shodan Response Body:', errorText);
+            console.log('Request Headers:', Object.fromEntries(response.headers.entries()));
+            throw new Error(`Failed to fetch Shodan data: ${response.statusText} - ${errorText}`);
+        }
+
         const data = await response.json();
+        console.log('Shodan Response:', data);
 
         if (!data.matches || data.matches.length === 0) {
             showToast(`No IPs found on Shodan with HTML Hash ${htmlHash}`, 'info');
@@ -2089,7 +2117,6 @@ const throttledSearchShodanHtmlHash = throttleRequest(async function searchShoda
         let successfulAdditions = 0;
         const totalMatches = data.matches.length;
 
-        // Deduplicate existing IPs
         const existingIPs = new Map(nodes.get({ filter: n => n.type === 'ip' }).map(n => [n.ip, n.id]));
 
         for (const match of data.matches) {
@@ -2115,7 +2142,6 @@ const throttledSearchShodanHtmlHash = throttleRequest(async function searchShoda
                 existingIPs.set(ip, ipId);
             }
 
-            // Link the IP to the HTML hash node
             const edgeId = `${ipId}-${htmlHashNodeId}-SharesHash`;
             if (!edges.get(edgeId) && !newEdges.some(e => e.id === edgeId)) {
                 newEdges.push({
@@ -2131,7 +2157,6 @@ const throttledSearchShodanHtmlHash = throttleRequest(async function searchShoda
             document.getElementById('progress-bar').textContent = `Shodan HTML Hash Search: ${successfulAdditions}/${totalMatches} IPs (${progress}%)`;
         }
 
-        // Add new nodes and edges
         if (newNodes.length > 0) nodes.add(newNodes);
         if (newEdges.length > 0) edges.add(newEdges);
 
@@ -2145,70 +2170,16 @@ const throttledSearchShodanHtmlHash = throttleRequest(async function searchShoda
     } catch (error) {
         if (error.name === 'AbortError') {
             showToast('Shodan HTML Hash search was cancelled', 'info');
-            completeProgressBar();
-            await stabilizeNetwork();
-            return;
+        } else {
+            console.error(`Error searching Shodan for HTML Hash ${htmlHash}: ${error.message}`);
+            showToast(`Error searching Shodan: ${error.message}. Check CORS proxy in Config tab.`, 'error');
         }
-        console.error(`Error searching Shodan for HTML Hash ${htmlHash}: ${error.message}`);
-        showToast(`Error searching Shodan: ${error.message}`, 'error');
         completeProgressBar();
         await stabilizeNetwork();
     }
-}, SHODAN_RATE_LIMIT_MS); // Use Shodan-specific rate limit (1000ms)
+}, SHODAN_RATE_LIMIT_MS);
 
-function startLinkCreation(nodeId) {
-    linkFromNode = nodeId;
-    hideContextMenu();
-    showToast('Select another node to create a link (right-click to cancel)', 'info');
-    
-    // Add temporary visual feedback
-    nodes.update({
-        id: nodeId,
-        color: { border: '#22c55e', background: nodes.get(nodeId).color.background }
-    });
-    
-    // Add one-time event listener for next node selection
-    network.once('oncontext', handleLinkDestination);
-    network.once('click', cancelLinkCreation);
-}
 
-function handleLinkDestination(params) {
-    params.event.preventDefault();
-    const nodeId = network.getNodeAt(params.pointer.DOM);
-    
-    if (!nodeId || nodeId === linkFromNode) {
-        cancelLinkCreation();
-        return;
-    }
-    
-    // Create the edge
-    const edgeId = `edge_${linkFromNode}_${nodeId}_${Date.now()}`;
-    if (!edges.get({ filter: e => e.from === linkFromNode && e.to === nodeId }).length) {
-        edges.add({
-            id: edgeId,
-            from: linkFromNode,
-            to: nodeId,
-            label: 'Connected' // Default label, could be made configurable
-        });
-        
-        updateNodeSizes();
-        updateEdgeSelectOptions();
-        stabilizeNetwork();
-        saveStateAfterOperation();
-        showToast(`Link created between nodes`, 'success');
-    } else {
-        showToast('Link already exists between these nodes', 'error');
-    }
-    
-    // Reset visual feedback
-    const originalNode = nodes.get(linkFromNode);
-    nodes.update({
-        id: linkFromNode,
-        color: { border: isDarkMode ? '#94a3b8' : '#6b7280', background: originalNode.color.background }
-    });
-    
-    linkFromNode = null;
-}
 
 function cancelLinkCreation() {
     if (linkFromNode) {
