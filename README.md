@@ -1,5 +1,5 @@
-# Crime-Mapper  
-**A sleek tool for mapping cyber crime**  
+# Enabling cyber invetigations from a browser
+**A prototype tool for mapping cyber crime**  
 
 Created by **@UK_Daniel_Card**  
 
