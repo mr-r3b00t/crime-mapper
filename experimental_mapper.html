@@ -530,6 +530,26 @@
     background-color: #4b5563;
 }
 
+#search-input {
+    padding: 6px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border-light);
+    background-color: #fff;
+    color: #1f2a44;
+    transition: border-color var(--transition);
+}
+
+.dark-mode #search-input {
+    border: 1px solid var(--border-dark);
+    background-color: #4b5563;
+    color: #e2e8f0;
+}
+
+#search-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+}
+
 /* Progress Bar Styles */
 #progress-bar {
     position: fixed;
@@ -579,6 +599,7 @@
             <button class="tab-button" onclick="showTab('enrichment')">Enrichment</button>
             <button class="tab-button active" onclick="showTab('import-iocs')">Import IOCs</button>
             <button class="tab-button" onclick="showTab('layouts')">Layouts</button>
+            <button class="tab-button" onclick="showTab('search')">Search</button>
         </div>
         <div id="object-management" class="tab-content">
             <div class="input-group">
@@ -787,6 +808,14 @@
                 <button onclick="importIOCsFromFile()">Import from File</button>
             </div>
         </div>
+        <div id="search" class="tab-content">
+            
+            <div class="input-group" style="margin: 10px 0;">
+                <input type="text" id="search-input" placeholder="Search graph..." style="width: 100%; margin-bottom: 5px;">
+                <button onclick="searchGraph()" style="background-color: #10b981;">Search</button>
+            </div>
+        
+        </div>
         <div id="layouts" class="tab-content">
             <div class="input-group">
                 <h3>Graph Layouts</h3>
@@ -844,7 +873,7 @@
         <!-- Suggested -->
 <footer id="footer">
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.260 experimental</p>
+    <p>© Xservus Limited - v0.261 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
@@ -886,6 +915,155 @@
         const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 
         let selectedNodes = new Set(); // To track multiple selected nodes
+
+
+        function searchGraph() {
+    const searchTerm = document.getElementById('search-input').value.trim().toLowerCase();
+    if (!searchTerm) {
+        showToast('Please enter a search term', 'error');
+        resetNodeHighlights();
+        return;
+    }
+
+    // Reset previous highlights
+    resetNodeHighlights();
+
+    // Find matching nodes
+    const matchingNodes = nodes.get().filter(node => {
+        // Search in label, and type-specific fields
+        const searchableText = [
+            node.label || '',
+            node.ip || '',
+            node.domain || '',
+            node.email || '',
+            node.name || '',
+            node.organization || '',
+            node.portNumber || '',
+            node.address || '',
+            node.accountNumber || '',
+            node.techName || '',
+            node.deviceName || '',
+            node.malwareName || '',
+            node.vulnName || '',
+            node.cve || '',
+            node.hash || '',
+            node.asn || '',
+            node.city || '',
+            node.country || '',
+            node.os || '',
+            node.product || ''
+        ].join(' ').toLowerCase();
+
+        return searchableText.includes(searchTerm);
+    });
+
+    if (matchingNodes.length === 0) {
+        showToast('No matches found', 'info');
+        return;
+    }
+
+    // Highlight matching nodes
+    matchingNodes.forEach(node => {
+        nodes.update({
+            id: node.id,
+            color: {
+                background: '#ffeb3b', // Bright yellow for highlight
+                border: '#f44336',     // Red border for visibility
+                highlight: {
+                    background: '#ffeb3b',
+                    border: '#f44336'
+                }
+            },
+            font: {
+                size: 14,  // Slightly larger font for visibility
+                color: '#000000'  // Black text for contrast
+            }
+        });
+    });
+
+    // Zoom to the first matching node
+    const firstMatchId = matchingNodes[0].id;
+    network.focus(firstMatchId, {
+        scale: 1.5,  // Zoom in
+        animation: {
+            duration: 1000,
+            easingFunction: 'easeInOutQuad'
+        }
+    });
+
+    showToast(`Found ${matchingNodes.length} matching nodes`, 'success');
+}
+
+function resetNodeHighlights() {
+    nodes.forEach(node => {
+        // Restore original colors based on node type
+        const originalColor = getNodeColorByType(node.type);
+        nodes.update({
+            id: node.id,
+            color: {
+                background: originalColor.background,
+                border: isDarkMode ? '#94a3b8' : '#6b7280',
+                highlight: {
+                    background: originalColor.background,
+                    border: '#60a5fa'
+                }
+            },
+            font: {
+                size: nodeLabelsVisible ? 12 : 0,
+                color: isDarkMode ? '#e2e8f0' : '#1f2a44'
+            }
+        });
+    });
+    network.fit({
+        animation: {
+            duration: 500,
+            easingFunction: 'easeInOutQuad'
+        }
+    });
+}
+
+// Helper function to get original colors by node type
+function getNodeColorByType(type) {
+    const colorMap = {
+        'ip': '#f87171',
+        'domain': '#60a5fa',
+        'contact': '#4ade80',
+        'organization': '#facc15',
+        'port': '#a78bfa',
+        'wallet': '#fb923c',
+        'bank': '#10b981',
+        'technology': '#ec4899',
+        'device': '#14b8a6',
+        'malware': '#ef4444',
+        'vulnerability': '#dc2626',
+        'favicon': '#22d3ee',
+        'http_hash': '#f97316',
+        'html_hash': '#f59e0b',
+        'ssl_hash': '#8b5cf6',
+        'asn': '#a3e635',
+        'city': '#f97316',
+        'country': '#34d399',
+        'os': '#10b981',
+        'product': '#ec4899',
+        'http_title': '#3b82f6',
+        'vpn': '#9333ea',
+        'proxy': '#f43f5e',
+        'tor': '#64748b',
+        'relay': '#eab308',
+        'hosting': '#14b8a6',
+        'tag': '#6d28d9',
+        'cpe': '#0d9488'
+    };
+    return { background: colorMap[type] || '#ffffff' };
+}
+
+// Add this with your other event listeners
+document.getElementById('search-input').addEventListener('keypress', function(event) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        searchGraph();
+    }
+});
 
 
         async function enrichAllIpinfo() {
