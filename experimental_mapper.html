@@ -848,6 +848,11 @@
                 <button onclick="setNodeSizeLayout('outgoing')">Size by Outgoing Links</button>
                 <button onclick="setNodeSizeLayout('both')">Size by All Links</button>
             </div>
+            <div class="input-group">
+                <h3>Filter Display</h3>
+                <button onclick="filterIpAndDomains()">Show Only IPs & Domains</button>
+                <button onclick="showAllNodes()">Show All Nodes</button>
+            </div>
         </div>
          <!-- Buy Me a Coffee Button -->
          <div style="text-align: center; padding: 10px;">
@@ -873,7 +878,7 @@
         <!-- Suggested -->
 <footer id="footer">
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.261 experimental</p>
+    <p>© Xservus Limited - v0.262 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
@@ -1019,6 +1024,75 @@ function resetNodeHighlights() {
             duration: 500,
             easingFunction: 'easeInOutQuad'
         }
+    });
+}
+
+function filterIpAndDomains() {
+    // Disable physics during filtering
+    network.setOptions({ physics: { enabled: false } });
+    
+    // Update each node's hidden property based on type
+    nodes.forEach(node => {
+        const shouldHide = node.type !== 'ip' && node.type !== 'domain';
+        nodes.update({
+            id: node.id,
+            hidden: shouldHide
+        });
+    });
+    
+    // Hide edges connected to hidden nodes
+    edges.forEach(edge => {
+        const fromNode = nodes.get(edge.from);
+        const toNode = nodes.get(edge.to);
+        const shouldHide = fromNode.hidden || toNode.hidden;
+        edges.update({
+            id: edge.id,
+            hidden: shouldHide
+        });
+    });
+    
+    // Stabilize and fit the network
+    stabilizeNetwork().then(() => {
+        network.fit({
+            animation: {
+                duration: 300,
+                easingFunction: 'easeInOutQuad'
+            }
+        });
+        showToast('Showing only IP addresses and domains', 'success');
+        saveStateAfterOperation();
+    });
+}
+
+function showAllNodes() {
+    // Disable physics during filtering
+    network.setOptions({ physics: { enabled: false } });
+    
+    // Show all nodes and edges
+    nodes.forEach(node => {
+        nodes.update({
+            id: node.id,
+            hidden: false
+        });
+    });
+    
+    edges.forEach(edge => {
+        edges.update({
+            id: edge.id,
+            hidden: false
+        });
+    });
+    
+    // Stabilize and fit the network
+    stabilizeNetwork().then(() => {
+        network.fit({
+            animation: {
+                duration: 300,
+                easingFunction: 'easeInOutQuad'
+            }
+        });
+        showToast('Showing all nodes and edges', 'success');
+        saveStateAfterOperation();
     });
 }
 
