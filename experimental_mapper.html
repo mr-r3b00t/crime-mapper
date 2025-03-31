@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Network Graph</title>
+    <title>Crime Mapper - Experimental</title>
     <style>
 
 #menu-toggle {
@@ -743,6 +743,7 @@
                 <button onclick="importGraph()">Import from JSON</button>
                 <button onclick="clearGraph()">Clear Graph</button>
                 <button id="summary-button" onclick="showGraphSummary()">Graph Summary</button>
+                <button onclick="exportToPNG()">Export to PNG</button>
             </div>
         </div>
         <div id="api-keys" class="tab-content">
@@ -878,7 +879,7 @@
         <!-- Suggested -->
 <footer id="footer">
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.262 experimental</p>
+    <p>© Xservus Limited - v0.263 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
@@ -1026,6 +1027,35 @@ function resetNodeHighlights() {
         }
     });
 }
+
+function exportToPNG() {
+    network.setOptions({ physics: { enabled: false } });
+    network.stabilize(100);
+    network.fit(); // Zoom to fit all nodes
+    
+    setTimeout(() => {
+        try {
+            const canvas = document.querySelector('#myNetwork .vis-network canvas');
+            if (!canvas) throw new Error('Canvas not found');
+            
+            const dataURL = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.href = dataURL;
+            link.download = `network_graph_${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            showToast('Graph exported as PNG', 'success');
+        } catch (error) {
+            console.error('Error exporting to PNG:', error);
+            showToast('Failed to export graph as PNG: ' + error.message, 'error');
+        } finally {
+            network.setOptions({ physics: { enabled: !isPhysicsPaused } });
+        }
+    }, 500);
+}
+
 
 function filterIpAndDomains() {
     // Disable physics during filtering
