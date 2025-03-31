@@ -581,6 +581,7 @@
     <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/dist/vis-network.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/toastify-js/1.12.0/toastify.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastify-js/1.12.0/toastify.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body class="dark-mode">
         <div id="progress-bar" class="progress-hidden">Task in progress...</div>
@@ -744,6 +745,7 @@
                 <button onclick="clearGraph()">Clear Graph</button>
                 <button id="summary-button" onclick="showGraphSummary()">Graph Summary</button>
                 <button onclick="exportToPNG()">Export to PNG</button>
+                <button onclick="exportToPDF()">Export to PDF</button>
             </div>
         </div>
         <div id="api-keys" class="tab-content">
@@ -879,7 +881,7 @@
         <!-- Suggested -->
 <footer id="footer">
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.263 experimental</p>
+    <p>© Xservus Limited - v0.264 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
@@ -1521,6 +1523,41 @@ async function enrichAllGoogleDNS() {
     }
 }
 
+
+function exportToPDF() {
+    network.setOptions({ physics: { enabled: false } });
+    network.stabilize(100);
+    network.fit();
+    
+    setTimeout(() => {
+        try {
+            const canvas = document.querySelector('#myNetwork .vis-network canvas');
+            if (!canvas) throw new Error('Canvas not found');
+
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF({
+                orientation: 'landscape',
+                unit: 'px',
+                format: [canvas.width, canvas.height]
+            });
+
+            // Add title
+            pdf.setFontSize(16);
+            pdf.text('Network Graph Export', 40, 20);
+            
+            const imgData = canvas.toDataURL('image/png');
+            pdf.addImage(imgData, 'PNG', 0, 40, canvas.width, canvas.height - 40); // Offset for title
+            pdf.save(`network_graph_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
+            
+            showToast('Graph exported as PDF', 'success');
+        } catch (error) {
+            console.error('Error exporting to PDF:', error);
+            showToast('Failed to export graph as PDF: ' + error.message, 'error');
+        } finally {
+            network.setOptions({ physics: { enabled: !isPhysicsPaused } });
+        }
+    }, 500);
+}
 
 // Function to trigger save after key operations
 function saveStateAfterOperation() {
