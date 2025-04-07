@@ -2000,8 +2000,8 @@ network.on('dragStart', function(params) {
 });
 
 network.on('dragEnd', function(params) {
-    if (params.nodes.length) {
-        // After dragging a node, ensure it's not fixed unless intended
+    if (params.nodes.length > 0) {
+        // Node dragging ended
         params.nodes.forEach(nodeId => {
             nodes.update({
                 id: nodeId,
@@ -2009,10 +2009,12 @@ network.on('dragEnd', function(params) {
             });
         });
         console.log('Node drag ended, position updated');
+        saveStateAfterOperation(); // Save only when nodes are dragged
+    } else {
+        // View panning ended
+        console.log('View pan ended, no save needed');
     }
-    // Reapply interaction settings to ensure panning works
-    ensureInteractionSettings();
-    saveStateAfterOperation(); // Save new node positions
+    ensureInteractionSettings(); // Reapply interaction settings regardless
 });
 
 function stabilizeNetwork(skipFit = false) {
@@ -3948,6 +3950,7 @@ function toggleMode() {
         const pauseButton = document.getElementById('pause-toggle');
         pauseButton.textContent = 'Resume Physics';
         pauseButton.classList.add('paused');
+        ensureInteractionSettings();
     });
 }
 
