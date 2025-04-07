@@ -877,6 +877,8 @@
                 <button onclick="enrichAllShodan()">Enrich All IPs with Shodan</button>
                 <button onclick="enrichAllInternetDB()">Enrich All IPs with InternetDB</button>
                 <button onclick="enrichAllGoogleDNS()">Enrich All Domains with Google DNS</button>
+                <button onclick="enrichAllHudsonRockEmails()">Enrich All Emails with Hudson Rock</button>
+                <button onclick="enrichAllHudsonRockDomains()">Enrich All Domains with Hudson Rock</button>
             </div>
         </div>
         <div id="import-iocs" class="tab-content active">
@@ -958,7 +960,7 @@
         <!-- Suggested -->
         <footer id="controls-footer"> 
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.266 experimental</p>
+    <p>© Xservus Limited - v0.267 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
@@ -1834,14 +1836,14 @@ function handleWheel(event) {
     };
 }
 
-        const baseInteractionOptions = {
-    dragView: true,
-    zoomView: true,
+const baseInteractionOptions = {
     dragNodes: true,
-    zoomSpeed: 0.5,
-    navigationButtons: false,
-    multiselect: true, // Changed from false to true
-    hover: true
+    dragView: true,    // Explicitly enable panning
+    zoomView: true,    // Enable zooming
+    selectable: true,
+    multiselect: true,
+    hover: true,
+    zoomSpeed: 0.5
 };
 
         let container = document.getElementById('myNetwork');
@@ -1977,10 +1979,10 @@ function ensureInteractionSettings() {
             minVelocity: 0.1
         },
         nodes: {
-            fixed: { x: false, y: false } // Ensure nodes remain movable unless layout specifies otherwise
+            fixed: { x: false, y: false } // Ensure nodes remain movable unless explicitly fixed
         }
     });
-    console.log('Interaction settings reapplied:', network.getOptionsFromConfigurator().interaction);
+    console.log('Interaction settings reapplied with dragView enabled');
 }
 
 
@@ -2040,17 +2042,9 @@ function stabilizeNetwork(skipFit = false) {
 
 function finishStabilization(resolve, skipFit) {
     network.setOptions({ 
-        physics: { enabled: !isPhysicsPaused, stabilization: { enabled: false } },
-        interaction: { 
-            dragNodes: true,
-            dragView: true,    // Ensure panning remains enabled
-            zoomView: true,
-            selectable: true,
-            multiselect: true,
-            hover: true,
-            zoomSpeed: 0.5
-        }
+        physics: { enabled: !isPhysicsPaused, stabilization: { enabled: false } }
     });
+    ensureInteractionSettings(); // Reapply interaction settings after stabilization
     if (!skipFit) network.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } });
     resolve();
 }
@@ -6686,6 +6680,224 @@ window.addEventListener('resize', () => {
     }
     myNetwork.style.marginLeft = controls.classList.contains('collapsed') ? '50px' : '300px';
 });
+
+async function enrichAllHudsonRockEmails() {
+    showProgressBar();
+    network.setOptions({ physics: { enabled: false } });
+    const emailNodes = nodes.get({ filter: n => n.type === 'contact' && n.email });
+    const totalEmails = emailNodes.length;
+    let successfulEnrichments = 0;
+
+    if (totalEmails === 0) {
+        showToast('No email nodes found to enrich', 'info');
+        completeProgressBar();
+        return;
+    }
+
+    console.log(`Found ${totalEmails} email nodes to enrich with Hudson Rock`);
+    showToast(`Starting Hudson Rock enrichment for ${totalEmails} emails`, 'info');
+
+    const batchSize = 50; // Consistent with other bulk enrichment functions
+    const delayBetweenBatches = 200; // Consistent with other bulk functions
+    const totalBatches = Math.ceil(totalEmails / batchSize);
+    const assumedRequestTimeMs = 100; // Estimated time per request
+    const timePerBatchMs = assumedRequestTimeMs * batchSize;
+    const totalBatchDelays = (totalBatches - 1) * delayBetweenBatches;
+    const estimatedTimeMs = (timePerBatchMs * totalBatches) + totalBatchDelays + 1000;
+
+    const estimatedSeconds = Math.ceil(estimatedTimeMs / 1000);
+    const estimatedMinutes = Math.floor(estimatedSeconds / 60);
+    const remainingSeconds = estimatedSeconds % 60;
+    const timeEstimateStr = estimatedMinutes > 0 
+        ? `${estimatedMinutes}m ${remainingSeconds}s` 
+        : `${estimatedSeconds}s`;
+
+    showToast(`Estimated time for Hudson Rock email enrichment: ~${timeEstimateStr}`, 'info');
+    document.getElementById('progress-bar').textContent = `Hudson Rock Email Enrichment: 0/${totalEmails} Emails (0%) - Est. ${timeEstimateStr}`;
+
+    async function processBatch(batch) {
+        const promises = batch.map(node => {
+            if (activeTaskController && activeTaskController.signal.aborted) {
+                return Promise.resolve(null);
+            }
+            return throttledEnrichHudsonRock(node.email, node.id, true) // isBulk = true
+                .then(() => successfulEnrichments++)
+                .catch(error => {
+                    console.error(`Failed to enrich email ${node.email}: ${error.message}`);
+                    showToast(`Failed to enrich email ${node.email}: ${error.message}`, 'error');
+                    return null;
+                });
+        });
+        await Promise.all(promises);
+    }
+
+    let lastProgressUpdate = 0;
+    const progressUpdateInterval = 1000;
+    const startTime = Date.now();
+
+    for (let i = 0; i < totalEmails; i += batchSize) {
+        if (activeTaskController && activeTaskController.signal.aborted) {
+            showToast('Hudson Rock email enrichment stopped', 'info');
+            document.getElementById('progress-bar').textContent = `Hudson Rock Email Enrichment: Stopped at ${successfulEnrichments}/${totalEmails} Emails`;
+            break;
+        }
+
+        const batch = emailNodes.slice(i, Math.min(i + batchSize, totalEmails));
+        console.log(`Processing batch ${Math.floor(i / batchSize) + 1} of ${totalBatches}, Emails ${i} to ${Math.min(i + batchSize - 1, totalEmails - 1)}`);
+
+        await processBatch(batch);
+
+        const currentTime = Date.now();
+        if (currentTime - lastProgressUpdate >= progressUpdateInterval || i + batchSize >= totalEmails) {
+            const processedEmails = Math.min(i + batchSize, totalEmails);
+            const progress = ((processedEmails / totalEmails) * 100).toFixed(1);
+            const remainingEmails = totalEmails - processedEmails;
+            const remainingTimeMs = Math.max(0, remainingEmails * assumedRequestTimeMs);
+            const remainingSeconds = Math.ceil(remainingTimeMs / 1000);
+            const remainingMinutes = Math.floor(remainingSeconds / 60);
+            const remainingSecondsPart = remainingSeconds % 60;
+            const remainingTimeStr = remainingMinutes > 0 
+                ? `${remainingMinutes}m ${remainingSecondsPart}s` 
+                : `${remainingSeconds}s`;
+
+            document.getElementById('progress-bar').textContent = 
+                `Hudson Rock Email Enrichment: ${successfulEnrichments}/${totalEmails} Emails (${progress}%) - Est. ${remainingTimeStr} remaining`;
+            lastProgressUpdate = currentTime;
+            updateSelectOptions();
+        }
+
+        await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    ensureInteractionSettings();
+
+    if (!(activeTaskController && activeTaskController.signal.aborted)) {
+        completeProgressBar();
+        showToast(`Hudson Rock email enrichment completed: ${successfulEnrichments}/${totalEmails} emails enriched`, 'success');
+    } else {
+        showToast(`Hudson Rock email enrichment stopped: ${successfulEnrichments}/${totalEmails} emails processed`, 'info');
+    }
+
+    if (window.innerWidth <= 768) {
+        const controls = document.getElementById('controls');
+        controls.classList.add('collapsed');
+        document.getElementById('myNetwork').style.display = 'block';
+        network.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
+    }
+}
+
+async function enrichAllHudsonRockDomains() {
+    showProgressBar();
+    network.setOptions({ physics: { enabled: false } });
+    const domainNodes = nodes.get({ filter: n => n.type === 'domain' && n.domain });
+    const totalDomains = domainNodes.length;
+    let successfulEnrichments = 0;
+
+    if (totalDomains === 0) {
+        showToast('No domain nodes found to enrich', 'info');
+        completeProgressBar();
+        return;
+    }
+
+    console.log(`Found ${totalDomains} domain nodes to enrich with Hudson Rock`);
+    showToast(`Starting Hudson Rock enrichment for ${totalDomains} domains`, 'info');
+
+    const batchSize = 50; // Consistent with other bulk enrichment functions
+    const delayBetweenBatches = 200; // Consistent with other bulk functions
+    const totalBatches = Math.ceil(totalDomains / batchSize);
+    const assumedRequestTimeMs = 100; // Estimated time per request
+    const timePerBatchMs = assumedRequestTimeMs * batchSize;
+    const totalBatchDelays = (totalBatches - 1) * delayBetweenBatches;
+    const estimatedTimeMs = (timePerBatchMs * totalBatches) + totalBatchDelays + 1000;
+
+    const estimatedSeconds = Math.ceil(estimatedTimeMs / 1000);
+    const estimatedMinutes = Math.floor(estimatedSeconds / 60);
+    const remainingSeconds = estimatedSeconds % 60;
+    const timeEstimateStr = estimatedMinutes > 0 
+        ? `${estimatedMinutes}m ${remainingSeconds}s` 
+        : `${estimatedSeconds}s`;
+
+    showToast(`Estimated time for Hudson Rock domain enrichment: ~${timeEstimateStr}`, 'info');
+    document.getElementById('progress-bar').textContent = `Hudson Rock Domain Enrichment: 0/${totalDomains} Domains (0%) - Est. ${timeEstimateStr}`;
+
+    async function processBatch(batch) {
+        const promises = batch.map(node => {
+            if (activeTaskController && activeTaskController.signal.aborted) {
+                return Promise.resolve(null);
+            }
+            return throttledEnrichHudsonRockDomain(node.domain, node.id, true) // isBulk = true
+                .then(() => successfulEnrichments++)
+                .catch(error => {
+                    console.error(`Failed to enrich domain ${node.domain}: ${error.message}`);
+                    showToast(`Failed to enrich domain ${node.domain}: ${error.message}`, 'error');
+                    return null;
+                });
+        });
+        await Promise.all(promises);
+    }
+
+    let lastProgressUpdate = 0;
+    const progressUpdateInterval = 1000;
+    const startTime = Date.now();
+
+    for (let i = 0; i < totalDomains; i += batchSize) {
+        if (activeTaskController && activeTaskController.signal.aborted) {
+            showToast('Hudson Rock domain enrichment stopped', 'info');
+            document.getElementById('progress-bar').textContent = `Hudson Rock Domain Enrichment: Stopped at ${successfulEnrichments}/${totalDomains} Domains`;
+            break;
+        }
+
+        const batch = domainNodes.slice(i, Math.min(i + batchSize, totalDomains));
+        console.log(`Processing batch ${Math.floor(i / batchSize) + 1} of ${totalBatches}, Domains ${i} to ${Math.min(i + batchSize - 1, totalDomains - 1)}`);
+
+        await processBatch(batch);
+
+        const currentTime = Date.now();
+        if (currentTime - lastProgressUpdate >= progressUpdateInterval || i + batchSize >= totalDomains) {
+            const processedDomains = Math.min(i + batchSize, totalDomains);
+            const progress = ((processedDomains / totalDomains) * 100).toFixed(1);
+            const remainingDomains = totalDomains - processedDomains;
+            const remainingTimeMs = Math.max(0, remainingDomains * assumedRequestTimeMs);
+            const remainingSeconds = Math.ceil(remainingTimeMs / 1000);
+            const remainingMinutes = Math.floor(remainingSeconds / 60);
+            const remainingSecondsPart = remainingSeconds % 60;
+            const remainingTimeStr = remainingMinutes > 0 
+                ? `${remainingMinutes}m ${remainingSecondsPart}s` 
+                : `${remainingSeconds}s`;
+
+            document.getElementById('progress-bar').textContent = 
+                `Hudson Rock Domain Enrichment: ${successfulEnrichments}/${totalDomains} Domains (${progress}%) - Est. ${remainingTimeStr} remaining`;
+            lastProgressUpdate = currentTime;
+            updateSelectOptions();
+        }
+
+        await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    ensureInteractionSettings();
+
+    if (!(activeTaskController && activeTaskController.signal.aborted)) {
+        completeProgressBar();
+        showToast(`Hudson Rock domain enrichment completed: ${successfulEnrichments}/${totalDomains} domains enriched`, 'success');
+    } else {
+        showToast(`Hudson Rock domain enrichment stopped: ${successfulEnrichments}/${totalDomains} domains processed`, 'info');
+    }
+
+    if (window.innerWidth <= 768) {
+        const controls = document.getElementById('controls');
+        controls.classList.add('collapsed');
+        document.getElementById('myNetwork').style.display = 'block';
+        network.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
+    }
+}
+
+
 
 // Add this at the end of the script section
 window.addEventListener('beforeunload', function() {
