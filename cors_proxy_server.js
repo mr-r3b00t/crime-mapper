@@ -9,7 +9,7 @@ const port = 3000;
 const allowList = [
   'api.shodan.io',
   'ipinfo.io',
-  'dns.google',
+  'dns.google.com',
   'api.hudsonrock.com',
   'cavalier.hudsonrock.com'
 ];
