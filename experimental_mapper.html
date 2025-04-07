@@ -6,6 +6,94 @@
     <title>Crime Mapper - Experimental</title>
     <style>
 
+/* Properties Panel */
+#properties-panel {
+    position: fixed;
+    right: -310px; /* Start offscreen on the right */
+    top: 0;
+    width: 300px;
+    height: 100vh;
+    background-color: #fff;
+    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.2); /* Shadow on left side */
+    z-index: 2000; /* Ensure it’s above other elements */
+    padding: 20px;
+    overflow-y: auto;
+    transition: right 0.3s ease-in-out; /* Transition right property */
+    box-sizing: border-box;
+}
+
+.dark-mode #properties-panel {
+    background-color: #2d3748;
+    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.4); /* Adjusted shadow direction */
+    color: #e2e8f0;
+}
+
+#properties-panel.active {
+    right: 0; /* Slide to the right edge */
+}
+
+/* Adjust close button positioning */
+#properties-panel .close-button {
+    position: absolute;
+    top: 10px;
+    right: 10px; /* Keep it on the right side */
+    background: none;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    color: #1f2a44;
+    transition: color 0.3s;
+}
+
+/* Remove or adjust conflicting layout rules */
+#properties-panel.active ~ #controls:not(.collapsed) {
+    left: 0; /* Don’t shift controls left; keep them in place */
+}
+
+#properties-panel.active ~ #controls.collapsed {
+    left: 0; /* Don’t shift collapsed controls */
+}
+
+#properties-panel.active ~ #myNetwork {
+    margin-right: 300px; /* Reduce right margin to make space */
+    margin-left: 0; /* Reset left margin adjustment */
+}
+
+#properties-panel.active ~ #controls.collapsed ~ #myNetwork {
+    margin-right: 300px; /* Adjust for collapsed controls */
+    margin-left: 50px; /* Maintain left margin for collapsed controls */
+}
+
+/* Ensure controls panel adjusts when properties panel is open */
+#controls {
+    transition: left 0.3s ease-in-out, width 0.3s ease-in-out;
+}
+
+#controls.collapsed ~ #myNetwork {
+    margin-left: 50px;
+}
+
+#controls:not(.collapsed) ~ #myNetwork {
+    margin-left: 300px;
+}
+
+#properties-panel.active ~ #controls:not(.collapsed) {
+    left: 300px; /* Shift controls right when properties panel is open */
+}
+
+#properties-panel.active ~ #controls.collapsed {
+    left: 300px; /* Keep collapsed controls aligned */
+}
+
+#properties-panel.active ~ #myNetwork {
+    margin-left: 350px; /* Account for both panels when expanded */
+}
+
+#properties-panel.active ~ #controls.collapsed ~ #myNetwork {
+    margin-left: 350px; /* Adjust network margin when controls are collapsed */
+}
+
+
 #menu-toggle {
     padding: 6px 12px;
     background-color: #3b82f6;
@@ -887,6 +975,19 @@
             <tbody></tbody>
         </table>
     </div>
+    <div id="properties-panel">
+        <button class="close-button" onclick="hidePropertiesPanel()">×</button>
+        <h3>Node Properties</h3>
+        <table id="properties-table">
+            <thead>
+                <tr>
+                    <th>Property</th>
+                    <th>Value</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
     <div id="contextMenu" style="display: none;"></div>
     <div id="edgeContextMenu" style="display: none;"></div>
 
@@ -1555,8 +1656,6 @@ function saveStateAfterOperation() {
 }
 
 window.onload = function() {
-
-     // Load saved state
     const stateLoaded = loadState();
     if (!stateLoaded) {
         nodes = new vis.DataSet([]);
@@ -1564,49 +1663,33 @@ window.onload = function() {
         nextId = 1;
     }
 
-    // If no state was loaded, apply defaults
-    if (!stateLoaded) {
-        console.log('No saved state found or loading failed, applying defaults');
-        updateTheme();
-        ensureInteractionSettings();
-    }
-    // Load API keys from localStorage
-    const storedIpinfoKey = localStorage.getItem('ipinfoApiKey');
-    if (storedIpinfoKey) {
-        ipinfoApiKey = storedIpinfoKey;
-        document.getElementById('ipinfoApiKey').value = storedIpinfoKey;
-        document.getElementById('storeIpinfoKey').checked = true;
-    }
-    const storedShodanKey = localStorage.getItem('shodanApiKey');
-    if (storedShodanKey) {
-        shodanApiKey = storedShodanKey;
-        document.getElementById('shodanApiKey').value = storedShodanKey;
-        document.getElementById('storeShodanKey').checked = true;
-    }
-    const storedCorsProxy = localStorage.getItem('corsProxyUrl');
-            if (storedCorsProxy) {
-                corsProxyUrl = storedCorsProxy;
-                document.getElementById('corsProxyUrl').value = storedCorsProxy;
-                document.getElementById('storeCorsProxy').checked = true;
-            } else {
-                // Set default value if not in localStorage
-                document.getElementById('corsProxyUrl').value = corsProxyUrl;
-            }
-   
-
-    // Update UI elements regardless of state
     updateSelectOptions();
+    updateTheme();
+    
+    // Ensure interaction settings with dragView
+    network.setOptions({
+        interaction: {
+            ...baseInteractionOptions,
+            dragView: true,  // Explicitly enable dragging
+            zoomView: true,
+            zoomSpeed: 0.5
+        }
+    });
+    ensureInteractionSettings();
+    
+    container.removeEventListener('mousedown', handleMouseDown);
+    container.removeEventListener('mousemove', handleMouseMove);
+    container.removeEventListener('mouseup', handleMouseUp);
+    container.addEventListener('wheel', handleWheel, { passive: false });
 
-    // Handle mobile layout
     if (window.innerWidth <= 768) {
         document.getElementById('controls').classList.add('collapsed');
     }
 
-    // Stabilize network after everything is set up
-    stabilizeNetwork();
+    stabilizeNetwork().then(() => {
+        network.fit({ animation: { duration: 300 } });
+    });
 
-    // Start periodic saving
-    // Only save when changes occur
     let hasChanges = false;
     nodes.on('*', () => hasChanges = true);
     edges.on('*', () => hasChanges = true);
@@ -1619,7 +1702,6 @@ window.onload = function() {
     }, 60 * 1000);
 };
 
-// Improve the loadState function with better error handling and logging
 function loadState() {
     const savedState = localStorage.getItem('networkGraphState');
     if (!savedState) {
@@ -1629,23 +1711,13 @@ function loadState() {
 
     try {
         const state = JSON.parse(savedState);
-        if (!state.nodes || !state.edges) {
-            console.error('Invalid state format: missing nodes or edges');
-            return false;
-        }
+        if (!state.nodes || !state.edges) return false;
 
         nodes.clear();
         edges.clear();
         
-        state.nodes.forEach(node => {
-            if (!node.id || !node.type) return;
-            nodes.add(node);
-        });
-        
-        state.edges.forEach(edge => {
-            if (!edge.from || !edge.to) return;
-            edges.add(edge);
-        });
+        state.nodes.forEach(node => nodes.add(node));
+        state.edges.forEach(edge => edges.add(edge));
         
         nextId = state.nextId || 1;
         isDarkMode = state.isDarkMode !== undefined ? state.isDarkMode : true;
@@ -1653,7 +1725,6 @@ function loadState() {
         nodeLabelsVisible = state.nodeLabelsVisible !== undefined ? state.nodeLabelsVisible : true;
         edgeLabelsVisible = state.edgeLabelsVisible !== undefined ? state.edgeLabelsVisible : true;
         
-        // Update checkbox states
         document.getElementById('showNodeLabels').checked = nodeLabelsVisible;
         document.getElementById('showEdgeLabels').checked = edgeLabelsVisible;
         
@@ -1661,9 +1732,26 @@ function loadState() {
         const pauseButton = document.getElementById('pause-toggle');
         pauseButton.textContent = isPhysicsPaused ? 'Resume Physics' : 'Pause Physics';
         pauseButton.classList.toggle('paused', isPhysicsPaused);
-        network.setOptions({ physics: { enabled: !isPhysicsPaused } });
-        ensureInteractionSettings();
         
+        // Explicitly set all interaction options including dragView
+        network.setOptions({
+            physics: { enabled: !isPhysicsPaused },
+            interaction: {
+                ...baseInteractionOptions,
+                dragView: true,  // Ensure dragView is enabled
+                zoomView: true,
+                dragNodes: true,
+                zoomSpeed: 0.5,
+                multiselect: true,
+                hover: true
+            }
+        });
+        
+        // Re-apply wheel event listener (from previous zoom fix)
+        container.removeEventListener('wheel', handleWheel);
+        container.addEventListener('wheel', handleWheel, { passive: false });
+        
+        console.log('Loaded state with dragView enabled');
         return true;
     } catch (e) {
         console.error('Error loading state:', e);
@@ -1672,6 +1760,19 @@ function loadState() {
         return false;
     }
 }
+
+
+// Separate wheel handler function for reusability
+function handleWheel(event) {
+    event.preventDefault();
+    const scale = event.deltaY > 0 ? 0.9 : 1.1;
+    const currentScale = network.getScale();
+    network.moveTo({
+        scale: currentScale * scale,
+        animation: { duration: 100 }
+    });
+}
+
         function showToast(message, type = 'info') {
             const toastOptions = {
                 text: message,
@@ -1824,7 +1925,15 @@ function loadState() {
         minVelocity: 0.1,
         solver: 'barnesHut'
     },
-    interaction: { ...baseInteractionOptions },
+    interaction: {
+        dragNodes: true,
+        dragView: true,    // Enable view dragging (panning)
+        zoomView: true,    // Enable zooming
+        hover: true,
+        multiselect: true,
+        selectable: true,
+        zoomSpeed: 0.5
+    },
     layout: { improvedLayout: true }
 };
         
@@ -1842,18 +1951,16 @@ network.on('deselectNode', function(params) {
 
 
 
-
-        // Ensure interaction settings are always applied
 function ensureInteractionSettings() {
     network.setOptions({
         interaction: { 
-            ...baseInteractionOptions,
-            zoomView: true,        // Explicitly ensure zooming is enabled
-            dragView: true,
             dragNodes: true,
-            zoomSpeed: 0.5,
+            dragView: true,    // Explicitly enable panning
+            zoomView: true,
+            selectable: true,
             multiselect: true,
-            hover: true
+            hover: true,
+            zoomSpeed: 0.5
         },
         physics: {
             enabled: !isPhysicsPaused,
@@ -1868,14 +1975,52 @@ function ensureInteractionSettings() {
             },
             maxVelocity: 25,
             minVelocity: 0.1
+        },
+        nodes: {
+            fixed: { x: false, y: false } // Ensure nodes remain movable unless layout specifies otherwise
         }
     });
+    console.log('Interaction settings reapplied:', network.getOptionsFromConfigurator().interaction);
 }
 
 
+network.on('dragStart', function(params) {
+    if (params.nodes.length) {
+        // Dragging a node
+        console.log('Dragging node:', params.nodes);
+    } else {
+        // Dragging background (panning)
+        console.log('Starting pan');
+        network.setOptions({
+            interaction: { dragView: true }
+        });
+    }
+});
+
+network.on('dragEnd', function(params) {
+    if (params.nodes.length) {
+        // After dragging a node, ensure it's not fixed unless intended
+        params.nodes.forEach(nodeId => {
+            nodes.update({
+                id: nodeId,
+                fixed: { x: false, y: false }
+            });
+        });
+        console.log('Node drag ended, position updated');
+    }
+    // Reapply interaction settings to ensure panning works
+    ensureInteractionSettings();
+    saveStateAfterOperation(); // Save new node positions
+});
+
 function stabilizeNetwork(skipFit = false) {
     return new Promise(resolve => {
-        network.setOptions({ physics: { enabled: true, stabilization: { enabled: true, iterations: 200, updateInterval: 50 } } });
+        network.setOptions({
+            physics: {
+                enabled: true,
+                stabilization: { enabled: true, iterations: 200, updateInterval: 50 }
+            }
+        });
         network.stabilize(200);
         let resolved = false;
         network.once('stabilizationIterationsDone', () => {
@@ -1889,11 +2034,23 @@ function stabilizeNetwork(skipFit = false) {
                 resolved = true;
                 finishStabilization(resolve, skipFit);
             }
-        }, 5000); // 5-second fallback
+        }, 5000);
     });
 }
+
 function finishStabilization(resolve, skipFit) {
-    network.setOptions({ physics: { enabled: !isPhysicsPaused, stabilization: { enabled: false } } });
+    network.setOptions({ 
+        physics: { enabled: !isPhysicsPaused, stabilization: { enabled: false } },
+        interaction: { 
+            dragNodes: true,
+            dragView: true,    // Ensure panning remains enabled
+            zoomView: true,
+            selectable: true,
+            multiselect: true,
+            hover: true,
+            zoomSpeed: 0.5
+        }
+    });
     if (!skipFit) network.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } });
     resolve();
 }
@@ -1944,10 +2101,10 @@ function finishStabilization(resolve, skipFit) {
 });
 
 network.on('click', function(params) {
-    // Only proceed if exactly one node is selected
-    if (params.nodes.length !== 1) {
-        console.log('Click event: Multiple or no nodes selected, nodes:', params.nodes);
-        return; // Do nothing if multiple nodes or no nodes are selected
+ // Only proceed if exactly one node is selected and not dragging
+ if (params.nodes.length !== 1 || params.event.type === 'drag') {
+        console.log('Click event ignored:', params);
+        return;
     }
 
     const nodeId = params.nodes[0];
@@ -2121,8 +2278,8 @@ function removeEdgeDirect(edgeId) {
     hideEdgeContextMenu();
 }
 
+// Update the showContextMenu function to include the new option
 function showContextMenu(x, y, value, nodeIds, type) {
-    // Ensure nodeIds is an array
     const nodesArray = Array.isArray(nodeIds) ? nodeIds : [nodeIds];
     const menu = document.getElementById('contextMenu');
     const isMultiple = nodesArray.length > 1;
@@ -2130,6 +2287,7 @@ function showContextMenu(x, y, value, nodeIds, type) {
     let menuHtml = `
         <button onclick="deleteNodes([${nodesArray.join(',')}])">Delete ${isMultiple ? 'Selected Nodes' : 'Node'}</button>
         ${isMultiple ? '' : `<button onclick="startLinkCreation(${nodesArray[0]})">Create Link From Here</button>`}
+        ${isMultiple ? '' : `<button onclick="showPropertiesPanel(${nodesArray[0]}); hideContextMenu();">View Node Properties</button>`}
     `;
     
     // Check if all selected nodes are of the same type
@@ -2151,6 +2309,7 @@ function showContextMenu(x, y, value, nodeIds, type) {
             menuHtml += `
                 <button onclick="throttledEnrichGoogleDNSMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via Google DNS</button>
                 <button onclick="throttledEnrichShodanMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via Shodan</button>
+                <button onclick="throttledEnrichHudsonRockDomainMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via Hudson Rock</button>
                 <button onclick="throttledSendHttpsRequestMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], 'domain', 'https')">Send HTTPS Request</button>
                 <button onclick="throttledSendHttpsRequestMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], 'domain', 'http')">Send HTTP Request</button>
             `;
@@ -2158,7 +2317,7 @@ function showContextMenu(x, y, value, nodeIds, type) {
             menuHtml += `
                 <button onclick="throttledSearchShodanHtmlHash('${nodesArray[0]}', '${nodes.get(nodesArray[0]).hash}')">Search Shodan for IPs with this HTML Hash</button>
             `;
-        } else if (type === 'contact') { // New condition for email enrichment
+        } else if (type === 'contact') {
             menuHtml += `
                 <button onclick="throttledEnrichHudsonRockMultiple([${nodesArray.map(id => `'${nodes.get(id).email}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via Hudson Rock</button>
             `;
@@ -2561,7 +2720,10 @@ function cancelLinkCreation() {
 
 function constructUrl(baseUrl, useApiKey = true) {
     if (routeViaProxy) {
-        return `${corsProxyUrl}/${baseUrl}`;
+        // Ensure corsProxyUrl doesn't end with a slash and baseUrl doesn't start with one
+        const cleanProxyUrl = corsProxyUrl.replace(/\/+$/, ''); // Remove trailing slashes
+        const cleanBaseUrl = baseUrl.replace(/^\/+/, '');      // Remove leading slashes
+        return `${cleanProxyUrl}/${cleanBaseUrl}`;
     }
     return useApiKey ? baseUrl : baseUrl.split('?')[0]; // Remove query params if ignoring API keys
 }
@@ -6201,6 +6363,329 @@ const throttledEnrichHudsonRockMultiple = throttleRequest(async function enrichH
     }
 }, RATE_LIMIT_MS);
 
+
+const throttledEnrichHudsonRockDomain = throttleRequest(async function enrichHudsonRockDomain(domain, domainNodeId, isBulk = false, signal) {
+    network.setOptions({ physics: { enabled: false } });
+    try {
+        const url = constructUrl(`https://cavalier.hudsonrock.com/api/json/v2/osint-tools/search-by-domain?domain=${encodeURIComponent(domain)}`);
+        const response = await fetch(url, { signal });
+        if (!response.ok) throw new Error(`Failed to fetch Hudson Rock domain data: ${response.statusText}`);
+        const data = await response.json();
+
+        // Deduplication maps
+        const existingOrganizations = new Map(nodes.get({ filter: n => n.type === 'organization' }).map(n => [n.organization, n.id]));
+        const existingDomains = new Map(nodes.get({ filter: n => n.type === 'domain' }).map(n => [n.domain, n.id]));
+        const existingMalwares = new Map(nodes.get({ filter: n => n.type === 'malware' }).map(n => [n.malwareName, n.id]));
+        const existingTechnologies = new Map(nodes.get({ filter: n => n.type === 'technology' }).map(n => [n.techName, n.id]));
+
+        const newNodes = [];
+        const newEdges = [];
+
+        // Process organization (company name)
+        if (data.data && data.data.company_name) {
+            const companyName = data.data.company_name;
+            let orgId = existingOrganizations.get(companyName);
+            if (!orgId) {
+                orgId = nextId++;
+                newNodes.push({
+                    id: orgId,
+                    type: 'organization',
+                    label: `Organization: ${companyName}`,
+                    title: `Organization: ${companyName}`,
+                    color: { background: '#facc15' },
+                    organization: companyName
+                });
+                existingOrganizations.set(companyName, orgId);
+            }
+            const orgEdgeId = `${domainNodeId}-${orgId}-BelongsTo`;
+            if (!edges.get(orgEdgeId) && !newEdges.some(e => e.id === orgEdgeId)) {
+                newEdges.push({ id: orgEdgeId, from: domainNodeId, to: orgId, label: 'Belongs to' });
+            }
+        }
+
+        // Process third-party domains
+        if (data.thirdPartyDomains && Array.isArray(data.thirdPartyDomains)) {
+            data.thirdPartyDomains.forEach(thirdParty => {
+                if (thirdParty.domain && thirdParty.domain !== null) {
+                    let thirdPartyId = existingDomains.get(thirdParty.domain);
+                    if (!thirdPartyId) {
+                        thirdPartyId = nextId++;
+                        newNodes.push({
+                            id: thirdPartyId,
+                            type: 'domain',
+                            label: `Domain: ${thirdParty.domain}`,
+                            title: `Third-Party Domain: ${thirdParty.domain}\nOccurrences: ${thirdParty.occurrence}`,
+                            color: { background: '#60a5fa' },
+                            domain: thirdParty.domain
+                        });
+                        existingDomains.set(thirdParty.domain, thirdPartyId);
+                    }
+                    const thirdPartyEdgeId = `${domainNodeId}-${thirdPartyId}-AssociatedWith`;
+                    if (!edges.get(thirdPartyEdgeId) && !newEdges.some(e => e.id === thirdPartyEdgeId)) {
+                        newEdges.push({
+                            id: thirdPartyEdgeId,
+                            from: domainNodeId,
+                            to: thirdPartyId,
+                            label: `Associated with (${thirdParty.occurrence})`
+                        });
+                    }
+                }
+            });
+        }
+
+        // Process stealer families as malware
+        if (data.stealerFamilies && typeof data.stealerFamilies === 'object') {
+            for (const [malwareName, count] of Object.entries(data.stealerFamilies)) {
+                if (malwareName !== 'total' && count > 0) {
+                    let malwareId = existingMalwares.get(malwareName);
+                    if (!malwareId) {
+                        malwareId = nextId++;
+                        newNodes.push({
+                            id: malwareId,
+                            type: 'malware',
+                            label: `Malware: ${malwareName}`,
+                            title: `Malware\nName: ${malwareName}\nType: Info-Stealer\nOccurrences: ${count}`,
+                            color: { background: '#ef4444' },
+                            malwareName: malwareName,
+                            malwareType: 'Info-Stealer'
+                        });
+                        existingMalwares.set(malwareName, malwareId);
+                    }
+                    const malwareEdgeId = `${domainNodeId}-${malwareId}-InfectedBy`;
+                    if (!edges.get(malwareEdgeId) && !newEdges.some(e => e.id === malwareEdgeId)) {
+                        newEdges.push({
+                            id: malwareEdgeId,
+                            from: domainNodeId,
+                            to: malwareId,
+                            label: `Infected by (${count})`
+                        });
+                    }
+                }
+            }
+        }
+
+        // Process antiviruses as technologies
+        if (data.antiviruses && data.antiviruses.list && Array.isArray(data.antiviruses.list)) {
+            data.antiviruses.list.forEach(av => {
+                if (av.name && av.count > 0) {
+                    let avId = existingTechnologies.get(av.name);
+                    if (!avId) {
+                        avId = nextId++;
+                        newNodes.push({
+                            id: avId,
+                            type: 'technology',
+                            label: `AV: ${av.name}`,
+                            title: `Technology\nName: ${av.name}\nVersion: N/A\nOccurrences: ${av.count}`,
+                            color: { background: '#ec4899' },
+                            techName: av.name,
+                            techVersion: 'N/A'
+                        });
+                        existingTechnologies.set(av.name, avId);
+                    }
+                    const avEdgeId = `${domainNodeId}-${avId}-ProtectedBy`;
+                    if (!edges.get(avEdgeId) && !newEdges.some(e => e.id === avEdgeId)) {
+                        newEdges.push({
+                            id: avEdgeId,
+                            from: domainNodeId,
+                            to: avId,
+                            label: `Protected by (${av.count})`
+                        });
+                    }
+                }
+            });
+        }
+
+        // Batch update
+        if (newNodes.length > 0) nodes.add(newNodes);
+        if (newEdges.length > 0) edges.add(newEdges);
+
+        updateNodeSizes();
+        updateSelectOptions();
+        await stabilizeNetwork();
+        if (!isBulk) showToast(`Domain ${domain} enrichment completed using Hudson Rock`, 'success');
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            showToast(`Enrichment of domain ${domain} was cancelled`, 'info');
+            return;
+        }
+        console.error(`Error enriching domain ${domain} with Hudson Rock: ${error.message}`);
+        showToast(`Error enriching domain ${domain}: ${error.message}`, 'error');
+        await stabilizeNetwork();
+    }
+}, RATE_LIMIT_MS);
+
+const throttledEnrichHudsonRockDomainMultiple = throttleRequest(async function enrichHudsonRockDomainMultiple(domains, nodeIds) {
+    if (!Array.isArray(domains) || !Array.isArray(nodeIds) || domains.length !== nodeIds.length) {
+        showToast('Invalid input for multiple Hudson Rock domain enrichment', 'error');
+        return;
+    }
+
+    showProgressBar();
+    network.setOptions({ physics: { enabled: false } });
+    const totalDomains = domains.length;
+    let successfulEnrichments = 0;
+
+    showToast(`Starting Hudson Rock enrichment for ${totalDomains} domains`, 'info');
+    document.getElementById('progress-bar').textContent = `Hudson Rock Domain Enrichment: 0/${totalDomains} Domains (0%)`;
+
+    for (let i = 0; i < totalDomains; i++) {
+        if (activeTaskController && activeTaskController.signal.aborted) {
+            showToast('Hudson Rock domain enrichment stopped', 'info');
+            document.getElementById('progress-bar').textContent = `Hudson Rock Domain Enrichment: Stopped at ${successfulEnrichments}/${totalDomains} Domains`;
+            break;
+        }
+
+        await throttledEnrichHudsonRockDomain(domains[i], nodeIds[i], true); // isBulk = true
+        successfulEnrichments++;
+
+        const progress = ((successfulEnrichments / totalDomains) * 100).toFixed(1);
+        document.getElementById('progress-bar').textContent = 
+            `Hudson Rock Domain Enrichment: ${successfulEnrichments}/${totalDomains} Domains (${progress}%)`;
+        
+        // Small delay to respect API limits
+        await new Promise(resolve => setTimeout(resolve, 200));
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();xf
+    await stabilizeNetwork();
+    ensureInteractionSettings();
+
+    if (!(activeTaskController && activeTaskController.signal.aborted)) {
+        completeProgressBar();
+        showToast(`Hudson Rock domain enrichment completed: ${successfulEnrichments}/${totalDomains} domains enriched`, 'success');
+    }
+}, RATE_LIMIT_MS);
+
+
+
+function showPropertiesPanel(nodeId) {
+    console.log('Attempting to show properties for node ID:', nodeId);
+    const node = nodes.get(nodeId);
+    
+    if (!node) {
+        console.error('Node not found for ID:', nodeId);
+        showToast('Node not found', 'error');
+        return;
+    }
+
+    console.log('Node data:', JSON.stringify(node, null, 2));
+
+    const tbody = document.querySelector('#properties-table tbody');
+    if (!tbody) {
+        console.error('Properties table body not found');
+        showToast('Properties table not found', 'error');
+        return;
+    }
+    
+    tbody.innerHTML = '';
+
+    const properties = {};
+    for (let key in node) {
+        if (node.hasOwnProperty(key) && 
+            !['id', 'x', 'y', 'fixed', 'physics', 'hidden', 'group', 'options', 
+              'scaling', 'shadow', 'shapeProperties', 'chosen', 'mass'].includes(key)) {
+            properties[key] = node[key];
+        }
+    }
+
+    Object.entries(properties).forEach(([key, value]) => {
+        if (typeof value === 'object' && value !== null && key !== 'color') {
+            value = JSON.stringify(value, null, 2);
+        } else if (value === null || value === undefined) {
+            value = 'N/A';
+        }
+        const row = document.createElement('tr');
+        row.innerHTML = `<td>${key}</td><td>${value}</td>`;
+        tbody.appendChild(row);
+    });
+
+    const panel = document.getElementById('properties-panel');
+    if (!panel) {
+        console.error('Properties panel element not found');
+        showToast('Properties panel not found', 'error');
+        return;
+    }
+
+    // Ensure panel is visible and trigger transition
+    panel.style.display = 'block'; // Ensure it’s not hidden
+    panel.classList.add('active');
+
+    // Force reflow for transition
+    void panel.offsetHeight;
+
+    // Adjust network layout
+    const controls = document.getElementById('controls');
+    const myNetwork = document.getElementById('myNetwork');
+    myNetwork.style.marginRight = '300px';
+    myNetwork.style.marginLeft = controls.classList.contains('collapsed') ? '50px' : '300px';
+
+    console.log('Properties panel should now be visible on the right');
+    network.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
+}
+
+function hidePropertiesPanel() {
+    const panel = document.getElementById('properties-panel');
+    if (!panel) return;
+
+    panel.classList.remove('active');
+
+    // Reset layout
+    const controls = document.getElementById('controls');
+    const myNetwork = document.getElementById('myNetwork');
+    myNetwork.style.marginRight = '0';
+    myNetwork.style.marginLeft = controls.classList.contains('collapsed') ? '50px' : '300px';
+
+    // Optional: Hide panel after transition to avoid flicker
+    panel.addEventListener('transitionend', function handler() {
+        if (!panel.classList.contains('active')) {
+            panel.style.display = 'none';
+        }
+        panel.removeEventListener('transitionend', handler);
+    });
+
+    network.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
+}
+
+// Ensure toggleMenu aligns with right-side panel
+function toggleMenu() {
+    const controls = document.getElementById('controls');
+    const menuToggle = document.getElementById('menu-toggle');
+    const propertiesPanel = document.getElementById('properties-panel');
+    const myNetwork = document.getElementById('myNetwork');
+    
+    controls.classList.toggle('collapsed');
+    
+    if (controls.classList.contains('collapsed')) {
+        menuToggle.textContent = '>'; 
+        menuToggle.style.transform = 'rotate(0deg)';
+        myNetwork.style.marginLeft = '50px';
+    } else {
+        menuToggle.textContent = '<'; 
+        menuToggle.style.transform = 'rotate(0deg)';
+        myNetwork.style.marginLeft = '300px';
+    }
+
+    myNetwork.style.marginRight = propertiesPanel.classList.contains('active') ? '300px' : '0';
+    
+    network.fit({
+        animation: { duration: 300, easingFunction: 'easeInOutQuad' }
+    });
+}
+
+// Update window resize handler
+window.addEventListener('resize', () => {
+    const propertiesPanel = document.getElementById('properties-panel');
+    const controls = document.getElementById('controls');
+    const myNetwork = document.getElementById('myNetwork');
+    
+    if (propertiesPanel.classList.contains('active')) {
+        myNetwork.style.marginRight = '300px';
+    } else {
+        myNetwork.style.marginRight = '0';
+    }
+    myNetwork.style.marginLeft = controls.classList.contains('collapsed') ? '50px' : '300px';
+});
 
 // Add this at the end of the script section
 window.addEventListener('beforeunload', function() {
