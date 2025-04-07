@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Network Graph</title>
+    <title>Crime Mapper - Experimental</title>
     <style>
 
 #menu-toggle {
@@ -530,6 +530,26 @@
     background-color: #4b5563;
 }
 
+#search-input {
+    padding: 6px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border-light);
+    background-color: #fff;
+    color: #1f2a44;
+    transition: border-color var(--transition);
+}
+
+.dark-mode #search-input {
+    border: 1px solid var(--border-dark);
+    background-color: #4b5563;
+    color: #e2e8f0;
+}
+
+#search-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+}
+
 /* Progress Bar Styles */
 #progress-bar {
     position: fixed;
@@ -561,6 +581,7 @@
     <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/dist/vis-network.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/toastify-js/1.12.0/toastify.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastify-js/1.12.0/toastify.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body class="dark-mode">
         <div id="progress-bar" class="progress-hidden">Task in progress...</div>
@@ -579,6 +600,7 @@
             <button class="tab-button" onclick="showTab('enrichment')">Enrichment</button>
             <button class="tab-button active" onclick="showTab('import-iocs')">Import IOCs</button>
             <button class="tab-button" onclick="showTab('layouts')">Layouts</button>
+            <button class="tab-button" onclick="showTab('search')">Search</button>
         </div>
         <div id="object-management" class="tab-content">
             <div class="input-group">
@@ -722,6 +744,8 @@
                 <button onclick="importGraph()">Import from JSON</button>
                 <button onclick="clearGraph()">Clear Graph</button>
                 <button id="summary-button" onclick="showGraphSummary()">Graph Summary</button>
+                <button onclick="exportToPNG()">Export to PNG</button>
+                <button onclick="exportToPDF()">Export to PDF</button>
             </div>
         </div>
         <div id="api-keys" class="tab-content">
@@ -787,6 +811,14 @@
                 <button onclick="importIOCsFromFile()">Import from File</button>
             </div>
         </div>
+        <div id="search" class="tab-content">
+            
+            <div class="input-group" style="margin: 10px 0;">
+                <input type="text" id="search-input" placeholder="Search graph..." style="width: 100%; margin-bottom: 5px;">
+                <button onclick="searchGraph()" style="background-color: #10b981;">Search</button>
+            </div>
+        
+        </div>
         <div id="layouts" class="tab-content">
             <div class="input-group">
                 <h3>Graph Layouts</h3>
@@ -819,6 +851,11 @@
                 <button onclick="setNodeSizeLayout('outgoing')">Size by Outgoing Links</button>
                 <button onclick="setNodeSizeLayout('both')">Size by All Links</button>
             </div>
+            <div class="input-group">
+                <h3>Filter Display</h3>
+                <button onclick="filterIpAndDomains()">Show Only IPs & Domains</button>
+                <button onclick="showAllNodes()">Show All Nodes</button>
+            </div>
         </div>
          <!-- Buy Me a Coffee Button -->
          <div style="text-align: center; padding: 10px;">
@@ -844,7 +881,7 @@
         <!-- Suggested -->
 <footer id="footer">
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.260 demo</p>
+    <p>© Xservus Limited - v0.264 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
@@ -886,6 +923,253 @@
         const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 
         let selectedNodes = new Set(); // To track multiple selected nodes
+
+
+        function searchGraph() {
+    const searchTerm = document.getElementById('search-input').value.trim().toLowerCase();
+    if (!searchTerm) {
+        showToast('Please enter a search term', 'error');
+        resetNodeHighlights();
+        return;
+    }
+
+    // Reset previous highlights
+    resetNodeHighlights();
+
+    // Find matching nodes
+    const matchingNodes = nodes.get().filter(node => {
+        // Search in label, and type-specific fields
+        const searchableText = [
+            node.label || '',
+            node.ip || '',
+            node.domain || '',
+            node.email || '',
+            node.name || '',
+            node.organization || '',
+            node.portNumber || '',
+            node.address || '',
+            node.accountNumber || '',
+            node.techName || '',
+            node.deviceName || '',
+            node.malwareName || '',
+            node.vulnName || '',
+            node.cve || '',
+            node.hash || '',
+            node.asn || '',
+            node.city || '',
+            node.country || '',
+            node.os || '',
+            node.product || ''
+        ].join(' ').toLowerCase();
+
+        return searchableText.includes(searchTerm);
+    });
+
+    if (matchingNodes.length === 0) {
+        showToast('No matches found', 'info');
+        return;
+    }
+
+    // Highlight matching nodes
+    matchingNodes.forEach(node => {
+        nodes.update({
+            id: node.id,
+            color: {
+                background: '#ffeb3b', // Bright yellow for highlight
+                border: '#f44336',     // Red border for visibility
+                highlight: {
+                    background: '#ffeb3b',
+                    border: '#f44336'
+                }
+            },
+            font: {
+                size: 14,  // Slightly larger font for visibility
+                color: '#000000'  // Black text for contrast
+            }
+        });
+    });
+
+    // Zoom to the first matching node
+    const firstMatchId = matchingNodes[0].id;
+    network.focus(firstMatchId, {
+        scale: 1.5,  // Zoom in
+        animation: {
+            duration: 1000,
+            easingFunction: 'easeInOutQuad'
+        }
+    });
+
+    showToast(`Found ${matchingNodes.length} matching nodes`, 'success');
+}
+
+function resetNodeHighlights() {
+    nodes.forEach(node => {
+        // Restore original colors based on node type
+        const originalColor = getNodeColorByType(node.type);
+        nodes.update({
+            id: node.id,
+            color: {
+                background: originalColor.background,
+                border: isDarkMode ? '#94a3b8' : '#6b7280',
+                highlight: {
+                    background: originalColor.background,
+                    border: '#60a5fa'
+                }
+            },
+            font: {
+                size: nodeLabelsVisible ? 12 : 0,
+                color: isDarkMode ? '#e2e8f0' : '#1f2a44'
+            }
+        });
+    });
+    network.fit({
+        animation: {
+            duration: 500,
+            easingFunction: 'easeInOutQuad'
+        }
+    });
+}
+
+function exportToPNG() {
+    network.setOptions({ physics: { enabled: false } });
+    network.stabilize(100);
+    network.fit(); // Zoom to fit all nodes
+    
+    setTimeout(() => {
+        try {
+            const canvas = document.querySelector('#myNetwork .vis-network canvas');
+            if (!canvas) throw new Error('Canvas not found');
+            
+            const dataURL = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.href = dataURL;
+            link.download = `network_graph_${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            showToast('Graph exported as PNG', 'success');
+        } catch (error) {
+            console.error('Error exporting to PNG:', error);
+            showToast('Failed to export graph as PNG: ' + error.message, 'error');
+        } finally {
+            network.setOptions({ physics: { enabled: !isPhysicsPaused } });
+        }
+    }, 500);
+}
+
+
+function filterIpAndDomains() {
+    // Disable physics during filtering
+    network.setOptions({ physics: { enabled: false } });
+    
+    // Update each node's hidden property based on type
+    nodes.forEach(node => {
+        const shouldHide = node.type !== 'ip' && node.type !== 'domain';
+        nodes.update({
+            id: node.id,
+            hidden: shouldHide
+        });
+    });
+    
+    // Hide edges connected to hidden nodes
+    edges.forEach(edge => {
+        const fromNode = nodes.get(edge.from);
+        const toNode = nodes.get(edge.to);
+        const shouldHide = fromNode.hidden || toNode.hidden;
+        edges.update({
+            id: edge.id,
+            hidden: shouldHide
+        });
+    });
+    
+    // Stabilize and fit the network
+    stabilizeNetwork().then(() => {
+        network.fit({
+            animation: {
+                duration: 300,
+                easingFunction: 'easeInOutQuad'
+            }
+        });
+        showToast('Showing only IP addresses and domains', 'success');
+        saveStateAfterOperation();
+    });
+}
+
+function showAllNodes() {
+    // Disable physics during filtering
+    network.setOptions({ physics: { enabled: false } });
+    
+    // Show all nodes and edges
+    nodes.forEach(node => {
+        nodes.update({
+            id: node.id,
+            hidden: false
+        });
+    });
+    
+    edges.forEach(edge => {
+        edges.update({
+            id: edge.id,
+            hidden: false
+        });
+    });
+    
+    // Stabilize and fit the network
+    stabilizeNetwork().then(() => {
+        network.fit({
+            animation: {
+                duration: 300,
+                easingFunction: 'easeInOutQuad'
+            }
+        });
+        showToast('Showing all nodes and edges', 'success');
+        saveStateAfterOperation();
+    });
+}
+
+// Helper function to get original colors by node type
+function getNodeColorByType(type) {
+    const colorMap = {
+        'ip': '#f87171',
+        'domain': '#60a5fa',
+        'contact': '#4ade80',
+        'organization': '#facc15',
+        'port': '#a78bfa',
+        'wallet': '#fb923c',
+        'bank': '#10b981',
+        'technology': '#ec4899',
+        'device': '#14b8a6',
+        'malware': '#ef4444',
+        'vulnerability': '#dc2626',
+        'favicon': '#22d3ee',
+        'http_hash': '#f97316',
+        'html_hash': '#f59e0b',
+        'ssl_hash': '#8b5cf6',
+        'asn': '#a3e635',
+        'city': '#f97316',
+        'country': '#34d399',
+        'os': '#10b981',
+        'product': '#ec4899',
+        'http_title': '#3b82f6',
+        'vpn': '#9333ea',
+        'proxy': '#f43f5e',
+        'tor': '#64748b',
+        'relay': '#eab308',
+        'hosting': '#14b8a6',
+        'tag': '#6d28d9',
+        'cpe': '#0d9488'
+    };
+    return { background: colorMap[type] || '#ffffff' };
+}
+
+// Add this with your other event listeners
+document.getElementById('search-input').addEventListener('keypress', function(event) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        searchGraph();
+    }
+});
 
 
         async function enrichAllIpinfo() {
@@ -1239,6 +1523,41 @@ async function enrichAllGoogleDNS() {
     }
 }
 
+
+function exportToPDF() {
+    network.setOptions({ physics: { enabled: false } });
+    network.stabilize(100);
+    network.fit();
+    
+    setTimeout(() => {
+        try {
+            const canvas = document.querySelector('#myNetwork .vis-network canvas');
+            if (!canvas) throw new Error('Canvas not found');
+
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF({
+                orientation: 'landscape',
+                unit: 'px',
+                format: [canvas.width, canvas.height]
+            });
+
+            // Add title
+            pdf.setFontSize(16);
+            pdf.text('Network Graph Export', 40, 20);
+            
+            const imgData = canvas.toDataURL('image/png');
+            pdf.addImage(imgData, 'PNG', 0, 40, canvas.width, canvas.height - 40); // Offset for title
+            pdf.save(`network_graph_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
+            
+            showToast('Graph exported as PDF', 'success');
+        } catch (error) {
+            console.error('Error exporting to PDF:', error);
+            showToast('Failed to export graph as PDF: ' + error.message, 'error');
+        } finally {
+            network.setOptions({ physics: { enabled: !isPhysicsPaused } });
+        }
+    }, 500);
+}
 
 // Function to trigger save after key operations
 function saveStateAfterOperation() {
@@ -1892,6 +2211,10 @@ function showContextMenu(x, y, value, nodeIds, type) {
                 <button onclick="throttledSendHttpsRequestMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], 'domain', 'https')">Send HTTPS Request</button>
                 <button onclick="throttledSendHttpsRequestMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], 'domain', 'http')">Send HTTP Request</button>
             `;
+        } else if (type === 'html_hash') { // New condition for html_hash
+            menuHtml += `
+                <button onclick="throttledSearchShodanHtmlHash('${nodesArray[0]}', '${nodes.get(nodesArray[0]).hash}')">Search Shodan for IPs with this HTML Hash</button>
+            `;
         }
     }
 
@@ -1902,6 +2225,8 @@ function showContextMenu(x, y, value, nodeIds, type) {
     menu.style.display = 'block';
     document.addEventListener('click', hideContextMenu);
 }
+
+
 
 let linkFromNode = null;
 
@@ -2049,59 +2374,131 @@ function deleteNodes(nodeIds) {
     showToast(`${idsToDelete.length > 1 ? 'Nodes' : 'Node'} deleted`, 'success');
 }
 
-function startLinkCreation(nodeId) {
-    linkFromNode = nodeId;
-    hideContextMenu();
-    showToast('Select another node to create a link (right-click to cancel)', 'info');
-    
-    // Add temporary visual feedback
-    nodes.update({
-        id: nodeId,
-        color: { border: '#22c55e', background: nodes.get(nodeId).color.background }
-    });
-    
-    // Add one-time event listener for next node selection
-    network.once('oncontext', handleLinkDestination);
-    network.once('click', cancelLinkCreation);
-}
 
-function handleLinkDestination(params) {
-    params.event.preventDefault();
-    const nodeId = network.getNodeAt(params.pointer.DOM);
-    
-    if (!nodeId || nodeId === linkFromNode) {
-        cancelLinkCreation();
+
+
+const throttledSearchShodanHtmlHash = throttleRequest(async function searchShodanHtmlHash(htmlHashNodeId, htmlHash, signal) {
+    if (!shodanApiKey) {
+        showToast('Please set your Shodan API key in the "API Keys" tab first.', 'error');
         return;
     }
-    
-    // Create the edge
-    const edgeId = `edge_${linkFromNode}_${nodeId}_${Date.now()}`;
-    if (!edges.get({ filter: e => e.from === linkFromNode && e.to === nodeId }).length) {
-        edges.add({
-            id: edgeId,
-            from: linkFromNode,
-            to: nodeId,
-            label: 'Connected' // Default label, could be made configurable
-        });
-        
-        updateNodeSizes();
-        updateEdgeSelectOptions();
-        stabilizeNetwork();
-        saveStateAfterOperation();
-        showToast(`Link created between nodes`, 'success');
-    } else {
-        showToast('Link already exists between these nodes', 'error');
+
+    // Validate htmlHash
+    const hashNum = parseInt(htmlHash);
+    if (!Number.isInteger(hashNum)) {
+        showToast(`Invalid HTML Hash: ${htmlHash}. Must be an integer.`, 'error');
+        return;
     }
-    
-    // Reset visual feedback
-    const originalNode = nodes.get(linkFromNode);
-    nodes.update({
-        id: linkFromNode,
-        color: { border: isDarkMode ? '#94a3b8' : '#6b7280', background: originalNode.color.background }
-    });
-    
-    linkFromNode = null;
-}
+
+    network.setOptions({ physics: { enabled: false } });
+    showProgressBar();
+    document.getElementById('progress-bar').textContent = `Searching Shodan for IPs with HTML Hash ${htmlHash.substring(0, 8)}...`;
+
+    try {
+        // Construct the URL to match the Bash script exactly
+        const query = `http.html_hash:${hashNum}`; // No encoding here yet
+        const baseUrl = `https://api.shodan.io/shodan/host/search?key=${shodanApiKey}&query=${query}`;
+        const url = routeViaProxy ? `${corsProxyUrl}/${baseUrl}` : baseUrl;
+
+        console.log('Search Shodan Base URL (before proxy):', baseUrl);
+        console.log('Search Shodan Final URL:', url);
+        console.log('routeViaProxy:', routeViaProxy, 'corsProxyUrl:', corsProxyUrl);
+
+        const response = await fetch(url, {
+            method: 'GET',
+            signal: signal,
+            headers: {
+                'Accept': 'application/json' // Ensure JSON response
+            }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.log('Search Shodan Status:', response.status, response.statusText);
+            console.log('Search Shodan Response Body:', errorText);
+            console.log('Request Headers:', Object.fromEntries(response.headers.entries()));
+            throw new Error(`Failed to fetch Shodan data: ${response.statusText} - ${errorText}`);
+        }
+
+        const data = await response.json();
+        console.log('Shodan Response:', data);
+
+        if (!data.matches || data.matches.length === 0) {
+            showToast(`No IPs found on Shodan with HTML Hash ${htmlHash}`, 'info');
+            completeProgressBar();
+            await stabilizeNetwork();
+            return;
+        }
+
+        // Process the matches
+        const newNodes = [];
+        const newEdges = [];
+        let successfulAdditions = 0;
+        const totalMatches = data.matches.length;
+
+        const existingIPs = new Map(nodes.get({ filter: n => n.type === 'ip' }).map(n => [n.ip, n.id]));
+
+        for (const match of data.matches) {
+            if (activeTaskController && activeTaskController.signal.aborted) {
+                showToast('Shodan HTML Hash search stopped', 'info');
+                break;
+            }
+
+            const ip = match.ip_str;
+            let ipId = existingIPs.get(ip);
+
+            if (!ipId) {
+                ipId = nextId++;
+                newNodes.push({
+                    id: ipId,
+                    type: 'ip',
+                    label: `IP: ${ip}`,
+                    title: `IP Address: ${ip}\nFrom Shodan HTML Hash Search`,
+                    color: { background: '#f87171' },
+                    ip: ip,
+                    size: 20
+                });
+                existingIPs.set(ip, ipId);
+            }
+
+            const edgeId = `${ipId}-${htmlHashNodeId}-SharesHash`;
+            if (!edges.get(edgeId) && !newEdges.some(e => e.id === edgeId)) {
+                newEdges.push({
+                    id: edgeId,
+                    from: ipId,
+                    to: htmlHashNodeId,
+                    label: 'Shares HTML Hash'
+                });
+            }
+
+            successfulAdditions++;
+            const progress = ((successfulAdditions / totalMatches) * 100).toFixed(1);
+            document.getElementById('progress-bar').textContent = `Shodan HTML Hash Search: ${successfulAdditions}/${totalMatches} IPs (${progress}%)`;
+        }
+
+        if (newNodes.length > 0) nodes.add(newNodes);
+        if (newEdges.length > 0) edges.add(newEdges);
+
+        updateNodeSizes();
+        updateSelectOptions();
+        await stabilizeNetwork();
+        ensureInteractionSettings();
+
+        completeProgressBar();
+        showToast(`Found and added ${successfulAdditions} IPs with HTML Hash ${htmlHash.substring(0, 8)}...`, 'success');
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            showToast('Shodan HTML Hash search was cancelled', 'info');
+        } else {
+            console.error(`Error searching Shodan for HTML Hash ${htmlHash}: ${error.message}`);
+            showToast(`Error searching Shodan: ${error.message}. Check CORS proxy in Config tab.`, 'error');
+        }
+        completeProgressBar();
+        await stabilizeNetwork();
+    }
+}, SHODAN_RATE_LIMIT_MS);
+
+
 
 function cancelLinkCreation() {
     if (linkFromNode) {
