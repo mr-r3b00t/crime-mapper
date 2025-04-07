@@ -11,7 +11,8 @@ const allowList = [
   'ipinfo.io',
   'dns.google.com',
   'api.hudsonrock.com',
-  'cavalier.hudsonrock.com'
+  'cavalier.hudsonrock.com',
+  'internetdb.shodan.io'
 ];
 
 // Configure CORS to allow specific origins, including null
