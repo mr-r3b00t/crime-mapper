@@ -960,7 +960,7 @@
         <!-- Suggested -->
         <footer id="controls-footer"> 
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.267 experimental</p>
+    <p>© Xservus Limited - v0.268 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
@@ -994,15 +994,15 @@
     <div id="edgeContextMenu" style="display: none;"></div>
 
 <script>
-        let routeViaProxy = false;
-        let ignoreApiKeysViaProxy = false;
         let nodes = new vis.DataSet([]);
         let edges = new vis.DataSet([]);
         let nextId = 1;
         let isDarkMode = true;
-        let ipinfoApiKey = '';
-        let shodanApiKey = '';
-        let corsProxyUrl = 'https://cors-anywhere.herokuapp.com/'; // Default value
+        let ipinfoApiKey;
+        let shodanApiKey;
+        let corsProxyUrl;
+        let routeViaProxy;
+        let ignoreApiKeysViaProxy;
         let isPhysicsPaused = false;
         let lastRequestTime = 0;
         let activeTaskController = null;
@@ -1015,15 +1015,16 @@
         const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 
         let selectedNodes = new Set(); // To track multiple selected nodes
+    
+        initializeApiKeys();
 
-
-        function searchGraph() {
-    const searchTerm = document.getElementById('search-input').value.trim().toLowerCase();
-    if (!searchTerm) {
-        showToast('Please enter a search term', 'error');
-        resetNodeHighlights();
-        return;
-    }
+function searchGraph() {
+        const searchTerm = document.getElementById('search-input').value.trim().toLowerCase();
+        if (!searchTerm) {
+            showToast('Please enter a search term', 'error');
+            resetNodeHighlights();
+            return;
+        }
 
     // Reset previous highlights
     resetNodeHighlights();
@@ -1664,6 +1665,15 @@ window.onload = function() {
         edges = new vis.DataSet([]);
         nextId = 1;
     }
+
+    document.getElementById('ipinfoApiKey').value = ipinfoApiKey;
+    document.getElementById('shodanApiKey').value = shodanApiKey;
+    document.getElementById('corsProxyUrl').value = corsProxyUrl;
+    document.getElementById('routeViaProxy').checked = routeViaProxy;
+    document.getElementById('ignoreApiKeysViaProxy').checked = ignoreApiKeysViaProxy;
+    document.getElementById('storeIpinfoKey').checked = !!localStorage.getItem('ipinfoApiKey');
+    document.getElementById('storeShodanKey').checked = !!localStorage.getItem('shodanApiKey');
+    document.getElementById('storeCorsProxy').checked = !!localStorage.getItem('corsProxyUrl');
 
     updateSelectOptions();
     updateTheme();
@@ -6900,7 +6910,14 @@ async function enrichAllHudsonRockDomains() {
     }
 }
 
-
+function initializeApiKeys() {
+    // Get keys from localStorage if they exist, otherwise use defaults
+    ipinfoApiKey = localStorage.getItem('ipinfoApiKey') || '';
+    shodanApiKey = localStorage.getItem('shodanApiKey') || '';
+    corsProxyUrl = localStorage.getItem('corsProxyUrl') || 'https://cors-anywhere.herokuapp.com/';
+    routeViaProxy = localStorage.getItem('routeViaProxy') === 'true'; // Convert string to boolean
+    ignoreApiKeysViaProxy = localStorage.getItem('ignoreApiKeysViaProxy') === 'true';
+    }
 
 // Add this at the end of the script section
 window.addEventListener('beforeunload', function() {
