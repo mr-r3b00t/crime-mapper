@@ -654,7 +654,6 @@
     pointer-events: none;
 }
 </style>
-
     <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/dist/vis-network.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/toastify-js/1.12.0/toastify.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastify-js/1.12.0/toastify.min.css">
@@ -817,6 +816,7 @@
             <div class="input-group">
                 <h3>Export/Import</h3>
                 <button onclick="exportGraph()">Export to JSON</button>
+                <button onclick="exportVisibleGraph()">Export Visible to JSON</button>
                 <input type="file" id="importFile" accept=".json">
                 <button onclick="importGraph()">Import from JSON</button>
                 <button onclick="clearGraph()">Clear Graph</button>
@@ -871,6 +871,17 @@
                 <button onclick="saveUrlscanApiKey()">Save URLscan.io API Key</button>
             </div>
             <div class="input-group">
+                <h3>SecurityTrails API Key</h3>
+                <div class="password-container">
+                    <input type="password" id="securitytrailsApiKey" placeholder="Enter SecurityTrails API Key">
+                    <button type="button" class="toggle-password" data-target="securitytrailsApiKey">Show</button>
+                </div>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="storeSecuritytrailsKey"> Store in local storage
+                </label>
+                <button onclick="saveSecuritytrailsApiKey()">Save SecurityTrails API Key</button>
+            </div>
+            <div class="input-group">
                 <h3>CORS Proxy URL</h3>
                 <div class="password-container">
                     <input type="password" id="corsProxyUrl" placeholder="Enter CORS Proxy URL" value="https://cors-anywhere.herokuapp.com/">
@@ -903,6 +914,8 @@
                 <button onclick="enrichAllHudsonRockDomains()">Enrich All Domains with Hudson Rock</button>
                 <button onclick="enrichAllGreyNoise()">Enrich All IPs with GreyNoise</button>
                 <button onclick="enrichAllURLscan()">Enrich All URLs with URLscan.io</button>
+                <button onclick="enrichAllSecurityTrails()">Enrich All IPs with SecurityTrails</button>
+
             </div>
         </div>
         <div id="import-iocs" class="tab-content active">
@@ -1024,6 +1037,7 @@
         let isDarkMode = true;
         let ipinfoApiKey;
         let shodanApiKey;
+        let securitytrailsApiKey = localStorage.getItem('securitytrailsApiKey') || ''; //security tails api key variable
         let greynoiseApiKey = localStorage.getItem('greynoiseApiKey') || '';
         let urlscanApiKey = localStorage.getItem('urlscanApiKey') || '';
         let corsProxyUrl;
@@ -2343,6 +2357,7 @@ function showContextMenu(x, y, value, nodeIds, type) {
                 <button onclick="throttledSendHttpsRequestMultiple([${nodesArray.map(id => `'${nodes.get(id).ip}'`).join(',')}], 'ip', 'https')">Send HTTPS Request</button>
                 <button onclick="throttledSendHttpsRequestMultiple([${nodesArray.map(id => `'${nodes.get(id).ip}'`).join(',')}], 'ip', 'http')">Send HTTP Request</button>
                 <button onclick="throttledEnrichURLscan('${nodes.get(nodesArray[0]).ip}', ${nodesArray[0]})">Enrich via URLscan.io</button>
+                 <button onclick="throttledEnrichSecurityTrailsIPMultiple([${nodesArray.map(id => `'${nodes.get(id).ip}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via SecurityTrails</button>
                 `;
         } else if (type === 'domain') {
             menuHtml += `
@@ -6954,6 +6969,7 @@ function initializeApiKeys() {
     routeViaProxy = localStorage.getItem('routeViaProxy') === 'true';
     ignoreApiKeysViaProxy = localStorage.getItem('ignoreApiKeysViaProxy') === 'true';
     urlscanApiKey = localStorage.getItem('urlscanApiKey') || '';
+    securitytrailsApiKey = localStorage.getItem('securitytrailsApiKey') || '';
     
     // Set initial values in UI
     document.getElementById('ipinfoApiKey').value = ipinfoApiKey;
@@ -6966,6 +6982,7 @@ function initializeApiKeys() {
     document.getElementById('storeShodanKey').checked = !!localStorage.getItem('shodanApiKey');
     document.getElementById('storeGreynoiseKey').checked = !!localStorage.getItem('greynoiseApiKey');
     document.getElementById('storeUrlscanKey').checked = !!localStorage.getItem('urlscanApiKey');
+    document.getElementById('storeSecuritytrailsKey').checked = !!localStorage.getItem('securitytrailsApiKey');
 }
 
 
@@ -7199,96 +7216,6 @@ const throttledEnrichGreyNoiseMultiple = throttleRequest(async function enrichGr
         showToast(`GreyNoise enrichment completed: ${successfulEnrichments}/${totalIPs} IPs enriched`, 'success');
     }
 }, RATE_LIMIT_MS);
-
-async function enrichAllGreyNoise() {
-    if (!greynoiseApiKey && !ignoreApiKeysViaProxy) {
-        showToast('Please set your GreyNoise API key in the "Config" tab first.', 'error');
-        return;
-    }
-
-    showProgressBar();
-    network.setOptions({ physics: { enabled: false } });
-    const ipNodes = nodes.get({ filter: n => n.type === 'ip' && n.ip });
-    const totalIPs = ipNodes.length;
-    let successfulEnrichments = 0;
-
-    if (totalIPs === 0) {
-        showToast('No IP nodes found to enrich', 'info');
-        completeProgressBar();
-        return;
-    }
-
-    const batchSize = 50;
-    const delayBetweenBatches = 200;
-    const totalBatches = Math.ceil(totalIPs / batchSize);
-    const estimatedTimeMs = (totalIPs * RATE_LIMIT_MS) + (totalBatches - 1) * delayBetweenBatches;
-    const estimatedSeconds = Math.ceil(estimatedTimeMs / 1000);
-    const estimatedMinutes = Math.floor(estimatedSeconds / 60);
-    const remainingSeconds = estimatedSeconds % 60;
-    const timeEstimateStr = estimatedMinutes > 0 
-        ? `${estimatedMinutes}m ${remainingSeconds}s` 
-        : `${estimatedSeconds}s`;
-
-    showToast(`Estimated time for GreyNoise enrichment: ~${timeEstimateStr}`, 'info');
-    document.getElementById('progress-bar').textContent = 
-        `GreyNoise Enrichment: 0/${totalIPs} IPs (0%) - Est. ${timeEstimateStr}`;
-
-    async function processBatch(batch) {
-        const promises = batch.map(node => {
-            if (activeTaskController && activeTaskController.signal.aborted) {
-                return Promise.resolve(null);
-            }
-            return throttledEnrichGreyNoise(node.ip, node.id, true)
-                .then(() => successfulEnrichments++)
-                .catch(error => console.error(`Failed to enrich ${node.ip}: ${error.message}`));
-        });
-        await Promise.all(promises);
-    }
-
-    let lastProgressUpdate = 0;
-    const progressUpdateInterval = 1000;
-
-    for (let i = 0; i < totalIPs; i += batchSize) {
-        if (activeTaskController && activeTaskController.signal.aborted) {
-            showToast('GreyNoise enrichment stopped', 'info');
-            document.getElementById('progress-bar').textContent = 
-                `GreyNoise Enrichment: Stopped at ${successfulEnrichments}/${totalIPs} IPs`;
-            break;
-        }
-
-        const batch = ipNodes.slice(i, Math.min(i + batchSize, totalIPs));
-        await processBatch(batch);
-
-        const currentTime = Date.now();
-        if (currentTime - lastProgressUpdate >= progressUpdateInterval || i + batchSize >= totalIPs) {
-            const progress = ((successfulEnrichments / totalIPs) * 100).toFixed(1);
-            document.getElementById('progress-bar').textContent = 
-                `GreyNoise Enrichment: ${successfulEnrichments}/${totalIPs} IPs (${progress}%)`;
-            lastProgressUpdate = currentTime;
-            updateSelectOptions();
-        }
-
-        await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
-    }
-
-    updateNodeSizes();
-    updateSelectOptions();
-    await stabilizeNetwork();
-    ensureInteractionSettings();
-
-    if (!(activeTaskController && activeTaskController.signal.aborted)) {
-        completeProgressBar();
-        showToast(`GreyNoise enrichment completed: ${successfulEnrichments}/${totalIPs} IPs enriched`, 'success');
-    }
-
-    if (window.innerWidth <= 768) {
-        const controls = document.getElementById('controls');
-        controls.classList.add('collapsed');
-        document.getElementById('myNetwork').style.display = 'block';
-        network.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
-    }
-}
-
 
 
 async function enrichAllGreyNoise() {
@@ -7639,6 +7566,246 @@ function addOrGetNode(type, value, newNodes, properties) {
         ...properties
     });
     return nodeId;
+}
+
+//security trails API key save
+function saveSecuritytrailsApiKey() {
+    securitytrailsApiKey = document.getElementById('securitytrailsApiKey').value.trim();
+    const storeKey = document.getElementById('storeSecuritytrailsKey').checked;
+    if (securitytrailsApiKey) {
+        if (storeKey) localStorage.setItem('securitytrailsApiKey', securitytrailsApiKey);
+        else localStorage.removeItem('securitytrailsApiKey');
+        showToast('SecurityTrails API key saved successfully!', 'success');
+    } else {
+        localStorage.removeItem('securitytrailsApiKey');
+        showToast('Please enter a valid SecurityTrails API key.', 'error');
+    }
+}
+
+const throttledEnrichSecurityTrailsIP = throttleRequest(async function enrichSecurityTrailsIP(ip, ipNodeId, isBulk = false, signal) {
+    if (!securitytrailsApiKey && !ignoreApiKeysViaProxy) {
+        showToast('Please set your SecurityTrails API key in the "Config" tab first.', 'error');
+        return;
+    }
+
+    if (!isBulk) network.setOptions({ physics: { enabled: false } });
+
+    try {
+        let page = 1;
+        let allDomains = [];
+        const perPage = 100;
+        const maxPages = 200;
+
+        while (page <= maxPages) {
+            const baseUrl = `https://api.securitytrails.com/v1/ips/${ip}/associated?page=${page}`;
+            const url = constructUrl(baseUrl); // Use constructUrl here
+            console.log('Requesting SecurityTrails URL:', url); // Debug log
+
+            const response = await fetch(url, {
+                headers: { 'APIKEY': securitytrailsApiKey, 'Accept': 'application/json' },
+                signal
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                if (response.status === 404) {
+                    showToast(`No associated domains found for IP ${ip} in SecurityTrails`, 'info');
+                    break;
+                }
+                throw new Error(`Failed to fetch SecurityTrails data: ${response.statusText} - ${errorText}`);
+            }
+
+            const data = await response.json();
+            if (!data.records || data.records.length === 0) break;
+
+            allDomains = allDomains.concat(data.records);
+            if (data.records.length < perPage) break;
+            page++;
+            await new Promise(resolve => setTimeout(resolve, 200));
+        }
+
+        const newNodes = [];
+        const newEdges = [];
+        const existingDomains = new Map(nodes.get({ filter: n => n.type === 'domain' }).map(n => [n.domain, n.id]));
+
+        allDomains.forEach(record => {
+            const domain = record.hostname;
+            let domainId = existingDomains.get(domain);
+            if (!domainId) {
+                domainId = nextId++;
+                newNodes.push({
+                    id: domainId,
+                    type: 'domain',
+                    label: `Domain: ${domain}`,
+                    title: `Domain: ${domain}\nFrom SecurityTrails`,
+                    color: { background: '#60a5fa' },
+                    domain: domain
+                });
+                existingDomains.set(domain, domainId);
+            }
+            const edgeId = `${ipNodeId}-${domainId}-AssociatedWith`;
+            if (!edges.get(edgeId) && !newEdges.some(e => e.id === edgeId)) {
+                newEdges.push({ id: edgeId, from: ipNodeId, to: domainId, label: 'Associated with' });
+            }
+        });
+
+        if (newNodes.length > 0) nodes.add(newNodes);
+        if (newEdges.length > 0) edges.add(newEdges);
+
+        updateNodeSizes();
+        updateSelectOptions();
+        if (!isBulk) {
+            await stabilizeNetwork();
+            showToast(`IP ${ip} enriched with ${allDomains.length} associated domains from SecurityTrails`, 'success');
+        }
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            showToast(`Enrichment of IP ${ip} cancelled`, 'info');
+            return;
+        }
+        console.error(`Error enriching IP ${ip} with SecurityTrails: ${error.message}`);
+        showToast(`Error enriching IP ${ip}: ${error.message}`, 'error');
+        if (!isBulk) await stabilizeNetwork();
+    }
+}, RATE_LIMIT_MS);
+
+// Bulk IP Enrichment
+async function enrichAllSecurityTrailsIPs() {
+    if (!securitytrailsApiKey && !ignoreApiKeysViaProxy) {
+        showToast('Please set your SecurityTrails API key in the "Config" tab first.', 'error');
+        return;
+    }
+
+    showProgressBar();
+    network.setOptions({ physics: { enabled: false } });
+    const ipNodes = nodes.get({ filter: n => n.type === 'ip' && n.ip });
+    const totalIPs = ipNodes.length;
+    let successfulEnrichments = 0;
+
+    if (totalIPs === 0) {
+        showToast('No IP nodes found to enrich', 'info');
+        completeProgressBar();
+        return;
+    }
+
+    const batchSize = 5; // Smaller batch due to pagination and rate limits
+    const delayBetweenBatches = 1000; // 1-second delay
+    const totalBatches = Math.ceil(totalIPs / batchSize);
+    const estimatedTimeMs = totalBatches * delayBetweenBatches * 2; // Rough estimate
+    const timeEstimateStr = Math.ceil(estimatedTimeMs / 60000) + 'm';
+
+    showToast(`Starting SecurityTrails enrichment for ${totalIPs} IPs`, 'info');
+    document.getElementById('progress-bar').textContent = `SecurityTrails Enrichment: 0/${totalIPs} IPs (0%) - Est. ${timeEstimateStr}`;
+
+    for (let i = 0; i < totalIPs; i += batchSize) {
+        if (activeTaskController?.signal.aborted) {
+            showToast('SecurityTrails enrichment stopped', 'info');
+            document.getElementById('progress-bar').textContent = `SecurityTrails Enrichment: Stopped at ${successfulEnrichments}/${totalIPs} IPs`;
+            break;
+        }
+
+        const batch = ipNodes.slice(i, Math.min(i + batchSize, totalIPs));
+        const promises = batch.map(node => 
+            throttledEnrichSecurityTrailsIP(node.ip, node.id, true)
+                .then(() => successfulEnrichments++)
+                .catch(error => console.error(`Failed to enrich ${node.ip}: ${error.message}`))
+        );
+
+        await Promise.all(promises);
+
+        const progress = ((successfulEnrichments / totalIPs) * 100).toFixed(1);
+        document.getElementById('progress-bar').textContent = `SecurityTrails Enrichment: ${successfulEnrichments}/${totalIPs} IPs (${progress}%)`;
+        await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    ensureInteractionSettings();
+    completeProgressBar();
+    showToast(`SecurityTrails enrichment completed: ${successfulEnrichments}/${totalIPs} IPs enriched`, 'success');
+}
+
+// Context Menu Option for Multiple IPs
+const throttledEnrichSecurityTrailsIPMultiple = throttleRequest(async function enrichSecurityTrailsIPMultiple(ips, nodeIds) {
+    for (let i = 0; i < ips.length; i++) {
+        if (activeTaskController?.signal.aborted) break;
+        await throttledEnrichSecurityTrailsIP(ips[i], nodeIds[i], true);
+    }
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    showToast(`Enriched ${ips.length} IPs with SecurityTrails`, 'success');
+}, RATE_LIMIT_MS);
+
+//Export visable only
+
+function exportVisibleGraph() {
+    // Filter for only visible nodes
+    const visibleNodes = nodes.get().filter(node => !node.hidden).map(node => ({ 
+        id: node.id,
+        type: node.type,
+        name: node.name,
+        email: node.email,
+        ip: node.ip,
+        domain: node.domain,
+        organization: node.organization,
+        portType: node.portType,
+        portNumber: node.portNumber,
+        address: node.address,
+        accountNumber: node.accountNumber,
+        sortCode: node.sortCode,
+        techName: node.techName,
+        techVersion: node.techVersion,
+        deviceCategory: node.deviceCategory,
+        deviceName: node.deviceName,
+        malwareName: node.malwareName,
+        malwareType: node.malwareType,
+        country: node.country,
+        asn: node.asn,
+        city: node.city,
+        value: node.value,
+        vulnName: node.vulnName,
+        cve: node.cve,
+        url: node.url,
+        x: node.x,
+        y: node.y,
+        label: node.label,
+        title: node.title,
+        color: node.color,
+        size: node.size
+    }));
+
+    // Get all edges and filter for those connecting visible nodes
+    const visibleNodeIds = new Set(visibleNodes.map(node => node.id));
+    const visibleEdges = edges.get().filter(edge => 
+        !edge.hidden && 
+        visibleNodeIds.has(edge.from) && 
+        visibleNodeIds.has(edge.to)
+    ).map(edge => ({
+        id: edge.id,
+        from: edge.from,
+        to: edge.to,
+        label: edge.label
+    }));
+
+    // Create export data object
+    const exportData = {
+        nodes: visibleNodes,
+        edges: visibleEdges
+    };
+
+    // Convert to JSON and trigger download
+    const json = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `visible_network_graph_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    showToast('Visible graph exported to JSON', 'success');
 }
 
 // Add this at the end of the script section
