@@ -64,7 +64,7 @@ app.get('/proxy', checkAllowList, async (req, res) => {
   try {
     const response = await axios.get(req.sanitizedUrl, {
       headers: {
-        'User-Agent': 'cors-proxy/1.0'
+        'User-Agent': 'crime-mapper-cors-proxy/1.0'
       },
       httpsAgent: new https.Agent({
         rejectUnauthorized: false
