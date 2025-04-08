@@ -849,6 +849,17 @@
                 <button onclick="saveShodanApiKey()">Save Shodan API Key</button>
             </div>
             <div class="input-group">
+                <h3>GreyNoise API Key</h3>
+                <div class="password-container">
+                    <input type="password" id="greynoiseApiKey" placeholder="Enter GreyNoise API Key">
+                    <button type="button" class="toggle-password" data-target="greynoiseApiKey">Show</button>
+                </div>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="storeGreynoiseKey"> Store in local storage
+                </label>
+                <button onclick="saveGreynoiseApiKey()">Save GreyNoise API Key</button>
+            </div>
+            <div class="input-group">
                 <h3>CORS Proxy URL</h3>
                 <div class="password-container">
                     <input type="password" id="corsProxyUrl" placeholder="Enter CORS Proxy URL" value="https://cors-anywhere.herokuapp.com/">
@@ -879,6 +890,7 @@
                 <button onclick="enrichAllGoogleDNS()">Enrich All Domains with Google DNS</button>
                 <button onclick="enrichAllHudsonRockEmails()">Enrich All Emails with Hudson Rock</button>
                 <button onclick="enrichAllHudsonRockDomains()">Enrich All Domains with Hudson Rock</button>
+                <button onclick="enrichAllGreyNoise()">Enrich All IPs with GreyNoise</button>
             </div>
         </div>
         <div id="import-iocs" class="tab-content active">
@@ -960,7 +972,7 @@
         <!-- Suggested -->
         <footer id="controls-footer"> 
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.268 experimental</p>
+    <p>© Xservus Limited - v0.269 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
@@ -1000,6 +1012,7 @@
         let isDarkMode = true;
         let ipinfoApiKey;
         let shodanApiKey;
+        let greynoiseApiKey = localStorage.getItem('greynoiseApiKey') || '';
         let corsProxyUrl;
         let routeViaProxy;
         let ignoreApiKeysViaProxy;
@@ -2308,6 +2321,7 @@ function showContextMenu(x, y, value, nodeIds, type) {
                 <button onclick="throttledEnrichIPMultiple([${nodesArray.map(id => `'${nodes.get(id).ip}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via IPINFO</button>
                 <button onclick="throttledEnrichShodanMultiple([${nodesArray.map(id => `'${nodes.get(id).ip}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via Shodan</button>
                 <button onclick="throttledEnrichInternetDBMultiple([${nodesArray.map(id => `'${nodes.get(id).ip}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via InternetDB</button>
+                <button onclick="throttledEnrichGreyNoiseMultiple([${nodesArray.map(id => `'${nodes.get(id).ip}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via GreyNoise</button>
                 <button onclick="throttledSendHttpsRequestMultiple([${nodesArray.map(id => `'${nodes.get(id).ip}'`).join(',')}], 'ip', 'https')">Send HTTPS Request</button>
                 <button onclick="throttledSendHttpsRequestMultiple([${nodesArray.map(id => `'${nodes.get(id).ip}'`).join(',')}], 'ip', 'http')">Send HTTP Request</button>
             `;
@@ -6911,13 +6925,406 @@ async function enrichAllHudsonRockDomains() {
 }
 
 function initializeApiKeys() {
-    // Get keys from localStorage if they exist, otherwise use defaults
     ipinfoApiKey = localStorage.getItem('ipinfoApiKey') || '';
     shodanApiKey = localStorage.getItem('shodanApiKey') || '';
+    greynoiseApiKey = localStorage.getItem('greynoiseApiKey') || '';
     corsProxyUrl = localStorage.getItem('corsProxyUrl') || 'https://cors-anywhere.herokuapp.com/';
-    routeViaProxy = localStorage.getItem('routeViaProxy') === 'true'; // Convert string to boolean
+    routeViaProxy = localStorage.getItem('routeViaProxy') === 'true';
     ignoreApiKeysViaProxy = localStorage.getItem('ignoreApiKeysViaProxy') === 'true';
+    
+    // Set initial values in UI
+    document.getElementById('ipinfoApiKey').value = ipinfoApiKey;
+    document.getElementById('shodanApiKey').value = shodanApiKey;
+    document.getElementById('greynoiseApiKey').value = greynoiseApiKey;
+    document.getElementById('corsProxyUrl').value = corsProxyUrl;
+    document.getElementById('routeViaProxy').checked = routeViaProxy;
+    document.getElementById('ignoreApiKeysViaProxy').checked = ignoreApiKeysViaProxy;
+    document.getElementById('storeIpinfoKey').checked = !!localStorage.getItem('ipinfoApiKey');
+    document.getElementById('storeShodanKey').checked = !!localStorage.getItem('shodanApiKey');
+    document.getElementById('storeGreynoiseKey').checked = !!localStorage.getItem('greynoiseApiKey');
+}
+
+
+// Save GreyNoise API Key
+function saveGreynoiseApiKey() {
+    greynoiseApiKey = document.getElementById('greynoiseApiKey').value.trim();
+    const storeKey = document.getElementById('storeGreynoiseKey').checked;
+    if (greynoiseApiKey) {
+        if (storeKey) {
+            localStorage.setItem('greynoiseApiKey', greynoiseApiKey);
+            showToast('GreyNoise API key saved successfully!', 'success');
+        } else {
+            localStorage.removeItem('greynoiseApiKey');
+            showToast('GreyNoise API key set for this session only', 'success');
+        }
+    } else {
+        localStorage.removeItem('greynoiseApiKey');
+        showToast('Please enter a valid GreyNoise API key.', 'error');
     }
+}
+
+// Greynoise enrichement
+
+
+
+const throttledEnrichGreyNoise = throttleRequest(async function enrichGreyNoise(ip, ipNodeId, isBulk = false, signal) {
+    if (!greynoiseApiKey && !ignoreApiKeysViaProxy) {
+        showToast('Please set your GreyNoise API key in the "Config" tab first.', 'error');
+        return;
+    }
+    
+    if (!isBulk) network.setOptions({ physics: { enabled: false } });
+    
+    try {
+        const baseUrl = `https://api.greynoise.io/v3/community/${ip}`;
+        const url = routeViaProxy ? `${corsProxyUrl}/${baseUrl}` : baseUrl;
+        const response = await fetch(url, {
+            headers: { 'key': greynoiseApiKey },
+            signal
+        });
+        if (!response.ok) throw new Error(`Failed to fetch GreyNoise data: ${response.statusText}`);
+        const data = await response.json();
+
+        // Only process successful responses
+        if (data.message !== 'Success') {
+            throw new Error('GreyNoise API did not return successful response');
+        }
+
+        // Deduplication maps
+        const existingTags = new Map(nodes.get({ filter: n => n.type === 'tag' }).map(n => [n.tag, n.id]));
+        const existingNames = new Map(nodes.get({ filter: n => n.type === 'service' }).map(n => [n.name, n.id]));
+        const existingDates = new Map(nodes.get({ filter: n => n.type === 'timestamp' }).map(n => [n.timestamp, n.id]));
+
+        const newNodes = [];
+        const newEdges = [];
+
+        // Update IP node title with GreyNoise data
+        nodes.update({
+            id: ipNodeId,
+            title: `IP Address: ${ip}\nNoise: ${data.noise ? 'Yes' : 'No'}\nRIOT: ${data.riot ? 'Yes' : 'No'}\nClassification: ${data.classification}\nName: ${data.name}\nLast Seen: ${data.last_seen}\nGreyNoise Link: ${data.link}`
+        });
+
+        // Classification Tag (if not 'unknown')
+        if (data.classification && data.classification !== 'unknown') {
+            const classificationKey = data.classification;
+            let classId = existingTags.get(classificationKey);
+            if (!classId) {
+                classId = nextId++;
+                newNodes.push({
+                    id: classId,
+                    type: 'tag',
+                    label: `Classification: ${classificationKey}`,
+                    title: `GreyNoise Classification: ${classificationKey}`,
+                    color: { background: '#6d28d9' }, // Purple for tags
+                    tag: classificationKey
+                });
+                existingTags.set(classificationKey, classId);
+            }
+            const classEdgeId = `${ipNodeId}-${classId}-ClassifiedAs`;
+            if (!edges.get(classEdgeId) && !newEdges.some(e => e.id === classEdgeId)) {
+                newEdges.push({ id: classEdgeId, from: ipNodeId, to: classId, label: 'Classified as' });
+            }
+        }
+
+        // Service Name (e.g., Google Public DNS)
+        if (data.name && data.name !== 'Unknown') {
+            let serviceId = existingNames.get(data.name);
+            if (!serviceId) {
+                serviceId = nextId++;
+                newNodes.push({
+                    id: serviceId,
+                    type: 'service', // New type for service names
+                    label: `Service: ${data.name}`,
+                    title: `Service Name: ${data.name}`,
+                    color: { background: '#10b981' }, // Green for services
+                    name: data.name
+                });
+                existingNames.set(data.name, serviceId);
+            }
+            const serviceEdgeId = `${ipNodeId}-${serviceId}-OperatesAs`;
+            if (!edges.get(serviceEdgeId) && !newEdges.some(e => e.id === serviceEdgeId)) {
+                newEdges.push({ id: serviceEdgeId, from: ipNodeId, to: serviceId, label: 'Operates as' });
+            }
+        }
+
+        // Last Seen Timestamp
+        if (data.last_seen) {
+            let timestampId = existingDates.get(data.last_seen);
+            if (!timestampId) {
+                timestampId = nextId++;
+                newNodes.push({
+                    id: timestampId,
+                    type: 'timestamp', // New type for timestamps
+                    label: `Last Seen: ${data.last_seen}`,
+                    title: `Last Seen: ${data.last_seen}`,
+                    color: { background: '#f97316' }, // Orange for timestamps
+                    timestamp: data.last_seen
+                });
+                existingDates.set(data.last_seen, timestampId);
+            }
+            const timestampEdgeId = `${ipNodeId}-${timestampId}-LastSeen`;
+            if (!edges.get(timestampEdgeId) && !newEdges.some(e => e.id === timestampEdgeId)) {
+                newEdges.push({ id: timestampEdgeId, from: ipNodeId, to: timestampId, label: 'Last seen' });
+            }
+        }
+
+        // Noise Status (as a boolean-like tag)
+        const noiseKey = `noise-${data.noise}`;
+        let noiseId = existingTags.get(noiseKey);
+        if (!noiseId) {
+            noiseId = nextId++;
+            newNodes.push({
+                id: noiseId,
+                type: 'tag',
+                label: `Noise: ${data.noise ? 'Yes' : 'No'}`,
+                title: `GreyNoise Noise Status: ${data.noise ? 'Yes' : 'No'}`,
+                color: { background: '#6d28d9' },
+                tag: noiseKey
+            });
+            existingTags.set(noiseKey, noiseId);
+        }
+        const noiseEdgeId = `${ipNodeId}-${noiseId}-HasNoise`;
+        if (!edges.get(noiseEdgeId) && !newEdges.some(e => e.id === noiseEdgeId)) {
+            newEdges.push({ id: noiseEdgeId, from: ipNodeId, to: noiseId, label: 'Has noise status' });
+        }
+
+        // RIOT Status (as a boolean-like tag)
+        const riotKey = `riot-${data.riot}`;
+        let riotId = existingTags.get(riotKey);
+        if (!riotId) {
+            riotId = nextId++;
+            newNodes.push({
+                id: riotId,
+                type: 'tag',
+                label: `RIOT: ${data.riot ? 'Yes' : 'No'}`,
+                title: `GreyNoise RIOT Status: ${data.riot ? 'Yes' : 'No'}`,
+                color: { background: '#6d28d9' },
+                tag: riotKey
+            });
+            existingTags.set(riotKey, riotId);
+        }
+        const riotEdgeId = `${ipNodeId}-${riotId}-HasRIOT`;
+        if (!edges.get(riotEdgeId) && !newEdges.some(e => e.id === riotEdgeId)) {
+            newEdges.push({ id: riotEdgeId, from: ipNodeId, to: riotId, label: 'Has RIOT status' });
+        }
+
+        // Batch update
+        if (newNodes.length > 0) nodes.add(newNodes);
+        if (newEdges.length > 0) edges.add(newEdges);
+
+        updateNodeSizes();
+        updateSelectOptions();
+        if (!isBulk) {
+            await stabilizeNetwork();
+            showToast(`IP ${ip} enriched with GreyNoise Community data`, 'success');
+        }
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            showToast(`Enrichment of IP ${ip} cancelled`, 'info');
+            return;
+        }
+        console.error(`Error enriching IP ${ip} with GreyNoise: ${error.message}`);
+        showToast(`Error enriching IP ${ip}: ${error.message}`, 'error');
+        if (!isBulk) await stabilizeNetwork();
+    }
+}, RATE_LIMIT_MS);
+
+// Multiple IP enrichment
+const throttledEnrichGreyNoiseMultiple = throttleRequest(async function enrichGreyNoiseMultiple(ips, nodeIds) {
+    if (!Array.isArray(ips) || !Array.isArray(nodeIds) || ips.length !== nodeIds.length) {
+        showToast('Invalid input for multiple GreyNoise enrichment', 'error');
+        return;
+    }
+
+    if (!greynoiseApiKey && !ignoreApiKeysViaProxy) {
+        showToast('Please set your GreyNoise API key in the "Config" tab first.', 'error');
+        return;
+    }
+
+    showProgressBar();
+    network.setOptions({ physics: { enabled: false } });
+    const totalIPs = ips.length;
+    let successfulEnrichments = 0;
+
+    showToast(`Starting GreyNoise enrichment for ${totalIPs} IPs`, 'info');
+    document.getElementById('progress-bar').textContent = `GreyNoise Enrichment: 0/${totalIPs} IPs (0%)`;
+
+    for (let i = 0; i < totalIPs; i++) {
+        if (activeTaskController && activeTaskController.signal.aborted) {
+            showToast('GreyNoise enrichment stopped', 'info');
+            document.getElementById('progress-bar').textContent = 
+                `GreyNoise Enrichment: Stopped at ${successfulEnrichments}/${totalIPs} IPs`;
+            break;
+        }
+        await throttledEnrichGreyNoise(ips[i], nodeIds[i], true);
+        successfulEnrichments++;
+        const progress = ((successfulEnrichments / totalIPs) * 100).toFixed(1);
+        document.getElementById('progress-bar').textContent = 
+            `GreyNoise Enrichment: ${successfulEnrichments}/${totalIPs} IPs (${progress}%)`;
+        // Small delay to respect API rate limits
+        await new Promise(resolve => setTimeout(resolve, 200));
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    ensureInteractionSettings();
+
+    if (!(activeTaskController && activeTaskController.signal.aborted)) {
+        completeProgressBar();
+        showToast(`GreyNoise enrichment completed: ${successfulEnrichments}/${totalIPs} IPs enriched`, 'success');
+    }
+}, RATE_LIMIT_MS);
+
+async function enrichAllGreyNoise() {
+    if (!greynoiseApiKey && !ignoreApiKeysViaProxy) {
+        showToast('Please set your GreyNoise API key in the "Config" tab first.', 'error');
+        return;
+    }
+
+    showProgressBar();
+    network.setOptions({ physics: { enabled: false } });
+    const ipNodes = nodes.get({ filter: n => n.type === 'ip' && n.ip });
+    const totalIPs = ipNodes.length;
+    let successfulEnrichments = 0;
+
+    if (totalIPs === 0) {
+        showToast('No IP nodes found to enrich', 'info');
+        completeProgressBar();
+        return;
+    }
+
+    const batchSize = 50;
+    const delayBetweenBatches = 200;
+    const totalBatches = Math.ceil(totalIPs / batchSize);
+    const estimatedTimeMs = (totalIPs * RATE_LIMIT_MS) + (totalBatches - 1) * delayBetweenBatches;
+    const estimatedSeconds = Math.ceil(estimatedTimeMs / 1000);
+    const estimatedMinutes = Math.floor(estimatedSeconds / 60);
+    const remainingSeconds = estimatedSeconds % 60;
+    const timeEstimateStr = estimatedMinutes > 0 
+        ? `${estimatedMinutes}m ${remainingSeconds}s` 
+        : `${estimatedSeconds}s`;
+
+    showToast(`Estimated time for GreyNoise enrichment: ~${timeEstimateStr}`, 'info');
+    document.getElementById('progress-bar').textContent = 
+        `GreyNoise Enrichment: 0/${totalIPs} IPs (0%) - Est. ${timeEstimateStr}`;
+
+    async function processBatch(batch) {
+        const promises = batch.map(node => {
+            if (activeTaskController && activeTaskController.signal.aborted) {
+                return Promise.resolve(null);
+            }
+            return throttledEnrichGreyNoise(node.ip, node.id, true)
+                .then(() => successfulEnrichments++)
+                .catch(error => console.error(`Failed to enrich ${node.ip}: ${error.message}`));
+        });
+        await Promise.all(promises);
+    }
+
+    let lastProgressUpdate = 0;
+    const progressUpdateInterval = 1000;
+
+    for (let i = 0; i < totalIPs; i += batchSize) {
+        if (activeTaskController && activeTaskController.signal.aborted) {
+            showToast('GreyNoise enrichment stopped', 'info');
+            document.getElementById('progress-bar').textContent = 
+                `GreyNoise Enrichment: Stopped at ${successfulEnrichments}/${totalIPs} IPs`;
+            break;
+        }
+
+        const batch = ipNodes.slice(i, Math.min(i + batchSize, totalIPs));
+        await processBatch(batch);
+
+        const currentTime = Date.now();
+        if (currentTime - lastProgressUpdate >= progressUpdateInterval || i + batchSize >= totalIPs) {
+            const progress = ((successfulEnrichments / totalIPs) * 100).toFixed(1);
+            document.getElementById('progress-bar').textContent = 
+                `GreyNoise Enrichment: ${successfulEnrichments}/${totalIPs} IPs (${progress}%)`;
+            lastProgressUpdate = currentTime;
+            updateSelectOptions();
+        }
+
+        await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    ensureInteractionSettings();
+
+    if (!(activeTaskController && activeTaskController.signal.aborted)) {
+        completeProgressBar();
+        showToast(`GreyNoise enrichment completed: ${successfulEnrichments}/${totalIPs} IPs enriched`, 'success');
+    }
+
+    if (window.innerWidth <= 768) {
+        const controls = document.getElementById('controls');
+        controls.classList.add('collapsed');
+        document.getElementById('myNetwork').style.display = 'block';
+        network.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
+    }
+}
+
+
+
+async function enrichAllGreyNoise() {
+    if (!greynoiseApiKey && !ignoreApiKeysViaProxy) {
+        showToast('Please set your GreyNoise API key in the "Config" tab first.', 'error');
+        return;
+    }
+
+    showProgressBar();
+    network.setOptions({ physics: { enabled: false } });
+    const ipNodes = nodes.get({ filter: n => n.type === 'ip' && n.ip });
+    const totalIPs = ipNodes.length;
+    let successfulEnrichments = 0;
+
+    if (totalIPs === 0) {
+        showToast('No IP nodes found to enrich', 'info');
+        completeProgressBar();
+        return;
+    }
+
+    const batchSize = 50;
+    const delayBetweenBatches = 200;
+    const totalBatches = Math.ceil(totalIPs / batchSize);
+    const estimatedTimeMs = (totalIPs * RATE_LIMIT_MS) + (totalBatches - 1) * delayBetweenBatches;
+    const estimatedSeconds = Math.ceil(estimatedTimeMs / 1000);
+    const timeEstimateStr = estimatedSeconds > 60 
+        ? `${Math.floor(estimatedSeconds / 60)}m ${estimatedSeconds % 60}s` 
+        : `${estimatedSeconds}s`;
+
+    document.getElementById('progress-bar').textContent = 
+        `GreyNoise Enrichment: 0/${totalIPs} IPs (0%) - Est. ${timeEstimateStr}`;
+
+    for (let i = 0; i < totalIPs; i += batchSize) {
+        if (activeTaskController && activeTaskController.signal.aborted) {
+            showToast('GreyNoise enrichment stopped', 'info');
+            break;
+        }
+
+        const batch = ipNodes.slice(i, Math.min(i + batchSize, totalIPs));
+        const batchPromises = batch.map(node => 
+            throttledEnrichGreyNoise(node.ip, node.id, true)
+                .then(() => successfulEnrichments++)
+                .catch(error => console.error(`Failed to enrich ${node.ip}: ${error.message}`))
+        );
+
+        await Promise.all(batchPromises);
+
+        const progress = ((successfulEnrichments / totalIPs) * 100).toFixed(1);
+        document.getElementById('progress-bar').textContent = 
+            `GreyNoise Enrichment: ${successfulEnrichments}/${totalIPs} IPs (${progress}%)`;
+        
+        await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    completeProgressBar();
+    showToast(`GreyNoise enrichment completed: ${successfulEnrichments}/${totalIPs} IPs enriched`, 'success');
+}
 
 // Add this at the end of the script section
 window.addEventListener('beforeunload', function() {
