@@ -3,14 +3,17 @@
 
 Created by **@UK_Daniel_Card**  
 
-The experimental version is the live, bleeeding edge version.
+The experimental version is the live, bleeeding edge version (Live Demo is largely where I'm storing a relatively stable version... but this is all DEV!)
 
+🔗 [Experimental Version](https://mr-r3b00t.github.io/crime-mapper/experimental_mapper.html) 
 🔗 [Live Demo](https://mr-r3b00t.github.io/crime-mapper/crimemapper.html)  
-🔗 [Experimental Version](https://mr-r3b00t.github.io/crime-mapper/experimental_mapper.html)  
+ 
 
 ### Features  
-- Import and Export to JSON  
-- Runs locally or via GitHub Pages  
+- Import and Export to JSON
+- FREE Enrichments with GOOGLE, SHODAN INTERNETDB, HUDSON ROCK (more to come!)
+- Runs locally or via GitHub Pages
+- Includes a POC local CORS proxy - you need to run this using node and run the html file locally as well!
 - Powered by an external JS library and third-party API keys (*BYOK - Bring Your Own Keys*)  
 
 ### Built With  
