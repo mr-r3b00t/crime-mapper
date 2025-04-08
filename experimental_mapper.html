@@ -860,6 +860,17 @@
                 <button onclick="saveGreynoiseApiKey()">Save GreyNoise API Key</button>
             </div>
             <div class="input-group">
+                <h3>URLscan.io API Key</h3>
+                <div class="password-container">
+                    <input type="password" id="urlscanApiKey" placeholder="Enter URLscan.io API Key">
+                    <button type="button" class="toggle-password" data-target="urlscanApiKey">Show</button>
+                </div>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="storeUrlscanKey"> Store in local storage
+                </label>
+                <button onclick="saveUrlscanApiKey()">Save URLscan.io API Key</button>
+            </div>
+            <div class="input-group">
                 <h3>CORS Proxy URL</h3>
                 <div class="password-container">
                     <input type="password" id="corsProxyUrl" placeholder="Enter CORS Proxy URL" value="https://cors-anywhere.herokuapp.com/">
@@ -891,6 +902,7 @@
                 <button onclick="enrichAllHudsonRockEmails()">Enrich All Emails with Hudson Rock</button>
                 <button onclick="enrichAllHudsonRockDomains()">Enrich All Domains with Hudson Rock</button>
                 <button onclick="enrichAllGreyNoise()">Enrich All IPs with GreyNoise</button>
+                <button onclick="enrichAllURLscan()">Enrich All URLs with URLscan.io</button>
             </div>
         </div>
         <div id="import-iocs" class="tab-content active">
@@ -1013,6 +1025,7 @@
         let ipinfoApiKey;
         let shodanApiKey;
         let greynoiseApiKey = localStorage.getItem('greynoiseApiKey') || '';
+        let urlscanApiKey = localStorage.getItem('urlscanApiKey') || '';
         let corsProxyUrl;
         let routeViaProxy;
         let ignoreApiKeysViaProxy;
@@ -2150,6 +2163,9 @@ network.on('click', function(params) {
         case 'domain':
             valueToCopy = node.domain;
             break;
+        case 'url': // New case for URL nodes
+            valueToCopy = node.url; // Use the full URL property
+            break;
         case 'contact':
             valueToCopy = node.email || node.name;
             break;
@@ -2326,7 +2342,8 @@ function showContextMenu(x, y, value, nodeIds, type) {
                 <button onclick="throttledEnrichGreyNoiseMultiple([${nodesArray.map(id => `'${nodes.get(id).ip}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via GreyNoise</button>
                 <button onclick="throttledSendHttpsRequestMultiple([${nodesArray.map(id => `'${nodes.get(id).ip}'`).join(',')}], 'ip', 'https')">Send HTTPS Request</button>
                 <button onclick="throttledSendHttpsRequestMultiple([${nodesArray.map(id => `'${nodes.get(id).ip}'`).join(',')}], 'ip', 'http')">Send HTTP Request</button>
-            `;
+                <button onclick="throttledEnrichURLscan('${nodes.get(nodesArray[0]).ip}', ${nodesArray[0]})">Enrich via URLscan.io</button>
+                `;
         } else if (type === 'domain') {
             menuHtml += `
                 <button onclick="throttledEnrichGoogleDNSMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via Google DNS</button>
@@ -2334,7 +2351,8 @@ function showContextMenu(x, y, value, nodeIds, type) {
                 <button onclick="throttledEnrichHudsonRockDomainMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via Hudson Rock</button>
                 <button onclick="throttledSendHttpsRequestMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], 'domain', 'https')">Send HTTPS Request</button>
                 <button onclick="throttledSendHttpsRequestMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], 'domain', 'http')">Send HTTP Request</button>
-            `;
+                <button onclick="throttledEnrichURLscan('https://${nodes.get(nodesArray[0]).domain}', ${nodesArray[0]})">Enrich via URLscan.io</button>
+                `;
         } else if (type === 'html_hash') {
             menuHtml += `
                 <button onclick="throttledSearchShodanHtmlHash('${nodesArray[0]}', '${nodes.get(nodesArray[0]).hash}')">Search Shodan for IPs with this HTML Hash</button>
@@ -6935,6 +6953,7 @@ function initializeApiKeys() {
     corsProxyUrl = localStorage.getItem('corsProxyUrl') || 'https://cors-anywhere.herokuapp.com/';
     routeViaProxy = localStorage.getItem('routeViaProxy') === 'true';
     ignoreApiKeysViaProxy = localStorage.getItem('ignoreApiKeysViaProxy') === 'true';
+    urlscanApiKey = localStorage.getItem('urlscanApiKey') || '';
     
     // Set initial values in UI
     document.getElementById('ipinfoApiKey').value = ipinfoApiKey;
@@ -6946,6 +6965,7 @@ function initializeApiKeys() {
     document.getElementById('storeIpinfoKey').checked = !!localStorage.getItem('ipinfoApiKey');
     document.getElementById('storeShodanKey').checked = !!localStorage.getItem('shodanApiKey');
     document.getElementById('storeGreynoiseKey').checked = !!localStorage.getItem('greynoiseApiKey');
+    document.getElementById('storeUrlscanKey').checked = !!localStorage.getItem('urlscanApiKey');
 }
 
 
@@ -7328,6 +7348,297 @@ async function enrichAllGreyNoise() {
     await stabilizeNetwork();
     completeProgressBar();
     showToast(`GreyNoise enrichment completed: ${successfulEnrichments}/${totalIPs} IPs enriched`, 'success');
+}
+
+// New function to save API key
+function saveUrlscanApiKey() {
+    urlscanApiKey = document.getElementById('urlscanApiKey').value.trim();
+    const storeKey = document.getElementById('storeUrlscanKey').checked;
+    if (urlscanApiKey) {
+        if (storeKey) {
+            localStorage.setItem('urlscanApiKey', urlscanApiKey);
+            showToast('URLscan.io API key saved successfully!', 'success');
+        } else {
+            localStorage.removeItem('urlscanApiKey');
+            showToast('URLscan.io API key set for this session only', 'success');
+        }
+    } else {
+        localStorage.removeItem('urlscanApiKey');
+        showToast('Please enter a valid URLscan.io API key.', 'error');
+    }
+}
+
+
+
+// Helper function to avoid duplicate nodes
+function addOrGetNode(type, value, newNodes, properties) {
+    const existing = nodes.get({ filter: n => n.type === type && n[type] === value })[0];
+    if (existing) return existing.id;
+    
+    const nodeId = nextId++;
+    newNodes.push({
+        id: nodeId,
+        type: type,
+        [type]: value,
+        ...properties
+    });
+    return nodeId;
+}
+
+// Single URL enrichment
+const throttledEnrichURLscan = throttleRequest(async function enrichURLscan(url, nodeId, isBulk = false, signal) {
+    if (!isBulk) network.setOptions({ physics: { enabled: false } });
+    
+    try {
+        const parsedUrl = url.startsWith('http') ? new URL(url) : { hostname: url };
+        const query = parsedUrl.hostname ? `domain:${parsedUrl.hostname}` : `ip:${url}`;
+        const searchUrl = constructUrl(`https://urlscan.io/api/v1/search/?q=${encodeURIComponent(query)}`);
+        
+        const headers = {
+            'Accept': 'application/json'
+        };
+        if (urlscanApiKey && !ignoreApiKeysViaProxy) {
+            headers['API-Key'] = urlscanApiKey;
+        }
+
+        const response = await fetch(searchUrl, {
+            method: 'GET',
+            headers: headers,
+            signal
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Failed to fetch URLscan.io data: ${response.statusText} - ${errorText}`);
+        }
+        
+        const data = await response.json();
+
+        if (!data.results || data.results.length === 0) {
+            throw new Error(`No results found for ${query}`);
+        }
+
+        // Process the most recent result
+        const latestResult = data.results[0];
+        const newNodes = [];
+        const newEdges = [];
+
+        // 1. Status (page.status)
+        if (latestResult.page?.status) {
+            const statusId = addOrGetNode('tag', `status-${latestResult.page.status}`, newNodes, {
+                label: `Status: ${latestResult.page.status}`,
+                title: `HTTP Status: ${latestResult.page.status}`,
+                color: { background: '#6d28d9' }
+            });
+            newEdges.push({ id: `${nodeId}-${statusId}-HasStatus`, from: nodeId, to: statusId, label: 'Has status' });
+        }
+
+        // 2. URL (page.url) - Updated to show full URL or meaningful truncation
+        if (latestResult.page?.url) {
+        const decodedUrl = decodeURIComponent(latestResult.page.url);
+        const urlLabel = decodedUrl.length > 30 
+            ? `${decodedUrl.substring(0, 27)}...` 
+            : decodedUrl;
+        const urlId = addOrGetNode('url', latestResult.page.url, newNodes, {
+            label: `URL: ${urlLabel}`,
+            title: `Full URL: ${decodedUrl}`,
+            url: decodedUrl, // Explicitly store full decoded URL
+            color: { background: '#3b82f6' }
+        });
+        newEdges.push({ id: `${nodeId}-${urlId}-ScannedAs`, from: nodeId, to: urlId, label: 'Scanned as' });
+    }
+
+
+        // 3. Submitted Date (task.time)
+        if (latestResult.task?.time) {
+            const dateId = addOrGetNode('timestamp', latestResult.task.time, newNodes, {
+                label: `Submitted: ${new Date(latestResult.task.time).toLocaleDateString()}`,
+                title: `Submitted Date: ${latestResult.task.time}`,
+                color: { background: '#f97316' }
+            });
+            newEdges.push({ id: `${nodeId}-${dateId}-SubmittedOn`, from: nodeId, to: dateId, label: 'Submitted on' });
+        }
+
+        // 4. Score (_score)
+        if (latestResult._score !== null && latestResult._score !== undefined) {
+            const scoreId = nextId++;
+            newNodes.push({
+                id: scoreId,
+                type: 'tag',
+                label: `Score: ${latestResult._score}`,
+                title: `URLscan Score: ${latestResult._score}`,
+                color: { background: '#10b981' }
+            });
+            newEdges.push({ id: `${nodeId}-${scoreId}-HasScore`, from: nodeId, to: scoreId, label: 'Has score' });
+        }
+
+        // 5. Total (data.total)
+        if (data.total !== undefined) {
+            const totalId = nextId++;
+            newNodes.push({
+                id: totalId,
+                type: 'tag',
+                label: `Total Scans: ${data.total}`,
+                title: `Total URLscan Results: ${data.total}`,
+                color: { background: '#ec4899' }
+            });
+            newEdges.push({ id: `${nodeId}-${totalId}-ScanCount`, from: nodeId, to: totalId, label: 'Scan count' });
+        }
+
+        // 6. Country (page.country)
+        if (latestResult.page?.country) {
+            const countryId = addOrGetNode('country', latestResult.page.country, newNodes, {
+                label: `Country: ${latestResult.page.country}`,
+                title: `Country: ${latestResult.page.country}`,
+                color: { background: '#34d399' }
+            });
+            newEdges.push({ id: `${nodeId}-${countryId}-LocatedIn`, from: nodeId, to: countryId, label: 'Located in' });
+        }
+
+        // 7. ASN (page.asn)
+        if (latestResult.page?.asn) {
+            const asnId = addOrGetNode('asn', latestResult.page.asn, newNodes, {
+                label: `ASN: ${latestResult.page.asn}`,
+                title: `ASN: ${latestResult.page.asn}\nName: ${latestResult.page.asnname || 'N/A'}`,
+                color: { background: '#a3e635' }
+            });
+            newEdges.push({ id: `${nodeId}-${asnId}-AssignedTo`, from: nodeId, to: asnId, label: 'Assigned to' });
+        }
+
+        // 8. Apex Domain (page.apexDomain)
+        if (latestResult.page?.apexDomain) {
+            const apexId = addOrGetNode('domain', latestResult.page.apexDomain, newNodes, {
+                label: `Apex: ${latestResult.page.apexDomain}`,
+                title: `Apex Domain: ${latestResult.page.apexDomain}`,
+                color: { background: '#60a5fa' }
+            });
+            newEdges.push({ id: `${nodeId}-${apexId}-ApexDomain`, from: nodeId, to: apexId, label: 'Apex domain' });
+        }
+
+        // 9. TLS Age (page.tlsAgeDays)
+        if (latestResult.page?.tlsAgeDays !== undefined) {
+            const tlsAgeId = nextId++;
+            newNodes.push({
+                id: tlsAgeId,
+                type: 'tag',
+                label: `TLS Age: ${latestResult.page.tlsAgeDays} days`,
+                title: `TLS Certificate Age: ${latestResult.page.tlsAgeDays} days`,
+                color: { background: '#8b5cf6' }
+            });
+            newEdges.push({ id: `${nodeId}-${tlsAgeId}-TlsAge`, from: nodeId, to: tlsAgeId, label: 'TLS age' });
+        }
+
+        // 10. IP (page.ip)
+        if (latestResult.page?.ip) {
+            const ipId = addOrGetNode('ip', latestResult.page.ip, newNodes, {
+                label: `IP: ${latestResult.page.ip}`,
+                title: `IP Address: ${latestResult.page.ip}`,
+                color: { background: '#f87171' }
+            });
+            newEdges.push({ id: `${nodeId}-${ipId}-ResolvedTo`, from: nodeId, to: ipId, label: 'Resolved to' });
+        }
+
+        // Update original node with scan metadata
+        nodes.update({
+            id: nodeId,
+            title: `${nodes.get(nodeId).title || url}\nLast Scanned: ${latestResult.task?.time || 'N/A'}\nUUID: ${latestResult._id}\nScreenshot: ${latestResult.screenshot || 'N/A'}`
+        });
+
+        if (newNodes.length) nodes.add(newNodes);
+        if (newEdges.length) edges.add(newEdges);
+
+        updateNodeSizes();
+        updateSelectOptions();
+        if (!isBulk) {
+            await stabilizeNetwork();
+            showToast(`URL ${url} enriched with URLscan.io search results`, 'success');
+        }
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            showToast(`Enrichment of URL ${url} cancelled`, 'info');
+            return;
+        }
+        console.error(`Error enriching URL ${url}: ${error.message}`);
+        showToast(`Error enriching URL ${url}: ${error.message}${!urlscanApiKey ? ' (API key may improve results)' : ''}`, 'error');
+        if (!isBulk) await stabilizeNetwork();
+    }
+}, RATE_LIMIT_MS);
+
+// Bulk enrichment
+async function enrichAllURLscan() {
+    showProgressBar();
+    network.setOptions({ physics: { enabled: false } });
+    const urlNodes = nodes.get({ filter: n => (n.type === 'domain' || n.type === 'ip') && (n.domain || n.ip) });
+    const totalURLs = urlNodes.length;
+    let successfulEnrichments = 0;
+
+    if (totalURLs === 0) {
+        showToast('No URLs found to enrich', 'info');
+        completeProgressBar();
+        return;
+    }
+
+    const batchSize = urlscanApiKey ? 5 : 2;
+    const delayBetweenBatches = urlscanApiKey ? 1000 : 2000;
+    const estimatedTimeMs = (totalURLs / batchSize) * delayBetweenBatches;
+    const timeEstimateStr = Math.ceil(estimatedTimeMs / 60000) + 'm';
+
+    document.getElementById('progress-bar').textContent = 
+        `URLscan.io Enrichment: 0/${totalURLs} URLs (0%) - Est. ${timeEstimateStr}`;
+
+    if (!urlscanApiKey) {
+        showToast('Running URLscan.io enrichment without API key - limited rate applies', 'warning');
+    }
+
+    for (let i = 0; i < totalURLs; i += batchSize) {
+        if (activeTaskController?.signal.aborted) {
+            showToast('URLscan.io enrichment stopped', 'info');
+            document.getElementById('progress-bar').textContent = 
+                `URLscan.io Enrichment: Stopped at ${successfulEnrichments}/${totalURLs} URLs`;
+            break;
+        }
+
+        const batch = urlNodes.slice(i, Math.min(i + batchSize, totalURLs));
+        const promises = batch.map(node => {
+            const url = node.type === 'domain' ? `https://${node.domain}` : node.ip;
+            return throttledEnrichURLscan(url, node.id, true)
+                .then(() => successfulEnrichments++)
+                .catch(error => {
+                    console.error(`Batch error for ${url}: ${error.message}`);
+                });
+        });
+
+        await Promise.all(promises);
+
+        const progress = ((successfulEnrichments / totalURLs) * 100).toFixed(1);
+        document.getElementById('progress-bar').textContent = 
+            `URLscan.io Enrichment: ${successfulEnrichments}/${totalURLs} URLs (${progress}%)`;
+        
+        await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    ensureInteractionSettings();
+    completeProgressBar();
+    showToast(`URLscan.io enrichment completed: ${successfulEnrichments}/${totalURLs} URLs enriched${!urlscanApiKey ? ' (API key may improve results)' : ''}`, 'success');
+}
+
+// Updated helper function to handle new node types
+function addOrGetNode(type, value, newNodes, properties) {
+    const key = type === 'url' ? 'url' : type; // Use 'url' as the key for URL nodes
+    const existing = nodes.get({ filter: n => n.type === type && n[key] === value })[0];
+    if (existing) return existing.id;
+    
+    const nodeId = nextId++;
+    newNodes.push({
+        id: nodeId,
+        type: type,
+        [key]: value,
+        ...properties
+    });
+    return nodeId;
 }
 
 // Add this at the end of the script section
