@@ -972,7 +972,7 @@
         <!-- Suggested -->
         <footer id="controls-footer"> 
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.269 experimental</p>
+    <p>© Xservus Limited - v0.270 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
@@ -1700,6 +1700,8 @@ window.onload = function() {
             zoomSpeed: 0.5
         }
     });
+
+    document.getElementById('menu-toggle').textContent = '<';  // Set to "<" since menu starts expanded
     ensureInteractionSettings();
     
     container.removeEventListener('mousedown', handleMouseDown);
@@ -5686,23 +5688,25 @@ document.addEventListener('click', (event) => {
 function toggleMenu() {
     const controls = document.getElementById('controls');
     const menuToggle = document.getElementById('menu-toggle');
+    const propertiesPanel = document.getElementById('properties-panel');
+    const myNetwork = document.getElementById('myNetwork');
     
     controls.classList.toggle('collapsed');
     
     if (controls.classList.contains('collapsed')) {
-        menuToggle.textContent = '>'; // Points right when collapsed
-        menuToggle.style.transform = 'rotate(0deg)'; // Normal orientation
+        menuToggle.textContent = '>'; 
+        menuToggle.style.transform = 'rotate(0deg)';
+        myNetwork.style.marginLeft = '50px';
     } else {
-        menuToggle.textContent = '<'; // Points left when expanded
-        menuToggle.style.transform = 'rotate(0deg)'; // No rotation needed, just text change
+        menuToggle.textContent = '<'; 
+        menuToggle.style.transform = 'rotate(0deg)';
+        myNetwork.style.marginLeft = '300px';
     }
+
+    myNetwork.style.marginRight = propertiesPanel.classList.contains('active') ? '300px' : '0';
     
-    // Adjust network view
     network.fit({
-        animation: {
-            duration: 300,
-            easingFunction: 'easeInOutQuad'
-        }
+        animation: { duration: 300, easingFunction: 'easeInOutQuad' }
     });
 }
 
