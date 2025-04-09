@@ -47,7 +47,7 @@ body.dark-mode {
     background-color: #2d3748;
     color: #e2e8f0;
     display: flex;
-    justify-content: space-between;
+    justify-content: space-between; /* Explicitly separate version and links */
     align-items: center;
     padding: 0 20px;
     z-index: 1000;
@@ -64,8 +64,24 @@ body.dark-mode {
 #version {
     font-size: 14px;
     font-weight: 500;
+    flex-shrink: 0; /* Prevent shrinking */
+    margin-right: 20px; /* Add space to separate from links */
 }
 
+#top-bar-links {
+    display: flex;
+    align-items: center;
+    gap: 30px; /* Increased spacing between links */
+    /* Fallback absolute positioning */
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    /* Diagnostic border to confirm application */
+    border: 1px solid red !important;
+}
+
+#cyberchef-link,
 #github-link {
     font-size: 14px;
     color: #60a5fa;
@@ -73,18 +89,20 @@ body.dark-mode {
     transition: color var(--transition);
 }
 
+#cyberchef-link:hover,
 #github-link:hover {
     color: #3b82f6;
 }
 
+.light-mode #cyberchef-link,
 .light-mode #github-link {
     color: #3b82f6;
 }
 
+.light-mode #cyberchef-link:hover,
 .light-mode #github-link:hover {
     color: #2563eb;
 }
-
 /* Controls Panel */
 #controls {
     position: fixed;
@@ -843,8 +861,9 @@ input[type="checkbox"] {
 </head>
 <body class="dark-mode">
     <div id="top-bar">
-        <span id="version">Crime Mapper v0.274 experimental</span>
+        <span id="version">Crime Mapper Experimental</span>
         <a href="https://github.com/mr-r3b00t/crime-mapper" target="_blank" id="github-link">GitHub Repo</a>
+        <a href="https://gchq.github.io/CyberChef" target="_blank" id="cyberchef-link">GCHQ CyberChef</a>
     </div>
     <div id="notes-modal">
         <h3>Edit Node Notes</h3>
@@ -1193,7 +1212,7 @@ input[type="checkbox"] {
         <!-- Suggested -->
         <footer id="controls-footer"> 
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.274 experimental</p>
+    <p>© Xservus Limited - v0.275 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
