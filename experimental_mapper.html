@@ -914,7 +914,7 @@
                 <button onclick="enrichAllHudsonRockDomains()">Enrich All Domains with Hudson Rock</button>
                 <button onclick="enrichAllGreyNoise()">Enrich All IPs with GreyNoise</button>
                 <button onclick="enrichAllURLscan()">Enrich All URLs with URLscan.io</button>
-                <button onclick="enrichAllSecurityTrails()">Enrich All IPs with SecurityTrails</button>
+                <button onclick="enrichAllSecurityTrails()">Enrich All Domains with SecurityTrails Subdomains</button>
 
             </div>
         </div>
@@ -997,7 +997,7 @@
         <!-- Suggested -->
         <footer id="controls-footer"> 
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.270 experimental</p>
+    <p>© Xservus Limited - v0.272 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
@@ -1050,6 +1050,7 @@
         let edgeLabelsVisible = true;
         const RATE_LIMIT_MS = 500;
         const SHODAN_RATE_LIMIT_MS = 1000; // Specific 1-second delay for Shodan
+        const SECURITYTRAILS_RATE_LIMIT_MS = 2000; // 1 second delay for SecurityTrails API
         const ipRegex = { ipv4: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/, ipv6: /^([0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}$/ };
         const domainRegex = /^(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,}$/;
         const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
@@ -1057,6 +1058,73 @@
         let selectedNodes = new Set(); // To track multiple selected nodes
     
         initializeApiKeys();
+
+
+
+        // Define updateTheme first
+function updateTheme() {
+    if (isDarkMode) {
+        document.body.classList.remove('light-mode');
+        document.body.classList.add('dark-mode');
+        options.nodes.font = {
+            size: nodeLabelsVisible ? 12 : 0,
+            color: '#e2e8f0',  // Light color for dark mode
+            multi: true,
+            align: 'center',
+            vadjust: 0,
+            strokeWidth: 0
+        };
+        options.edges.font = {
+            size: edgeLabelsVisible ? 12 : 0,
+            color: '#e2e8f0',  // Light color for dark mode
+            strokeWidth: 0,
+            strokeColor: 'transparent',
+            align: 'middle',
+            multi: true
+        };
+    } else {
+        document.body.classList.remove('dark-mode');
+        document.body.classList.add('light-mode');
+        options.nodes.font = {
+            size: nodeLabelsVisible ? 12 : 0,
+            color: '#1f2a44',  // Dark color for light mode
+            multi: true,
+            align: 'center',
+            vadjust: 0,
+            strokeWidth: 0
+        };
+        options.edges.font = {
+            size: edgeLabelsVisible ? 12 : 0,
+            color: '#1f2a44',  // Dark color for light mode
+            strokeWidth: 0,
+            strokeColor: 'transparent',
+            align: 'middle',
+            multi: true
+        };
+    }
+
+    // Update all existing nodes and edges with the new font settings
+    nodes.forEach(node => {
+        nodes.update({
+            id: node.id,
+            font: options.nodes.font
+        });
+    });
+    
+    edges.forEach(edge => {
+        edges.update({
+            id: edge.id,
+            font: options.edges.font
+        });
+    });
+
+    // Apply the options to the network and force a redraw
+    network.setOptions(options);
+    updateLabelVisibility();
+    ensureInteractionSettings();
+    network.setData({ nodes: nodes, edges: edges });  // Force data refresh
+    network.redraw();
+}
 
 function searchGraph() {
         const searchTerm = document.getElementById('search-input').value.trim().toLowerCase();
@@ -2357,7 +2425,6 @@ function showContextMenu(x, y, value, nodeIds, type) {
                 <button onclick="throttledSendHttpsRequestMultiple([${nodesArray.map(id => `'${nodes.get(id).ip}'`).join(',')}], 'ip', 'https')">Send HTTPS Request</button>
                 <button onclick="throttledSendHttpsRequestMultiple([${nodesArray.map(id => `'${nodes.get(id).ip}'`).join(',')}], 'ip', 'http')">Send HTTP Request</button>
                 <button onclick="throttledEnrichURLscan('${nodes.get(nodesArray[0]).ip}', ${nodesArray[0]})">Enrich via URLscan.io</button>
-                 <button onclick="throttledEnrichSecurityTrailsIPMultiple([${nodesArray.map(id => `'${nodes.get(id).ip}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via SecurityTrails</button>
                 `;
         } else if (type === 'domain') {
             menuHtml += `
@@ -2367,6 +2434,7 @@ function showContextMenu(x, y, value, nodeIds, type) {
                 <button onclick="throttledSendHttpsRequestMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], 'domain', 'https')">Send HTTPS Request</button>
                 <button onclick="throttledSendHttpsRequestMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], 'domain', 'http')">Send HTTP Request</button>
                 <button onclick="throttledEnrichURLscan('https://${nodes.get(nodesArray[0]).domain}', ${nodesArray[0]})">Enrich via URLscan.io</button>
+                <button onclick="throttledEnrichSecurityTrailsDomainMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via SecurityTrails</button>
                 `;
         } else if (type === 'html_hash') {
             menuHtml += `
@@ -3678,8 +3746,13 @@ const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ip
 
 
 async function importIOCsFromText() {
-    const text = document.getElementById('iocText').value.trim();
-    if (!text) { showToast('Please enter some text containing IOCs', 'error'); return; }
+    let text = document.getElementById('iocText').value.trim();
+    if (!text) { 
+        showToast('Please enter some text containing IOCs', 'error'); 
+        return; 
+    }
+    // Replace [.] with . before processing
+    text = text.replace(/\[\.\]/g, '.');
     await processIOCs(text);
     document.getElementById('iocText').value = '';
     saveStateAfterOperation();
@@ -3691,10 +3764,15 @@ async function importIOCsFromText() {
 async function importIOCsFromFile() {
     const fileInput = document.getElementById('iocFile');
     const file = fileInput.files[0];
-    if (!file) { showToast('Please select a text file containing IOCs', 'error'); return; }
+    if (!file) { 
+        showToast('Please select a text file containing IOCs', 'error'); 
+        return; 
+    }
     const reader = new FileReader();
     reader.onload = async function(event) { 
-        await processIOCs(event.target.result); 
+        // Replace [.] with . before processing
+        let text = event.target.result.replace(/\[\.\]/g, '.');
+        await processIOCs(text); 
         fileInput.value = ''; 
         saveStateAfterOperation();
         showToast('IOCs (including emails) import completed', 'success');
@@ -3702,13 +3780,11 @@ async function importIOCsFromFile() {
     reader.readAsText(file);
 }
 
-
-
-        async function processIOCs(text) {
+async function processIOCs(text) {
     // Disable physics for the duration of the import
     network.setOptions({ physics: { enabled: false } });
     
-    // Pre-collect all matches to avoid multiple regex passes
+    // Pre-collect all matches using regex on the preprocessed text
     const ipMatches = new Set(text.match(/(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)|(?:[0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}/g) || []);
     const domainMatches = new Set(text.match(/(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,}/g) || []);
     const emailMatches = new Set(text.match(emailRegex) || []);
@@ -3839,93 +3915,7 @@ async function importIOCsFromFile() {
     showToast(`Imported ${ipMatches.size} IPs, ${domainMatches.size} domains, and ${emailMatches.size} emails`, 'success');
 }
 
-        function saveIpinfoApiKey() {
-            ipinfoApiKey = document.getElementById('ipinfoApiKey').value.trim();
-            const storeKey = document.getElementById('storeIpinfoKey').checked;
-            if (ipinfoApiKey) {
-                if (storeKey) localStorage.setItem('ipinfoApiKey', ipinfoApiKey); else localStorage.removeItem('ipinfoApiKey');
-                showToast('IPinfo API key saved successfully!', 'success');
-            } else {
-                localStorage.removeItem('ipinfoApiKey');
-                showToast('Please enter a valid IPinfo API key.', 'error');
-            }
-        }
 
-        function saveShodanApiKey() {
-            shodanApiKey = document.getElementById('shodanApiKey').value.trim();
-            const storeKey = document.getElementById('storeShodanKey').checked;
-            if (shodanApiKey) {
-                if (storeKey) localStorage.setItem('shodanApiKey', shodanApiKey); else localStorage.removeItem('shodanApiKey');
-                showToast('Shodan API key saved successfully!', 'success');
-            } else {
-                localStorage.removeItem('shodanApiKey');
-                showToast('Please enter a valid Shodan API key.', 'error');
-            }
-        }
-        
-        function updateTheme() {
-    if (isDarkMode) {
-        document.body.classList.remove('light-mode');
-        document.body.classList.add('dark-mode');
-        options.nodes.font = {
-            size: nodeLabelsVisible ? 12 : 0,
-            color: '#e2e8f0',  // Light color for dark mode
-            multi: true,
-            align: 'center',
-            vadjust: 0,
-            strokeWidth: 0
-        };
-        options.edges.font = {
-            size: edgeLabelsVisible ? 12 : 0,
-            color: '#e2e8f0',  // Light color for dark mode
-            strokeWidth: 0,
-            strokeColor: 'transparent',
-            align: 'middle',
-            multi: true
-        };
-    } else {
-        document.body.classList.remove('dark-mode');
-        document.body.classList.add('light-mode');
-        options.nodes.font = {
-            size: nodeLabelsVisible ? 12 : 0,
-            color: '#1f2a44',  // Dark color for light mode
-            multi: true,
-            align: 'center',
-            vadjust: 0,
-            strokeWidth: 0
-        };
-        options.edges.font = {
-            size: edgeLabelsVisible ? 12 : 0,
-            color: '#1f2a44',  // Dark color for light mode
-            strokeWidth: 0,
-            strokeColor: 'transparent',
-            align: 'middle',
-            multi: true
-        };
-    }
-
-    // Update all existing nodes and edges with the new font settings
-    nodes.forEach(node => {
-        nodes.update({
-            id: node.id,
-            font: options.nodes.font
-        });
-    });
-    
-    edges.forEach(edge => {
-        edges.update({
-            id: edge.id,
-            font: options.edges.font
-        });
-    });
-
-    // Apply the options to the network and force a redraw
-    network.setOptions(options);
-    updateLabelVisibility();
-    ensureInteractionSettings();
-    network.setData({ nodes: nodes, edges: edges });  // Force data refresh
-    network.redraw();
-}
 
 function toggleMode() {
     isDarkMode = !isDarkMode;
@@ -6982,7 +6972,7 @@ function initializeApiKeys() {
     document.getElementById('storeShodanKey').checked = !!localStorage.getItem('shodanApiKey');
     document.getElementById('storeGreynoiseKey').checked = !!localStorage.getItem('greynoiseApiKey');
     document.getElementById('storeUrlscanKey').checked = !!localStorage.getItem('urlscanApiKey');
-    document.getElementById('storeSecuritytrailsKey').checked = !!localStorage.getItem('securitytrailsApiKey');
+    document.getElementById('securitytrailsApiKey').value = securitytrailsApiKey; // Set SecurityTrails input
 }
 
 
@@ -7582,161 +7572,7 @@ function saveSecuritytrailsApiKey() {
     }
 }
 
-const throttledEnrichSecurityTrailsIP = throttleRequest(async function enrichSecurityTrailsIP(ip, ipNodeId, isBulk = false, signal) {
-    if (!securitytrailsApiKey && !ignoreApiKeysViaProxy) {
-        showToast('Please set your SecurityTrails API key in the "Config" tab first.', 'error');
-        return;
-    }
 
-    if (!isBulk) network.setOptions({ physics: { enabled: false } });
-
-    try {
-        let page = 1;
-        let allDomains = [];
-        const perPage = 100;
-        const maxPages = 200;
-
-        while (page <= maxPages) {
-            const baseUrl = `https://api.securitytrails.com/v1/ips/${ip}/associated?page=${page}`;
-            const url = constructUrl(baseUrl); // Use constructUrl here
-            console.log('Requesting SecurityTrails URL:', url); // Debug log
-
-            const response = await fetch(url, {
-                headers: { 'APIKEY': securitytrailsApiKey, 'Accept': 'application/json' },
-                signal
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                if (response.status === 404) {
-                    showToast(`No associated domains found for IP ${ip} in SecurityTrails`, 'info');
-                    break;
-                }
-                throw new Error(`Failed to fetch SecurityTrails data: ${response.statusText} - ${errorText}`);
-            }
-
-            const data = await response.json();
-            if (!data.records || data.records.length === 0) break;
-
-            allDomains = allDomains.concat(data.records);
-            if (data.records.length < perPage) break;
-            page++;
-            await new Promise(resolve => setTimeout(resolve, 200));
-        }
-
-        const newNodes = [];
-        const newEdges = [];
-        const existingDomains = new Map(nodes.get({ filter: n => n.type === 'domain' }).map(n => [n.domain, n.id]));
-
-        allDomains.forEach(record => {
-            const domain = record.hostname;
-            let domainId = existingDomains.get(domain);
-            if (!domainId) {
-                domainId = nextId++;
-                newNodes.push({
-                    id: domainId,
-                    type: 'domain',
-                    label: `Domain: ${domain}`,
-                    title: `Domain: ${domain}\nFrom SecurityTrails`,
-                    color: { background: '#60a5fa' },
-                    domain: domain
-                });
-                existingDomains.set(domain, domainId);
-            }
-            const edgeId = `${ipNodeId}-${domainId}-AssociatedWith`;
-            if (!edges.get(edgeId) && !newEdges.some(e => e.id === edgeId)) {
-                newEdges.push({ id: edgeId, from: ipNodeId, to: domainId, label: 'Associated with' });
-            }
-        });
-
-        if (newNodes.length > 0) nodes.add(newNodes);
-        if (newEdges.length > 0) edges.add(newEdges);
-
-        updateNodeSizes();
-        updateSelectOptions();
-        if (!isBulk) {
-            await stabilizeNetwork();
-            showToast(`IP ${ip} enriched with ${allDomains.length} associated domains from SecurityTrails`, 'success');
-        }
-    } catch (error) {
-        if (error.name === 'AbortError') {
-            showToast(`Enrichment of IP ${ip} cancelled`, 'info');
-            return;
-        }
-        console.error(`Error enriching IP ${ip} with SecurityTrails: ${error.message}`);
-        showToast(`Error enriching IP ${ip}: ${error.message}`, 'error');
-        if (!isBulk) await stabilizeNetwork();
-    }
-}, RATE_LIMIT_MS);
-
-// Bulk IP Enrichment
-async function enrichAllSecurityTrailsIPs() {
-    if (!securitytrailsApiKey && !ignoreApiKeysViaProxy) {
-        showToast('Please set your SecurityTrails API key in the "Config" tab first.', 'error');
-        return;
-    }
-
-    showProgressBar();
-    network.setOptions({ physics: { enabled: false } });
-    const ipNodes = nodes.get({ filter: n => n.type === 'ip' && n.ip });
-    const totalIPs = ipNodes.length;
-    let successfulEnrichments = 0;
-
-    if (totalIPs === 0) {
-        showToast('No IP nodes found to enrich', 'info');
-        completeProgressBar();
-        return;
-    }
-
-    const batchSize = 5; // Smaller batch due to pagination and rate limits
-    const delayBetweenBatches = 1000; // 1-second delay
-    const totalBatches = Math.ceil(totalIPs / batchSize);
-    const estimatedTimeMs = totalBatches * delayBetweenBatches * 2; // Rough estimate
-    const timeEstimateStr = Math.ceil(estimatedTimeMs / 60000) + 'm';
-
-    showToast(`Starting SecurityTrails enrichment for ${totalIPs} IPs`, 'info');
-    document.getElementById('progress-bar').textContent = `SecurityTrails Enrichment: 0/${totalIPs} IPs (0%) - Est. ${timeEstimateStr}`;
-
-    for (let i = 0; i < totalIPs; i += batchSize) {
-        if (activeTaskController?.signal.aborted) {
-            showToast('SecurityTrails enrichment stopped', 'info');
-            document.getElementById('progress-bar').textContent = `SecurityTrails Enrichment: Stopped at ${successfulEnrichments}/${totalIPs} IPs`;
-            break;
-        }
-
-        const batch = ipNodes.slice(i, Math.min(i + batchSize, totalIPs));
-        const promises = batch.map(node => 
-            throttledEnrichSecurityTrailsIP(node.ip, node.id, true)
-                .then(() => successfulEnrichments++)
-                .catch(error => console.error(`Failed to enrich ${node.ip}: ${error.message}`))
-        );
-
-        await Promise.all(promises);
-
-        const progress = ((successfulEnrichments / totalIPs) * 100).toFixed(1);
-        document.getElementById('progress-bar').textContent = `SecurityTrails Enrichment: ${successfulEnrichments}/${totalIPs} IPs (${progress}%)`;
-        await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
-    }
-
-    updateNodeSizes();
-    updateSelectOptions();
-    await stabilizeNetwork();
-    ensureInteractionSettings();
-    completeProgressBar();
-    showToast(`SecurityTrails enrichment completed: ${successfulEnrichments}/${totalIPs} IPs enriched`, 'success');
-}
-
-// Context Menu Option for Multiple IPs
-const throttledEnrichSecurityTrailsIPMultiple = throttleRequest(async function enrichSecurityTrailsIPMultiple(ips, nodeIds) {
-    for (let i = 0; i < ips.length; i++) {
-        if (activeTaskController?.signal.aborted) break;
-        await throttledEnrichSecurityTrailsIP(ips[i], nodeIds[i], true);
-    }
-    updateNodeSizes();
-    updateSelectOptions();
-    await stabilizeNetwork();
-    showToast(`Enriched ${ips.length} IPs with SecurityTrails`, 'success');
-}, RATE_LIMIT_MS);
 
 //Export visable only
 
@@ -7807,6 +7643,215 @@ function exportVisibleGraph() {
     
     showToast('Visible graph exported to JSON', 'success');
 }
+
+
+// Single Domain Enrichment with SecurityTrails
+const throttledEnrichSecurityTrailsDomain = throttleRequest(async function enrichSecurityTrailsDomain(domain, domainNodeId, isBulk = false, signal) {
+    if (!securitytrailsApiKey && !ignoreApiKeysViaProxy) {
+        showToast('Please set your SecurityTrails API key in the "Config" tab first.', 'error');
+        return;
+    }
+
+    if (!isBulk) network.setOptions({ physics: { enabled: false } });
+
+    try {
+        const baseUrl = `https://api.securitytrails.com/v1/domain/${domain}/subdomains`;
+        const url = constructUrl(baseUrl);
+        console.log('Requesting SecurityTrails URL:', url);
+
+        const response = await fetch(url, {
+            headers: { 
+                'apikey': securitytrailsApiKey, // Updated to 'apikey'
+                'Accept': 'application/json' 
+            },
+            signal
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            if (response.status === 404) {
+                showToast(`No subdomains found for domain ${domain} in SecurityTrails`, 'info');
+                return;
+            }
+            throw new Error(`Failed to fetch SecurityTrails data: ${response.statusText} - ${errorText}`);
+        }
+
+        const data = await response.json();
+        console.log('SecurityTrails Response:', data);
+
+        if (!data.subdomains || data.subdomains.length === 0) {
+            showToast(`No subdomains associated with domain ${domain} in SecurityTrails`, 'info');
+            return;
+        }
+
+        const newNodes = [];
+        const newEdges = [];
+        const existingDomains = new Map(nodes.get({ filter: n => n.type === 'domain' }).map(n => [n.domain, n.id]));
+
+        data.subdomains.forEach(subdomain => {
+            const fullSubdomain = `${subdomain}.${domain}`;
+            let subdomainId = existingDomains.get(fullSubdomain);
+            if (!subdomainId) {
+                subdomainId = nextId++;
+                newNodes.push({
+                    id: subdomainId,
+                    type: 'domain',
+                    label: `Subdomain: ${fullSubdomain}`,
+                    title: `Subdomain: ${fullSubdomain}\nFrom SecurityTrails`,
+                    color: { background: '#60a5fa' },
+                    domain: fullSubdomain
+                });
+                existingDomains.set(fullSubdomain, subdomainId);
+            }
+            const edgeId = `${domainNodeId}-${subdomainId}-SubdomainOf`;
+            if (!edges.get(edgeId) && !newEdges.some(e => e.id === edgeId)) {
+                newEdges.push({ id: edgeId, from: domainNodeId, to: subdomainId, label: 'Subdomain of' });
+            }
+        });
+
+        if (newNodes.length > 0) nodes.add(newNodes);
+        if (newEdges.length > 0) edges.add(newEdges);
+
+        updateNodeSizes();
+        updateSelectOptions();
+        if (!isBulk) {
+            await stabilizeNetwork();
+            showToast(`Domain ${domain} enriched with ${data.subdomains.length} subdomains from SecurityTrails`, 'success');
+        }
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            showToast(`Enrichment of domain ${domain} cancelled`, 'info');
+            return;
+        }
+        console.error(`Error enriching domain ${domain} with SecurityTrails: ${error.message}`);
+        showToast(`Error enriching domain ${domain}: ${error.message}`, 'error');
+        if (!isBulk) await stabilizeNetwork();
+    }
+}, SECURITYTRAILS_RATE_LIMIT_MS);
+
+
+async function enrichAllSecurityTrails() {
+    if (!securitytrailsApiKey && !ignoreApiKeysViaProxy) {
+        showToast('Please set your SecurityTrails API key in the "Config" tab first.', 'error');
+        return;
+    }
+
+    showProgressBar();
+    network.setOptions({ physics: { enabled: false } });
+    const domainNodes = nodes.get({ filter: n => n.type === 'domain' && n.domain });
+    const totalDomains = domainNodes.length;
+    let successfulEnrichments = 0;
+
+    if (totalDomains === 0) {
+        showToast('No domain nodes found to enrich', 'info');
+        completeProgressBar();
+        return;
+    }
+
+    const delayBetweenRequests = SECURITYTRAILS_RATE_LIMIT_MS; // Use the defined rate limit
+    const estimatedTimeMs = totalDomains * delayBetweenRequests;
+    const estimatedSeconds = Math.ceil(estimatedTimeMs / 1000);
+    const timeEstimateStr = estimatedSeconds > 60 
+        ? `${Math.floor(estimatedSeconds / 60)}m ${estimatedSeconds % 60}s` 
+        : `${estimatedSeconds}s`;
+
+    showToast(`Starting SecurityTrails enrichment for ${totalDomains} domains`, 'info');
+    document.getElementById('progress-bar').textContent = `SecurityTrails Enrichment: 0/${totalDomains} Domains (0%) - Est. ${timeEstimateStr}`;
+
+    for (let i = 0; i < totalDomains; i++) {
+        if (activeTaskController?.signal.aborted) {
+            showToast('SecurityTrails enrichment stopped', 'info');
+            document.getElementById('progress-bar').textContent = `SecurityTrails Enrichment: Stopped at ${successfulEnrichments}/${totalDomains} Domains`;
+            break;
+        }
+
+        const node = domainNodes[i];
+        let attempts = 0;
+        const maxAttempts = 3;
+        let success = false;
+
+        while (attempts < maxAttempts && !success) {
+            try {
+                await throttledEnrichSecurityTrailsDomain(node.domain, node.id, true);
+                successfulEnrichments++;
+                success = true;
+            } catch (error) {
+                if (error.message.includes('429')) {
+                    attempts++;
+                    if (attempts < maxAttempts) {
+                        const backoffTime = delayBetweenRequests * attempts; // Exponential backoff: 2s, 4s, 6s
+                        showToast(`Rate limit hit for ${node.domain}, retrying in ${backoffTime / 1000}s (Attempt ${attempts}/${maxAttempts})`, 'warning');
+                        await new Promise(resolve => setTimeout(resolve, backoffTime));
+                    } else {
+                        showToast(`Failed to enrich ${node.domain} after ${maxAttempts} attempts: ${error.message}`, 'error');
+                    }
+                } else {
+                    showToast(`Error enriching ${node.domain}: ${error.message}`, 'error');
+                    break; // Non-429 errors skip retries
+                }
+            }
+        }
+
+        const progress = ((successfulEnrichments / totalDomains) * 100).toFixed(1);
+        document.getElementById('progress-bar').textContent = `SecurityTrails Enrichment: ${successfulEnrichments}/${totalDomains} Domains (${progress}%)`;
+
+        // Wait between requests, even on success, to respect rate limits
+        if (i < totalDomains - 1) { // No delay after the last domain
+            await new Promise(resolve => setTimeout(resolve, delayBetweenRequests));
+        }
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    ensureInteractionSettings();
+    completeProgressBar();
+    showToast(`SecurityTrails enrichment completed: ${successfulEnrichments}/${totalDomains} domains enriched`, 'success');
+}
+
+
+
+// Multiple Domain Enrichment with SecurityTrails (Context Menu)
+const throttledEnrichSecurityTrailsDomainMultiple = throttleRequest(async function enrichSecurityTrailsDomainMultiple(domains, nodeIds) {
+    if (!Array.isArray(domains) || !Array.isArray(nodeIds) || domains.length !== nodeIds.length) {
+        showToast('Invalid input for multiple SecurityTrails enrichment', 'error');
+        return;
+    }
+
+    if (!securitytrailsApiKey && !ignoreApiKeysViaProxy) {
+        showToast('Please set your SecurityTrails API key in the "Config" tab first.', 'error');
+        return;
+    }
+
+    showProgressBar();
+    let successfulEnrichments = 0;
+    const totalDomains = domains.length;
+
+    document.getElementById('progress-bar').textContent = `SecurityTrails Enrichment: 0/${totalDomains} Domains (0%)`;
+
+    for (let i = 0; i < domains.length; i++) {
+        if (activeTaskController?.signal.aborted) {
+            showToast('SecurityTrails enrichment stopped', 'info');
+            document.getElementById('progress-bar').textContent = `SecurityTrails Enrichment: Stopped at ${successfulEnrichments}/${totalDomains} Domains`;
+            break;
+        }
+        await throttledEnrichSecurityTrailsDomain(domains[i], nodeIds[i], true)
+            .then(() => successfulEnrichments++)
+            .catch(error => console.error(`Failed to enrich ${domains[i]}: ${error.message}`));
+        
+        const progress = ((successfulEnrichments / totalDomains) * 100).toFixed(1);
+        document.getElementById('progress-bar').textContent = `SecurityTrails Enrichment: ${successfulEnrichments}/${totalDomains} Domains (${progress}%)`;
+        await new Promise(resolve => setTimeout(resolve, 200)); // Small delay between requests
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    completeProgressBar();
+    showToast(`Enriched ${successfulEnrichments}/${domains.length} domains with SecurityTrails subdomains`, 'success');
+}, SECURITYTRAILS_RATE_LIMIT_MS);
+
+
 
 // Add this at the end of the script section
 window.addEventListener('beforeunload', function() {
