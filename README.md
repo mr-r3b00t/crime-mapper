@@ -1,4 +1,4 @@
-# Enabling cyber invetigations from a browser
+# Enabling cyber investigations from a browser
 **A prototype tool for mapping cyber crime**  
 
 Created by **@UK_Daniel_Card**  
