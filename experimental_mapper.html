@@ -6,6 +6,111 @@
     <title>Crime Mapper - Experimental</title>
     <style>
 
+        /* Notes Modal Styles */
+        #notes-modal {
+    display: none;
+    position: fixed; /* Ensure it stays relative to viewport */
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: var(--shadow-light);
+    z-index: 2000;
+    width: 500px; /* Fixed width */
+    max-width: 90vw; /* Prevent overflow on small screens */
+    max-height: 80vh;
+    overflow-y: auto;
+    margin: 0; /* Remove any inherited margins */
+    box-sizing: border-box; /* Include padding in dimensions */
+}
+
+/* Ensure overlay covers entire viewport */
+#modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1999;
+}
+
+.dark-mode #notes-modal {
+    background-color: #2d3748;
+    box-shadow: var(--shadow-dark);
+    color: #e2e8f0;
+}
+
+#notes-modal h3 {
+    margin: 0 0 15px 0;
+    font-size: 16px;
+}
+
+#notes-textarea {
+    width: 100%;
+    height: 300px; /* Larger input area */
+    padding: 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border-light);
+    background-color: #fff;
+    color: #1f2a44;
+    font-size: 12px;
+    resize: vertical;
+    box-sizing: border-box;
+    overflow-y: auto; /* Scroll bar when needed */
+}
+
+.dark-mode #notes-textarea {
+    border: 1px solid var(--border-dark);
+    background-color: #4b5563;
+    color: #e2e8f0;
+}
+
+#notes-modal .button-container {
+    margin-top: 15px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+#notes-modal button {
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background-color var(--transition);
+}
+
+#notes-save {
+    background-color: #3b82f6;
+    color: white;
+}
+
+#notes-cancel {
+    background-color: #6b7280;
+    color: white;
+}
+
+#notes-save:hover {
+    background-color: #2563eb;
+}
+
+#notes-cancel:hover {
+    background-color: #4b5563;
+}
+
+.dark-mode #notes-save {
+    background-color: #60a5fa;
+    color: #1e293b;
+}
+
+.dark-mode #notes-cancel {
+    background-color: #9ca3af;
+}
+
 /* Properties Panel */
 #properties-panel {
     position: fixed;
@@ -660,8 +765,18 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body class="dark-mode">
+    <div id="notes-modal">
+        <h3>Edit Node Notes</h3>
+        <textarea id="notes-textarea" placeholder="Enter notes here (max 1000 characters)"></textarea>
+        <div class="button-container">
+            <button id="notes-save" onclick="saveNodeNotes()">Save</button>
+            <button id="notes-cancel" onclick="hideNotesModal()">Cancel</button>
+        </div>
+    </div>
         <div id="progress-bar" class="progress-hidden">Task in progress...</div>
         <!-- Rest of your HTML -->
+
+      
 
     <div id="controls">
         <button id="menu-toggle" onclick="toggleMenu()" title="Toggle Menu">></button>
@@ -997,7 +1112,7 @@
         <!-- Suggested -->
         <footer id="controls-footer"> 
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.272 experimental</p>
+    <p>© Xservus Limited - v0.273 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
@@ -1048,6 +1163,7 @@
         let activeTaskController = null;
         let nodeLabelsVisible = true;
         let edgeLabelsVisible = true;
+        let currentEditingNodeId = null;
         const RATE_LIMIT_MS = 500;
         const SHODAN_RATE_LIMIT_MS = 1000; // Specific 1-second delay for Shodan
         const SECURITYTRAILS_RATE_LIMIT_MS = 2000; // 1 second delay for SecurityTrails API
@@ -2129,7 +2245,7 @@ network.on('dragEnd', function(params) {
             });
         });
         console.log('Node drag ended, position updated');
-        saveStateAfterOperation(); // Save only when nodes are dragged
+        //saveState(); // Save silently without toast
     } else {
         // View panning ended
         console.log('View pan ended, no save needed');
@@ -2407,6 +2523,7 @@ function showContextMenu(x, y, value, nodeIds, type) {
         <button onclick="deleteNodes([${nodesArray.join(',')}])">Delete ${isMultiple ? 'Selected Nodes' : 'Node'}</button>
         ${isMultiple ? '' : `<button onclick="startLinkCreation(${nodesArray[0]})">Create Link From Here</button>`}
         ${isMultiple ? '' : `<button onclick="showPropertiesPanel(${nodesArray[0]}); hideContextMenu();">View Node Properties</button>`}
+        ${isMultiple ? '' : `<button onclick="editNodeNotes(${nodesArray[0]}); hideContextMenu();">Add/Edit Notes</button>`}
     `;
     
     // Check if all selected nodes are of the same type
@@ -2456,8 +2573,9 @@ function showContextMenu(x, y, value, nodeIds, type) {
 }
 
 
-
+// why is this here?
 let linkFromNode = null;
+// set variable above - move to top
 
 function saveState() {
     try {
@@ -2473,7 +2591,8 @@ function saveState() {
                     x: node.x,
                     y: node.y,
                     size: node.size,
-                    originalLabel: node.originalLabel // Preserve original label for toggling visibility
+                    originalLabel: node.originalLabel,
+                    notes: node.notes // Include notes for all types
                 };
 
                 // Add type-specific properties
@@ -2520,11 +2639,13 @@ function saveState() {
                         nodeData.url = node.url;
                         break;
                     case 'favicon':
+                        nodeData.hash = node.hash;
+                        nodeData.location = node.location;
+                        break;
                     case 'http_hash':
                     case 'html_hash':
                     case 'ssl_hash':
-                        nodeData.hash = node.hash; // Standardized hash property
-                        if (node.type === 'favicon') nodeData.location = node.location; // Favicon-specific
+                        nodeData.hash = node.hash;
                         break;
                     case 'asn':
                         nodeData.asn = node.asn;
@@ -2551,6 +2672,26 @@ function saveState() {
                     case 'hosting':
                         nodeData.value = node.value;
                         break;
+                    case 'tag':
+                        nodeData.tag = node.tag;
+                        break;
+                    case 'cpe':
+                        nodeData.cpe = node.cpe;
+                        break;
+                    case 'service':
+                        nodeData.name = node.name;
+                        break;
+                    case 'timestamp':
+                        nodeData.timestamp = node.timestamp;
+                        break;
+                    case 'url':
+                        nodeData.url = node.url;
+                        break;
+                    case 'port_title':
+                        nodeData.portType = node.portType;
+                        nodeData.portNumber = node.portNumber;
+                        nodeData.title = node.title;
+                        break;
                     default:
                         console.warn(`Unhandled node type in saveState: ${node.type}`);
                 }
@@ -2562,7 +2703,7 @@ function saveState() {
                 from: edge.from,
                 to: edge.to,
                 label: edge.label,
-                originalLabel: edge.originalLabel // Preserve original label for toggling visibility
+                originalLabel: edge.originalLabel
             })),
             nextId: nextId,
             isDarkMode: isDarkMode,
@@ -2578,31 +2719,6 @@ function saveState() {
         showToast('Failed to save state: ' + e.message, 'error');
     }
 }
-
-function deleteNodes(nodeIds) {
-    const idsToDelete = Array.isArray(nodeIds) ? nodeIds.map(id => parseInt(id)) : [parseInt(nodeIds)];
-
-    idsToDelete.forEach(nodeId => {
-        const node = nodes.get(nodeId);
-        if (!node) {
-            showToast(`Node ${nodeId} not found`, 'error');
-            return;
-        }
-
-        const connectedEdges = edges.get({
-            filter: edge => edge.from === nodeId || edge.to === nodeId
-        });
-        edges.remove(connectedEdges.map(edge => edge.id));
-        nodes.remove({ id: nodeId });
-    });
-
-    updateSelectOptions();
-    updateNodeSizes();
-    stabilizeNetwork();
-    saveStateAfterOperation();
-    showToast(`${idsToDelete.length > 1 ? 'Nodes' : 'Node'} deleted`, 'success');
-}
-
 
 
 
@@ -4179,7 +4295,7 @@ function setHierarchicalLayout() {
             document.getElementById('addMalwareType').style.display = type === 'malware' ? 'block' : 'none';
         });
 
-function createNodeData(type, values) {
+        function createNodeData(type, values) {
     const nodeData = { 
         id: nextId++, 
         size: 10,
@@ -4191,157 +4307,92 @@ function createNodeData(type, values) {
     const configs = {
         vulnerability: { 
             fields: ['vulnName'], 
-            optionalFields: ['cve', 'url'], 
-            color: '#dc2626', // Red color for vulnerabilities
-            label: v => {
-                let label = `Vulnerability: ${v.vulnName}`;
-                if (v.cve) label += `\nCVE: ${v.cve}`;
-                if (v.url) label += `\nURL: ${v.url}`;
-                return label;
-            }, 
-            title: v => {
-                let title = `Vulnerability\nName: ${v.vulnName}`;
-                if (v.cve) title += `\nCVE: ${v.cve}`;
-                if (v.url) title += `\nURL: ${v.url}`;
-                return title;
-            }
+            optionalFields: ['cve', 'url', 'notes'], 
+            color: '#dc2626',
+            label: v => `Vulnerability: ${v.vulnName}${v.cve ? '\nCVE: ' + v.cve : ''}${v.url ? '\nURL: ' + v.url : ''}`,
+            title: v => `Vulnerability\nName: ${v.vulnName}${v.cve ? '\nCVE: ' + v.cve : ''}${v.url ? '\nURL: ' + v.url : ''}${v.notes ? '\nNotes: ' + v.notes : ''}`
         },
         contact: { 
             fields: ['name'], 
-            optionalFields: ['email'], 
+            optionalFields: ['email', 'notes'], 
             color: '#4ade80', 
             label: v => `Contact: ${v.name}${v.email ? '\n' + v.email : ''}`, 
-            title: v => v.email ? `Contact\nName: ${v.name}\nEmail: ${v.email}` : `Contact\nName: ${v.name}` 
+            title: v => `Contact\nName: ${v.name}${v.email ? '\nEmail: ' + v.email : ''}${v.notes ? '\nNotes: ' + v.notes : ''}`
         },
         ip: { 
             fields: ['ip'], 
+            optionalFields: ['notes'],
             color: '#f87171', 
             label: v => `IP: ${v.ip}`, 
-            title: v => `IP Address: ${v.ip}`,
+            title: v => `IP Address: ${v.ip}${v.notes ? '\nNotes: ' + v.notes : ''}`,
             validate: v => ipRegex.ipv4.test(v.ip) || ipRegex.ipv6.test(v.ip) 
         },
         domain: { 
             fields: ['domain'], 
+            optionalFields: ['notes'],
             color: '#60a5fa', 
             label: v => `Domain: ${v.domain}`, 
-            title: v => `Domain: ${v.domain}` 
+            title: v => `Domain: ${v.domain}${v.notes ? '\nNotes: ' + v.notes : ''}` 
         },
         organization: { 
             fields: ['organization'], 
+            optionalFields: ['notes'],
             color: '#facc15', 
             label: v => `Organization: ${v.organization}`, 
-            title: v => `Organization: ${v.organization}` 
+            title: v => `Organization: ${v.organization}${v.notes ? '\nNotes: ' + v.notes : ''}` 
         },
         port: { 
             fields: ['portNumber', 'portType'], 
+            optionalFields: ['notes'],
             color: '#a78bfa', 
             label: v => `Port: ${v.portType}/${v.portNumber}`, 
-            title: v => `Port\nType: ${v.portType}\nNumber: ${v.portNumber}` 
+            title: v => `Port\nType: ${v.portType}\nNumber: ${v.portNumber}${v.notes ? '\nNotes: ' + v.notes : ''}` 
         },
         wallet: { 
             fields: ['address'], 
+            optionalFields: ['notes'],
             color: '#fb923c', 
             label: v => `Wallet: ${v.address}`, 
-            title: v => `Wallet\nAddress: ${v.address}` 
+            title: v => `Wallet\nAddress: ${v.address}${v.notes ? '\nNotes: ' + v.notes : ''}` 
         },
         bank: { 
             fields: ['accountNumber', 'sortCode'], 
+            optionalFields: ['notes'],
             color: '#10b981', 
             label: v => `Bank: ${v.accountNumber}\nSort Code: ${v.sortCode}`, 
-            title: v => `Bank Account\nAccount Number: ${v.accountNumber}\nSort Code: ${v.sortCode}` 
+            title: v => `Bank Account\nAccount Number: ${v.accountNumber}\nSort Code: ${v.sortCode}${v.notes ? '\nNotes: ' + v.notes : ''}` 
         },
         technology: { 
-            fields: ['techName', 'techVersion'], 
+            fields: ['techName'], 
+            optionalFields: ['techVersion', 'notes'], 
             color: '#ec4899', 
-            label: v => `Technology: ${v.techName}\nVersion: ${v.techVersion}`, 
-            title: v => `Technology\nName: ${v.techName}\nVersion: ${v.techVersion}` 
+            label: v => `Technology: ${v.techName}${v.techVersion ? '\nVersion: ' + v.techVersion : ''}`, 
+            title: v => `Technology\nName: ${v.techName}${v.techVersion ? '\nVersion: ' + v.techVersion : ''}${v.notes ? '\nNotes: ' + v.notes : ''}` 
         },
         device: { 
             fields: ['deviceCategory', 'deviceName'], 
+            optionalFields: ['notes'],
             color: '#14b8a6', 
             label: v => `Device: ${v.deviceName}\nCategory: ${v.deviceCategory}`, 
-            title: v => `Device\nName: ${v.deviceName}\nCategory: ${v.deviceCategory}` 
+            title: v => `Device\nName: ${v.deviceName}\nCategory: ${v.deviceCategory}${v.notes ? '\nNotes: ' + v.notes : ''}` 
         },
         malware: { 
             fields: ['malwareName', 'malwareType'], 
+            optionalFields: ['notes'],
             color: '#ef4444', 
             label: v => `Malware: ${v.malwareName}\nType: ${v.malwareType}`, 
-            title: v => `Malware\nName: ${v.malwareName}\nType: ${v.malwareType}` 
+            title: v => `Malware\nName: ${v.malwareName}\nType: ${v.malwareType}${v.notes ? '\nNotes: ' + v.notes : ''}` 
         },
+        // Add notes to other types as needed
         favicon: { 
             fields: ['hash'], 
-            optionalFields: ['location'], 
+            optionalFields: ['location', 'notes'], 
             color: '#22d3ee',
             label: v => `Favicon: ${v.hash.substring(0, 8)}...`, 
-            title: v => `Favicon\nHash: ${v.hash}${v.location ? '\nPath: ' + v.location : ''}` 
+            title: v => `Favicon\nHash: ${v.hash}${v.location ? '\nPath: ' + v.location : ''}${v.notes ? '\nNotes: ' + v.notes : ''}` 
         },
-        http_hash: { 
-            fields: ['hash'], 
-            color: '#f97316', 
-            label: v => `HTTP Hash: ${v.hash.substring(0, 8)}...`, 
-            title: v => `HTTP Headers Hash\nSHA256: ${v.hash}` 
-        },
-        html_hash: { 
-            fields: ['hash'], 
-            color: '#f59e0b', 
-            label: v => `HTML Hash: ${v.hash.substring(0, 8)}...`, 
-            title: v => `HTML Hash\nSHA256: ${v.hash}` 
-        },
-        ssl_hash: { 
-            fields: ['hash'], // Changed from 'fingerprint' to 'hash'
-            color: '#8b5cf6', 
-            label: v => `SSL Hash: ${v.hash.substring(0, 8)}...`, 
-            title: v => `SSL Certificate Hash\nSHA256: ${v.hash}` // Updated title
-        },
-        // Fixed entries for privacy types
-        vpn: { 
-            fields: ['value'], 
-            color: '#9333ea', 
-            label: v => `VPN: ${v.value}`, 
-            title: v => `VPN for IP: ${v.value}` 
-        },
-        proxy: { 
-            fields: ['value'], 
-            color: '#f43f5e', 
-            label: v => `Proxy: ${v.value}`, 
-            title: v => `Proxy for IP: ${v.value}` 
-        },
-        tor: { 
-            fields: ['value'], 
-            color: '#64748b', 
-            label: v => `Tor: ${v.value}`, 
-            title: v => `Tor for IP: ${v.value}` 
-        },
-        relay: { 
-            fields: ['value'], 
-            color: '#eab308', 
-            label: v => `Relay: ${v.value}`, 
-            title: v => `Relay for IP: ${v.value}` 
-        },
-        hosting: { 
-            fields: ['value'], 
-            color: '#14b8a6', 
-            label: v => `Hosting: ${v.value}`, 
-            title: v => `Hosting for IP: ${v.value}` 
-        },
-        tag: { 
-            fields: ['tag'], 
-            color: '#6d28d9', // Purple for tags
-            label: v => `Tag: ${v.tag}`, 
-            title: v => `Tag: ${v.tag}` 
-        },
-        cpe: { 
-            fields: ['cpe'], 
-            color: '#0d9488', // Teal for CPEs
-            label: v => `CPE: ${v.cpe.split(':')[3] || v.cpe}`, // Show vendor or full CPE
-            title: v => `CPE: ${v.cpe}` 
-        }
-
+        // ... add 'notes' to optionalFields for all other types similarly ...
     };
-
-    configs.asn = { fields: ['asn'], color: '#a3e635', label: v => `ASN: ${v.asn}`, title: v => `ASN: ${v.asn}` };
-    configs.city = { fields: ['city'], color: '#f97316', label: v => `City: ${v.city}`, title: v => `City: ${v.city}` };
-    configs.country = { fields: ['country'], color: '#34d399', label: v => `Country: ${v.country}`, title: v => `Country: ${v.country}` };
 
     const config = configs[type];
     if (!config || config.fields.some(f => !values[f])) { 
@@ -4414,14 +4465,12 @@ function addNode() {
         }
     };
 
-    // Get the node data using the inputs for the selected type
     const nodeData = createNodeData(type, inputs[type]);
     if (!nodeData) {
-        // createNodeData already shows a toast for validation errors
         return;
     }
 
-    // Check for duplicates based on key fields
+    // Check for duplicates based on key fields with corrected syntax
     const existingNodes = nodes.get({
         filter: n => n.type === type && (
             (type === 'contact' && n.name === inputs[type].name && (!inputs[type].email || n.email === inputs[type].email)) ||
@@ -4433,7 +4482,7 @@ function addNode() {
             (type === 'bank' && n.accountNumber === inputs[type].accountNumber && n.sortCode === inputs[type].sortCode) ||
             (type === 'technology' && n.techName === inputs[type].techName && n.techVersion === inputs[type].techVersion) ||
             (type === 'device' && n.deviceCategory === inputs[type].deviceCategory && n.deviceName === inputs[type].deviceName) ||
-            (type === 'malware' && n.malwareName === inputs[type].malwareName && n.malwareType === inputs[type].malwareType)
+            (type === 'malware' && n.malwareName === inputs[type].malwareName && n.malwareType === inputs[type].malwareType) ||
             (type === 'vulnerability' && n.vulnName === inputs[type].vulnName && 
              (!inputs[type].cve || n.cve === inputs[type].cve) && 
              (!inputs[type].url || n.url === inputs[type].url))
@@ -4445,15 +4494,13 @@ function addNode() {
         return;
     }
 
-    // Add the node
     nodes.add({
         ...nodeData,
-        size: 10, // Fixed initial size
+        size: 10,
         widthConstraint: false,
         heightConstraint: false
     });
 
-    // Update UI and network
     updateSelectOptions();
     clearAddInputs();
     updateNodeSizes();
@@ -4461,6 +4508,7 @@ function addNode() {
     saveStateAfterOperation();
     showToast(`${type} added successfully`, 'success');
 }
+
 
         function editNode() {
             const nodeId = document.getElementById('editNodeSelect').value;
@@ -6606,24 +6654,13 @@ const throttledEnrichHudsonRockDomainMultiple = throttleRequest(async function e
 
 
 function showPropertiesPanel(nodeId) {
-    console.log('Attempting to show properties for node ID:', nodeId);
     const node = nodes.get(nodeId);
-    
     if (!node) {
-        console.error('Node not found for ID:', nodeId);
         showToast('Node not found', 'error');
         return;
     }
 
-    console.log('Node data:', JSON.stringify(node, null, 2));
-
     const tbody = document.querySelector('#properties-table tbody');
-    if (!tbody) {
-        console.error('Properties table body not found');
-        showToast('Properties table not found', 'error');
-        return;
-    }
-    
     tbody.innerHTML = '';
 
     const properties = {};
@@ -6647,26 +6684,14 @@ function showPropertiesPanel(nodeId) {
     });
 
     const panel = document.getElementById('properties-panel');
-    if (!panel) {
-        console.error('Properties panel element not found');
-        showToast('Properties panel not found', 'error');
-        return;
-    }
-
-    // Ensure panel is visible and trigger transition
-    panel.style.display = 'block'; // Ensure it’s not hidden
+    panel.style.display = 'block';
     panel.classList.add('active');
 
-    // Force reflow for transition
-    void panel.offsetHeight;
-
-    // Adjust network layout
     const controls = document.getElementById('controls');
     const myNetwork = document.getElementById('myNetwork');
     myNetwork.style.marginRight = '300px';
     myNetwork.style.marginLeft = controls.classList.contains('collapsed') ? '50px' : '300px';
 
-    console.log('Properties panel should now be visible on the right');
     network.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
 }
 
@@ -7882,6 +7907,245 @@ function refangText(text) {
 
     return refanged;
 }
+
+
+
+//notes 
+function editNodeNotes(nodeId) {
+    console.log('Attempting to open notes for node:', nodeId);
+    const node = nodes.get(nodeId);
+    if (!node) {
+        showToast('Node not found', 'error');
+        return;
+    }
+
+    const modal = document.getElementById('notes-modal');
+    const notesTextarea = document.getElementById('notes-textarea');
+    if (!modal || !notesTextarea) {
+        console.error('Modal or textarea not found');
+        showToast('Notes interface unavailable', 'error');
+        return;
+    }
+
+    // Get the modal title element
+    const modalTitle = modal.querySelector('h3');
+    if (!modalTitle) {
+        console.error('Modal title element not found');
+        showToast('Modal title unavailable', 'error');
+        return;
+    }
+
+    // Determine the entity name
+    let entityName;
+    switch (node.type) {
+        case 'contact':
+            entityName = node.name || node.email || node.label.split('\n')[0];
+            break;
+        case 'ip':
+            entityName = node.ip || node.label.split('\n')[0];
+            break;
+        case 'domain':
+            entityName = node.domain || node.label.split('\n')[0];
+            break;
+        case 'organization':
+            entityName = node.organization || node.label.split('\n')[0];
+            break;
+        case 'port':
+            entityName = `${node.portType}/${node.portNumber}` || node.label.split('\n')[0];
+            break;
+        case 'wallet':
+            entityName = node.address || node.label.split('\n')[0];
+            break;
+        case 'bank':
+            entityName = node.accountNumber || node.label.split('\n')[0];
+            break;
+        case 'technology':
+            entityName = node.techName || node.label.split('\n')[0];
+            break;
+        case 'device':
+            entityName = node.deviceName || node.label.split('\n')[0];
+            break;
+        case 'malware':
+            entityName = node.malwareName || node.label.split('\n')[0];
+            break;
+        case 'vulnerability':
+            entityName = node.vulnName || node.cve || node.label.split('\n')[0];
+            break;
+        default:
+            entityName = node.label.split('\n')[0]; // Fallback to first line of label
+    }
+
+    // Set the modal title
+    modalTitle.textContent = `Edit Notes for ${entityName}`;
+
+    currentEditingNodeId = nodeId;
+    notesTextarea.value = node.notes || '';
+
+    // Remove existing overlay if any
+    let overlay = document.getElementById('modal-overlay');
+    if (overlay) overlay.remove();
+
+    // Create new overlay
+    overlay = document.createElement('div');
+    overlay.id = 'modal-overlay';
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1999;
+    `;
+    document.body.appendChild(overlay);
+
+    // Reset modal styles
+    modal.style.position = 'fixed';
+    modal.style.top = '50%';
+    modal.style.left = '50%';
+    modal.style.transform = 'translate(-50%, -50%)';
+    modal.style.zIndex = '2000';
+    modal.style.display = 'block';
+
+    // Force reflow
+    void modal.offsetWidth;
+    console.log('Modal display set to:', modal.style.display);
+
+    notesTextarea.focus();
+
+    // Remove any existing click handler to prevent accumulation
+    if (window.notesClickHandler) {
+        document.removeEventListener('click', window.notesClickHandler);
+    }
+
+    // Define and add new click handler
+    const clickHandler = (event) => {
+        if (modal.style.display === 'block' && !modal.contains(event.target)) {
+            hideNotesModal();
+        }
+    };
+    setTimeout(() => {
+        document.addEventListener('click', clickHandler);
+        window.notesClickHandler = clickHandler; // Store globally for cleanup
+    }, 100);
+
+    // Remove any existing resize handler
+    if (modal.dataset.resizeHandler) {
+        window.removeEventListener('resize', modal.dataset.resizeHandler);
+    }
+
+    // Add resize handler
+    const resizeHandler = () => {
+        modal.style.top = '50%';
+        modal.style.left = '50%';
+        modal.style.transform = 'translate(-50%, -50%)';
+    };
+    window.addEventListener('resize', resizeHandler);
+    modal.dataset.resizeHandler = resizeHandler;
+}
+
+
+// save notes
+
+function saveNodeNotes() {
+    if (currentEditingNodeId === null) return;
+
+    const node = nodes.get(currentEditingNodeId);
+    if (!node) {
+        showToast('Node not found', 'error');
+        hideNotesModal();
+        return;
+    }
+
+    const notesTextarea = document.getElementById('notes-textarea');
+    const newNotes = notesTextarea.value.trim();
+
+    if (newNotes.length > 1000) {
+        showToast('Notes cannot exceed 1000 characters', 'error');
+        return;
+    }
+
+    // Define configs as in createNodeData (or move this to a global scope if reused elsewhere)
+    const configs = {
+        contact: {
+            title: v => `Contact\nName: ${v.name}${v.email ? '\nEmail: ' + v.email : ''}${v.notes ? '\nNotes: ' + v.notes : ''}`
+        },
+        ip: {
+            title: v => `IP Address: ${v.ip}${v.notes ? '\nNotes: ' + v.notes : ''}`
+        },
+        domain: {
+            title: v => `Domain: ${v.domain}${v.notes ? '\nNotes: ' + v.notes : ''}`
+        },
+        organization: {
+            title: v => `Organization: ${v.organization}${v.notes ? '\nNotes: ' + v.notes : ''}`
+        },
+        port: {
+            title: v => `Port\nType: ${v.portType}\nNumber: ${v.portNumber}${v.notes ? '\nNotes: ' + v.notes : ''}`
+        },
+        wallet: {
+            title: v => `Wallet\nAddress: ${v.address}${v.notes ? '\nNotes: ' + v.notes : ''}`
+        },
+        bank: {
+            title: v => `Bank Account\nAccount Number: ${v.accountNumber}\nSort Code: ${v.sortCode}${v.notes ? '\nNotes: ' + v.notes : ''}`
+        },
+        technology: {
+            title: v => `Technology\nName: ${v.techName}${v.techVersion ? '\nVersion: ' + v.techVersion : ''}${v.notes ? '\nNotes: ' + v.notes : ''}`
+        },
+        device: {
+            title: v => `Device\nName: ${v.deviceName}\nCategory: ${v.deviceCategory}${v.notes ? '\nNotes: ' + v.notes : ''}`
+        },
+        malware: {
+            title: v => `Malware\nName: ${v.malwareName}\nType: ${v.malwareType}${v.notes ? '\nNotes: ' + v.notes : ''}`
+        },
+        vulnerability: {
+            title: v => `Vulnerability\nName: ${v.vulnName}${v.cve ? '\nCVE: ' + v.cve : ''}${v.url ? '\nURL: ' + v.url : ''}${v.notes ? '\nNotes: ' + v.notes : ''}`
+        },
+        // Add other types as needed
+    };
+
+    const config = configs[node.type];
+    if (!config) {
+        showToast(`Unsupported node type: ${node.type}`, 'error');
+        hideNotesModal();
+        return;
+    }
+
+    const updatedNode = { ...node, notes: newNotes };
+    nodes.update({
+        id: currentEditingNodeId,
+        notes: newNotes,
+        title: config.title(updatedNode) // Call the function directly
+    });
+
+    saveStateAfterOperation();
+    showToast('Notes saved successfully', 'success');
+    hideNotesModal();
+}
+
+function hideNotesModal() {
+    const modal = document.getElementById('notes-modal');
+    if (!modal) return;
+
+    modal.style.display = 'none';
+    const overlay = document.getElementById('modal-overlay');
+    if (overlay) overlay.remove();
+
+    // Clean up click handler
+    if (window.notesClickHandler) {
+        document.removeEventListener('click', window.notesClickHandler);
+        delete window.notesClickHandler;
+    }
+
+    // Clean up resize handler
+    const resizeHandler = modal.dataset.resizeHandler;
+    if (resizeHandler) {
+        window.removeEventListener('resize', resizeHandler);
+        delete modal.dataset.resizeHandler;
+    }
+
+    currentEditingNodeId = null;
+}
+
 
 // Add this at the end of the script section
 window.addEventListener('beforeunload', function() {
