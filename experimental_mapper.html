@@ -3751,15 +3751,13 @@ async function importIOCsFromText() {
         showToast('Please enter some text containing IOCs', 'error'); 
         return; 
     }
-    // Replace [.] with . before processing
-    text = text.replace(/\[\.\]/g, '.');
+    // Apply comprehensive refanging
+    text = refangText(text);
     await processIOCs(text);
     document.getElementById('iocText').value = '';
     saveStateAfterOperation();
     showToast('IOCs (including emails) import completed', 'success');
 }
-
-
 
 async function importIOCsFromFile() {
     const fileInput = document.getElementById('iocFile');
@@ -3770,8 +3768,8 @@ async function importIOCsFromFile() {
     }
     const reader = new FileReader();
     reader.onload = async function(event) { 
-        // Replace [.] with . before processing
-        let text = event.target.result.replace(/\[\.\]/g, '.');
+        // Apply comprehensive refanging
+        let text = refangText(event.target.result);
         await processIOCs(text); 
         fileInput.value = ''; 
         saveStateAfterOperation();
@@ -7851,7 +7849,39 @@ const throttledEnrichSecurityTrailsDomainMultiple = throttleRequest(async functi
     showToast(`Enriched ${successfulEnrichments}/${domains.length} domains with SecurityTrails subdomains`, 'success');
 }, SECURITYTRAILS_RATE_LIMIT_MS);
 
+//Refang IOCs
 
+function refangText(text) {
+    // Ensure the text is a string
+    if (typeof text !== 'string') return text;
+
+    let refanged = text;
+
+    // Common defanging patterns for URLs and IPs
+    refanged = refanged.replace(/\[\.\]/g, '.');        // [.] → .
+    refanged = refanged.replace(/\[dot\]/gi, '.');     // [dot] or [DOT] → .
+    refanged = refanged.replace(/\[ \. \]/g, '.');     // [ . ] → .
+    refanged = refanged.replace(/\[\:\]/g, ':');       // [:] → :
+    refanged = refanged.replace(/\[colon\]/gi, '://'); // [colon] or [COLON] → :// (corrected)
+    refanged = refanged.replace(/hxxp/gi, 'http');     // hxxp → http
+    refanged = refanged.replace(/\[hxxp\]/gi, 'http'); // [hxxp] → http
+    refanged = refanged.replace(/\[http\]/gi, 'http'); // [http] → http
+
+    // Email address defanging
+    refanged = refanged.replace(/\[at\]/gi, '@');      // [at] or [AT] → @
+    refanged = refanged.replace(/\[ @ \]/g, '@');      // [ @ ] → @
+    refanged = refanged.replace(/ at /gi, '@');        // " at " → @ (common in text)
+    refanged = refanged.replace(/\[dot\]/gi, '.');     // [dot] in emails → .
+
+    // Remove any remaining standalone square brackets that might remain
+    refanged = refanged.replace(/\[\s*\]/g, '');       // Empty brackets [] → ''
+    refanged = refanged.replace(/\[([^\]]+)\]/g, '$1'); // [text] → text (general cleanup)
+
+    // Clean up any extra spaces that might have been introduced
+    refanged = refanged.replace(/\s+/g, ' ').trim();
+
+    return refanged;
+}
 
 // Add this at the end of the script section
 window.addEventListener('beforeunload', function() {
