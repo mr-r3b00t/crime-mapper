@@ -5,11 +5,454 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Crime Mapper - Experimental</title>
     <style>
+/* CSS Variables */
+:root {
+    --transition: 0.3s;
+    --shadow-light: 0 2px 10px rgba(0, 0, 0, 0.1);
+    --shadow-dark: 0 2px 10px rgba(0, 0, 0, 0.3);
+    --border-light: #d1d5db;
+    --border-dark: #4b5563;
+    --top-bar-height: 40px;
+}
 
-        /* Notes Modal Styles */
-        #notes-modal {
+/* Base Styles */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    height: calc(100vh - var(--top-bar-height));
+    font-size: 12px;
+    transition: background-color var(--transition), color var(--transition);
+    margin-top: var(--top-bar-height);
+}
+
+body.light-mode {
+    background-color: #f0f2f5;
+    color: #1f2a44;
+}
+
+body.dark-mode {
+    background-color: #1e293b;
+    color: #e2e8f0;
+}
+
+/* Top Bar */
+#top-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: var(--top-bar-height);
+    background-color: #2d3748;
+    color: #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 20px;
+    z-index: 1000;
+    box-shadow: var(--shadow-dark);
+    box-sizing: border-box;
+}
+
+.light-mode #top-bar {
+    background-color: #f0f2f5;
+    color: #1f2a44;
+    box-shadow: var(--shadow-light);
+}
+
+#version {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+#github-link {
+    font-size: 14px;
+    color: #60a5fa;
+    text-decoration: none;
+    transition: color var(--transition);
+}
+
+#github-link:hover {
+    color: #3b82f6;
+}
+
+.light-mode #github-link {
+    color: #3b82f6;
+}
+
+.light-mode #github-link:hover {
+    color: #2563eb;
+}
+
+/* Controls Panel */
+#controls {
+    position: fixed;
+    top: var(--top-bar-height);
+    left: 0;
+    height: calc(100vh - var(--top-bar-height));
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    transition: width var(--transition);
+    background-color: #fff;
+}
+
+.light-mode #controls {
+    background-color: #fff;
+    box-shadow: var(--shadow-light);
+}
+
+.dark-mode #controls {
+    background-color: #2d3748;
+    box-shadow: var(--shadow-dark);
+    color: #e2e8f0;
+}
+
+#controls.collapsed {
+    width: 50px;
+}
+
+#controls:not(.collapsed) {
+    width: 300px;
+}
+
+#controls-header {
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+#controls-footer {
+    text-align: center;
+    padding: 10px;
+    font-size: 10px;
+    margin-top: auto;
+    transition: color var(--transition);
+}
+
+.light-mode #controls-footer {
+    color: #6b7280;
+}
+
+.dark-mode #controls-footer {
+    color: #94a3b8;
+}
+
+/* Menu Toggle Button */
+#menu-toggle {
+    padding: 6px 12px;
+    background-color: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background-color var(--transition);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+#controls.collapsed #menu-toggle {
+    width: 100%;
+    display: block;
+}
+
+.light-mode #menu-toggle {
+    background-color: #3b82f6;
+}
+
+#menu-toggle:hover {
+    background-color: #2563eb;
+}
+
+.dark-mode #menu-toggle:hover {
+    background-color: #3b82f6;
+}
+
+/* Top Buttons */
+#mode-toggle,
+#pause-toggle,
+#reset-layout,
+#summary-button {
+    padding: 6px 12px;
+    background-color: #6b7280;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background-color var(--transition);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+#mode-toggle:hover,
+#pause-toggle:hover,
+#reset-layout:hover,
+#summary-button:hover {
+    background-color: #4b5563;
+}
+
+.dark-mode #mode-toggle,
+.dark-mode #pause-toggle,
+.dark-mode #reset-layout,
+.dark-mode #summary-button {
+    background-color: #9ca3af;
+}
+
+#pause-toggle.paused {
+    background-color: #ef4444;
+}
+
+#controls.collapsed #mode-toggle,
+#controls.collapsed #pause-toggle,
+#controls.collapsed #reset-layout,
+#controls.collapsed #summary-button,
+#controls.collapsed .tab-buttons,
+#controls.collapsed .tab-content,
+#controls.collapsed #controls-footer {
     display: none;
-    position: fixed; /* Ensure it stays relative to viewport */
+}
+
+/* Tab Navigation */
+.tab-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--border-light);
+    transition: border-color var(--transition);
+    padding: 10px 0;
+}
+
+.dark-mode .tab-buttons {
+    border-bottom: 1px solid var(--border-dark);
+}
+
+.tab-button {
+    flex: 1 0 14.28%;
+    padding: 10px;
+    text-align: center;
+    border: none;
+    cursor: pointer;
+    transition: background-color var(--transition), color var(--transition);
+    font-size: 10px;
+}
+
+.light-mode .tab-button {
+    background-color: #f9fafb;
+    color: #1f2a44;
+}
+
+.dark-mode .tab-button {
+    background-color: #374151;
+    color: #e2e8f0;
+}
+
+.tab-button.active {
+    font-weight: bold;
+}
+
+.light-mode .tab-button.active {
+    background-color: #fff;
+    border-bottom: 2px solid #3b82f6;
+}
+
+.dark-mode .tab-button.active {
+    background-color: #2d3748;
+    border-bottom: 2px solid #60a5fa;
+}
+
+.light-mode .tab-button:hover:not(.active) {
+    background-color: #e5e7eb;
+}
+
+.dark-mode .tab-button:hover:not(.active) {
+    background-color: #4b5563;
+}
+
+/* Tab Content */
+.tab-content {
+    padding: 15px;
+    display: none;
+    flex-grow: 1;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.input-group {
+    margin: 15px 0;
+    padding: 10px;
+    border-radius: 6px;
+    transition: background-color var(--transition);
+}
+
+.light-mode .input-group {
+    background-color: #f9fafb;
+}
+
+.dark-mode .input-group {
+    background-color: #374151;
+}
+
+.input-group h3 {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+}
+
+.light-mode .input-group h3 {
+    color: #1f2a44;
+}
+
+.dark-mode .input-group h3 {
+    color: #e2e8f0;
+}
+
+/* Inputs and Buttons */
+input,
+select,
+textarea {
+    margin: 4px 0;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    transition: border-color var(--transition), background-color var(--transition), color var(--transition);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.light-mode input,
+.light-mode select,
+.light-mode textarea {
+    border: 1px solid var(--border-light);
+    background-color: #fff;
+    color: #1f2a44;
+}
+
+.dark-mode input,
+.dark-mode select,
+.dark-mode textarea {
+    border: 1px solid var(--border-dark);
+    background-color: #4b5563;
+    color: #e2e8f0;
+}
+
+textarea {
+    height: 100px;
+    resize: vertical;
+}
+
+button {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background-color var(--transition), color var(--transition);
+    width: 100%;
+    margin: 4px 0;
+}
+
+.light-mode button {
+    background-color: #3b82f6;
+    color: white;
+}
+
+.dark-mode button {
+    background-color: #60a5fa;
+    color: #1e293b;
+}
+
+/* Network Container */
+#myNetwork {
+    flex-grow: 1;
+    height: calc(100vh - var(--top-bar-height));
+    border-radius: 0 8px 8px 0;
+    box-shadow: var(--shadow-light);
+    transition: margin-left var(--transition), margin-right var(--transition);
+    position: relative;
+}
+
+.light-mode #myNetwork {
+    background-color: #fff;
+}
+
+.dark-mode #myNetwork {
+    background-color: #334155;
+    box-shadow: var(--shadow-dark);
+}
+
+#controls:not(.collapsed) ~ #myNetwork {
+    margin-left: 300px;
+}
+
+#controls.collapsed ~ #myNetwork {
+    margin-left: 50px;
+}
+
+/* Properties Panel */
+#properties-panel {
+    position: fixed;
+    top: var(--top-bar-height);
+    right: -310px;
+    width: 300px;
+    height: calc(100vh - var(--top-bar-height));
+    background-color: #fff;
+    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.2);
+    z-index: 2000;
+    padding: 20px;
+    overflow-y: auto;
+    transition: right var(--transition);
+    box-sizing: border-box;
+}
+
+.dark-mode #properties-panel {
+    background-color: #2d3748;
+    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.4);
+    color: #e2e8f0;
+}
+
+#properties-panel.active {
+    right: 0;
+}
+
+#properties-panel .close-button {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: none;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    color: #1f2a44;
+    transition: color var(--transition);
+}
+
+.dark-mode #properties-panel .close-button {
+    color: #e2e8f0;
+}
+
+#properties-panel.active ~ #myNetwork {
+    margin-right: 300px;
+}
+
+#properties-panel.active ~ #controls:not(.collapsed) ~ #myNetwork {
+    margin-left: 300px;
+    margin-right: 300px;
+}
+
+#properties-panel.active ~ #controls.collapsed ~ #myNetwork {
+    margin-left: 50px;
+    margin-right: 300px;
+}
+
+/* Notes Modal */
+#notes-modal {
+    display: none;
+    position: fixed;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
@@ -18,15 +461,19 @@
     border-radius: 8px;
     box-shadow: var(--shadow-light);
     z-index: 2000;
-    width: 500px; /* Fixed width */
-    max-width: 90vw; /* Prevent overflow on small screens */
+    width: 500px;
+    max-width: 90vw;
     max-height: 80vh;
     overflow-y: auto;
-    margin: 0; /* Remove any inherited margins */
-    box-sizing: border-box; /* Include padding in dimensions */
+    box-sizing: border-box;
 }
 
-/* Ensure overlay covers entire viewport */
+.dark-mode #notes-modal {
+    background-color: #2d3748;
+    box-shadow: var(--shadow-dark);
+    color: #e2e8f0;
+}
+
 #modal-overlay {
     position: fixed;
     top: 0;
@@ -37,12 +484,6 @@
     z-index: 1999;
 }
 
-.dark-mode #notes-modal {
-    background-color: #2d3748;
-    box-shadow: var(--shadow-dark);
-    color: #e2e8f0;
-}
-
 #notes-modal h3 {
     margin: 0 0 15px 0;
     font-size: 16px;
@@ -50,7 +491,7 @@
 
 #notes-textarea {
     width: 100%;
-    height: 300px; /* Larger input area */
+    height: 300px;
     padding: 10px;
     border-radius: 4px;
     border: 1px solid var(--border-light);
@@ -59,7 +500,7 @@
     font-size: 12px;
     resize: vertical;
     box-sizing: border-box;
-    overflow-y: auto; /* Scroll bar when needed */
+    overflow-y: auto;
 }
 
 .dark-mode #notes-textarea {
@@ -111,170 +552,7 @@
     background-color: #9ca3af;
 }
 
-/* Properties Panel */
-#properties-panel {
-    position: fixed;
-    right: -310px; /* Start offscreen on the right */
-    top: 0;
-    width: 300px;
-    height: 100vh;
-    background-color: #fff;
-    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.2); /* Shadow on left side */
-    z-index: 2000; /* Ensure it’s above other elements */
-    padding: 20px;
-    overflow-y: auto;
-    transition: right 0.3s ease-in-out; /* Transition right property */
-    box-sizing: border-box;
-}
-
-.dark-mode #properties-panel {
-    background-color: #2d3748;
-    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.4); /* Adjusted shadow direction */
-    color: #e2e8f0;
-}
-
-#properties-panel.active {
-    right: 0; /* Slide to the right edge */
-}
-
-/* Adjust close button positioning */
-#properties-panel .close-button {
-    position: absolute;
-    top: 10px;
-    right: 10px; /* Keep it on the right side */
-    background: none;
-    border: none;
-    font-size: 18px;
-    cursor: pointer;
-    color: #1f2a44;
-    transition: color 0.3s;
-}
-
-/* Remove or adjust conflicting layout rules */
-#properties-panel.active ~ #controls:not(.collapsed) {
-    left: 0; /* Don’t shift controls left; keep them in place */
-}
-
-#properties-panel.active ~ #controls.collapsed {
-    left: 0; /* Don’t shift collapsed controls */
-}
-
-#properties-panel.active ~ #myNetwork {
-    margin-right: 300px; /* Reduce right margin to make space */
-    margin-left: 0; /* Reset left margin adjustment */
-}
-
-#properties-panel.active ~ #controls.collapsed ~ #myNetwork {
-    margin-right: 300px; /* Adjust for collapsed controls */
-    margin-left: 50px; /* Maintain left margin for collapsed controls */
-}
-
-/* Ensure controls panel adjusts when properties panel is open */
-#controls {
-    transition: left 0.3s ease-in-out, width 0.3s ease-in-out;
-}
-
-#controls.collapsed ~ #myNetwork {
-    margin-left: 50px;
-}
-
-#controls:not(.collapsed) ~ #myNetwork {
-    margin-left: 300px;
-}
-
-#properties-panel.active ~ #controls:not(.collapsed) {
-    left: 300px; /* Shift controls right when properties panel is open */
-}
-
-#properties-panel.active ~ #controls.collapsed {
-    left: 300px; /* Keep collapsed controls aligned */
-}
-
-#properties-panel.active ~ #myNetwork {
-    margin-left: 350px; /* Account for both panels when expanded */
-}
-
-#properties-panel.active ~ #controls.collapsed ~ #myNetwork {
-    margin-left: 350px; /* Adjust network margin when controls are collapsed */
-}
-
-
-#menu-toggle {
-    padding: 6px 12px;
-    background-color: #3b82f6;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    font-size: 12px;
-    cursor: pointer;
-    transition: background-color var(--transition), transform var(--transition);
-    width: 100%; /* Match other buttons */
-    box-sizing: border-box;
-    margin: 0;
-}
-
-#controls-footer { /* Adjusted selector */
-    text-align: center;
-    padding: 10px;
-    font-size: 10px;
-    margin-top: auto;
-    transition: color var(--transition);
-}
-
-#controls.collapsed #menu-toggle {
-    width: 100%; /* Ensure it fits the collapsed width */
-    display: block; /* Always visible when collapsed */
-}
-
-.light-mode #menu-toggle {
-    background-color: #3b82f6; /* Ensure light mode is blue */
-}
-
-#menu-toggle:hover {
-    background-color: #2563eb; /* Darker blue for hover in light mode */
-}
-
-.dark-mode #menu-toggle:hover {
-    background-color: #3b82f6; /* Slightly darker blue for hover in dark mode */
-}
-/* Specific styling for summary button to match other buttons */
-#summary-button {
-    padding: 6px 12px;
-    background-color: #6b7280;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    font-size: 12px;
-    cursor: pointer;
-    transition: background-color var(--transition);
-    width: 100%; /* Makes it match the width of other buttons */
-    box-sizing: border-box; /* Ensures padding doesn't affect width */
-    margin: 0; /* Resets any unwanted margins */
-}
-
-
-
-/* Match dark mode styling with other buttons */
-.dark-mode #summary-button {
-    background-color: #9ca3af;
-}
-
-/* When controls are collapsed, hide summary button consistently */
-#controls.collapsed #summary-button {
-    display: none;
-}
-
-.light-mode #summary-button {
-    background-color: #6b7280;
-}
-
-.dark-mode #summary-button {
-    background-color: #9ca3af;
-}
-
-
-
-/* Modal styles */
+/* Summary Modal */
 #summary-modal {
     display: none;
     position: fixed;
@@ -304,13 +582,15 @@
     margin-top: 10px;
 }
 
-#summary-modal th, #summary-modal td {
+#summary-modal th,
+#summary-modal td {
     padding: 8px;
     text-align: left;
     border-bottom: 1px solid var(--border-light);
 }
 
-.dark-mode #summary-modal th, .dark-mode #summary-modal td {
+.dark-mode #summary-modal th,
+.dark-mode #summary-modal td {
     border-bottom: 1px solid var(--border-dark);
 }
 
@@ -335,12 +615,82 @@
     color: #e2e8f0;
 }
 
-/* Ensure nodes maintain consistent size regardless of label */
-#myNetwork .vis-network canvas {
-    overflow: hidden; /* Prevent clipping issues */
+/* Progress Bar */
+#progress-bar {
+    position: fixed;
+    top: var(--top-bar-height);
+    left: 0;
+    width: 100%;
+    padding: 10px;
+    text-align: center;
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
+    z-index: 2000;
+    transition: opacity 0.5s ease-in-out;
 }
 
+.progress-active {
+    background-color: #dc2626;
+}
 
+.progress-complete {
+    background-color: #22c55e;
+}
+
+.progress-hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Context Menus */
+#contextMenu,
+#edgeContextMenu {
+    position: absolute;
+    background-color: #fff;
+    border: 1px solid #ccc;
+    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+    z-index: 2000;
+    padding: 5px 0;
+}
+
+#contextMenu button,
+#edgeContextMenu button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 5px 10px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #1f2a44;
+}
+
+#contextMenu button:hover,
+#edgeContextMenu button:hover {
+    background-color: #f0f0f0;
+}
+
+.dark-mode #contextMenu,
+.dark-mode #edgeContextMenu {
+    background-color: #2d3748;
+    border: 1px solid var(--border-dark);
+}
+
+.dark-mode #contextMenu button,
+.dark-mode #edgeContextMenu button {
+    color: #e2e8f0;
+}
+
+.dark-mode #contextMenu button:hover,
+.dark-mode #edgeContextMenu button:hover {
+    background-color: #4b5563;
+}
+
+/* Network Visualization */
+#myNetwork .vis-network canvas {
+    overflow: hidden;
+}
 
 .vis-network .vis-label {
     display: flex;
@@ -350,18 +700,19 @@
     padding: 0;
     margin: 0;
     overflow: hidden;
-    white-space: normal; /* Allow multi-line labels */
-    max-width: 100%;     /* Keep within node bounds */
+    white-space: normal;
+    max-width: 100%;
 }
 
-/* Optional: Adjust node appearance */
 .vis-network .vis-node {
-    min-width: 40px;    /* Minimum size to accommodate label */
+    min-width: 40px;
     min-height: 40px;
     display: flex;
     justify-content: center;
     align-items: center;
 }
+
+/* Password Toggle */
 .password-container {
     position: relative;
     width: 100%;
@@ -369,7 +720,7 @@
 }
 
 .password-container input {
-    padding-right: 60px; /* Make room for the toggle button */
+    padding-right: 60px;
 }
 
 .toggle-password {
@@ -384,7 +735,6 @@
     border-radius: 4px;
     font-size: 10px;
     cursor: pointer;
-    width: auto;
 }
 
 .light-mode .toggle-password {
@@ -399,9 +749,10 @@
     background-color: #4b5563;
 }
 
+/* Stop Task Button */
 #stop-task {
     padding: 6px 12px;
-    background-color: #dc2626; /* Red color */
+    background-color: #dc2626;
     color: white;
     border: none;
     border-radius: 4px;
@@ -414,7 +765,7 @@
 }
 
 #stop-task:hover {
-    background-color: #b91c1c; /* Darker red on hover */
+    background-color: #b91c1c;
 }
 
 #stop-task:disabled {
@@ -422,295 +773,7 @@
     cursor: not-allowed;
 }
 
-        :root {
-            --transition: 0.3s;
-            --shadow-light: 0 2px 10px rgba(0, 0, 0, 0.1);
-            --shadow-dark: 0 2px 10px rgba(0, 0, 0, 0.3);
-            --border-light: #d1d5db;
-            --border-dark: #4b5563;
-        }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; display: flex; height: 100vh; font-size: 12px; transition: background-color var(--transition), color var(--transition); }
-        body.light-mode { background-color: #f0f2f5; color: #1f2a44; }
-        body.dark-mode { background-color: #1e293b; color: #e2e8f0; }
-       
-
-/* Controls container */
-#controls {
-    transition: width var(--transition);
-    position: fixed;
-    left: 0;
-    top: 0;
-    height: 100vh;
-    z-index: 1000;
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto; /* Allow scrolling if content overflows */
-}
-
-#controls.collapsed {
-    width: 50px;
-}
-
-#controls:not(.collapsed) {
-    width: 300px;
-}
-
-#controls-header {
-    padding: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    align-items: stretch;
-}
-
-
-
-/* Menu toggle button */
-#menu-toggle {
-  
-    transition: transform var(--transition);
-}
-
-
-
-/* Top buttons - no absolute positioning */
-#mode-toggle, #pause-toggle, #reset-layout, #summary-button {
-    padding: 6px 12px;
-    background-color: #6b7280;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    font-size: 12px;
-    cursor: pointer;
-    transition: background-color var(--transition);
-    width: 100%; /* Full width for consistency */
-    box-sizing: border-box;
-    margin: 0; /* Prevent unwanted margins */
-}
-/* Hover states */
-#mode-toggle:hover, #pause-toggle:hover, #reset-layout:hover, #summary-button:hover {
-    background-color: #4b5563;
-}
-
-/* Dark mode states */
-.dark-mode #mode-toggle,
-.dark-mode #pause-toggle,
-.dark-mode #reset-layout,
-.dark-mode #summary-button {
-    background-color: #9ca3af;
-}
-
-/* Paused state for pause-toggle */
-#pause-toggle.paused {
-    background-color: #ef4444;
-}
-
-/* Hide all but menu-toggle when collapsed */
-#controls.collapsed #mode-toggle,
-#controls.collapsed #pause-toggle,
-#controls.collapsed #reset-layout,
-#controls.collapsed #summary-button,
-#controls.collapsed .tab-buttons,
-#controls.collapsed .tab-content,
-#controls.collapsed #footer {
-    display: none;
-}
-.light-mode #pause-toggle, .light-mode #reset-layout {
-    background-color: #6b7280;
-}
-
-.dark-mode #pause-toggle, .dark-mode #reset-layout {
-    background-color: #9ca3af;
-}
-
-#pause-toggle.paused {
-    background-color: #ef4444;
-}
-
-/* Hide buttons when collapsed, except menu toggle */
-#controls.collapsed #mode-toggle,
-#controls.collapsed #pause-toggle,
-#controls.collapsed #reset-layout,
-#controls.collapsed .tab-buttons,
-#controls.collapsed .tab-content,
-#controls.collapsed #footer {
-    display: none;
-}
-
-/* Tab buttons and content */
-.tab-buttons {
-    display: flex;
-    flex-wrap: wrap;
-    border-bottom: 1px solid var(--border-light);
-    transition: border-color var(--transition);
-    margin-top: 10px; /* Small margin after header */
-}
-
-.tab-content {
-    padding: 15px;
-    display: none;
-    flex-grow: 1;
-}
-
-.tab-content.active {
-    display: block;
-}
-
-/* Network margin */
-#myNetwork {
-    transition: margin-left var(--transition);
-}
-
-#controls.collapsed ~ #myNetwork {
-    margin-left: 50px;
-}
-
-#controls:not(.collapsed) ~ #myNetwork {
-    margin-left: 300px;
-}
-
-/* Media query for mobile */
-@media (max-width: 768px) {
-    #controls:not(.collapsed) {
-        width: 100%;
-    }
-    
-    #controls:not(.collapsed) ~ #myNetwork {
-        margin-left: 0;
-        display: none;
-    }
-    
-    #controls.collapsed ~ #myNetwork {
-        margin-left: 50px;
-        display: block;
-    }
-}
-
-
-/* Hide content when collapsed except for toggle button */
-#controls.collapsed > *:not(#menu-toggle) {
-    display: none;
-}
-
-/* Adjust button positions when expanded */
-#controls:not(.collapsed) #mode-toggle {
-    top: 50px;
-}
-
-#controls:not(.collapsed) #pause-toggle {
-    top: 80px;
-}
-
-#controls:not(.collapsed) #reset-layout {
-    top: 110px;
-}
-
-
-        #myNetwork { flex-grow: 1; height: 100%; border-radius: 0 8px 8px 0; box-shadow: var(--shadow-light); transition: background-color var(--transition); }
-        .light-mode #myNetwork { background-color: #fff; }
-        .dark-mode #myNetwork { background-color: #334155; box-shadow: var(--shadow-dark); }
-        .tab-buttons { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--border-light); transition: border-color var(--transition); padding-top: 100px; }
-        .dark-mode .tab-buttons { border-bottom: 1px solid var(--border-dark); }
-        .tab-button { flex: 1 0 14.28%; padding: 10px; text-align: center; border: none; cursor: pointer; transition: background-color var(--transition), color var(--transition); font-size: 10px; }
-        .light-mode .tab-button { background-color: #f9fafb; color: #1f2a44; }
-        .dark-mode .tab-button { background-color: #374151; color: #e2e8f0; }
-        .tab-button.active { font-weight: bold; }
-        .light-mode .tab-button.active { background-color: #fff; border-bottom: 2px solid #3b82f6; }
-        .dark-mode .tab-button.active { background-color: #2d3748; border-bottom: 2px solid #60a5fa; }
-        .light-mode .tab-button:hover:not(.active) { background-color: #e5e7eb; }
-        .dark-mode .tab-button:hover:not(.active) { background-color: #4b5563; }
-        .tab-content { padding: 15px; display: none; flex-grow: 1; }
-        .tab-content.active { display: block; }
-        .input-group { margin: 15px 0; padding: 10px; border-radius: 6px; transition: background-color var(--transition); }
-        .light-mode .input-group { background-color: #f9fafb; }
-        .dark-mode .input-group { background-color: #374151; }
-        .input-group h3 { margin: 0 0 8px 0; font-size: 14px; }
-        .light-mode .input-group h3 { color: #1f2a44; }
-        .dark-mode .input-group h3 { color: #e2e8f0; }
-        input, select, textarea { margin: 4px 0; padding: 6px 10px; border-radius: 4px; font-size: 12px; transition: border-color var(--transition), background-color var(--transition), color var(--transition); width: 100%; box-sizing: border-box; }
-        .light-mode input, .light-mode select, .light-mode textarea { border: 1px solid var(--border-light); background-color: #fff; color: #1f2a44; }
-        .dark-mode input, .dark-mode select, .dark-mode textarea { border: 1px solid var(--border-dark); background-color: #4b5563; color: #e2e8f0; }
-        textarea { height: 100px; resize: vertical; }
-        button { padding: 6px 12px; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; transition: background-color var(--transition), color var(--transition); width: 100%; margin: 4px 0; }
-        .light-mode button { background-color: #3b82f6; color: white; }
-        .dark-mode button { background-color: #60a5fa; color: #1e293b; }
-        #mode-toggle { position: absolute; top: 10px; right: 10px; padding: 6px 12px; background-color: #6b7280; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; }
-        #pause-toggle { position: absolute; top: 40px; right: 10px; padding: 6px 12px; background-color: #6b7280; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; transition: background-color var(--transition); }
-        .light-mode #pause-toggle { background-color: #6b7280; }
-        .dark-mode #pause-toggle { background-color: #9ca3af; }
-        #pause-toggle.paused { background-color: #ef4444; }
-        #reset-layout { position: absolute; top: 70px; right: 10px; padding: 6px 12px; background-color: #6b7280; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; transition: background-color var(--transition); }
-        .light-mode #reset-layout { background-color: #6b7280; }
-        .dark-mode #reset-layout { background-color: #9ca3af; }
-        #footer { text-align: center; padding: 10px; font-size: 10px; margin-top: auto; transition: color var(--transition); }
-        .light-mode #footer { color: #6b7280; }
-        .dark-mode #footer { color: #94a3b8; }
-        #contextMenu { position: absolute; background-color: #fff; border: 1px solid #ccc; box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2); z-index: 1000; padding: 5px 0; }
-        #contextMenu button { display: block; width: 100%; text-align: left; padding: 5px 10px; background: none; border: none; cursor: pointer; }
-        #contextMenu button:hover { background-color: #f0f0f0; }
-        .light-mode #contextMenu button { 
-    color: #1f2a44 !important; 
-}
-.light-mode #contextMenu button:hover { 
-    color: #1f2a44 !important; 
-    background-color: #f0f0f0; 
-}
-        .dark-mode #contextMenu { background-color: #2d3748; border: 1px solid var(--border-dark); }
-        .dark-mode #contextMenu button { color: #e2e8f0; }
-        .dark-mode #contextMenu button:hover { background-color: #4b5563; }
-        .checkbox-label { display: flex; align-items: center; margin: 4px 0; font-size: 12px; }
-        .light-mode .checkbox-label { color: #1f2a44; }
-        .dark-mode .checkbox-label { color: #e2e8f0; }
-        input[type="checkbox"] { margin-right: 8px; width: auto; }
-        #edgeContextMenu {
-    position: absolute;
-    background-color: #fff;
-    border: 1px solid #ccc;
-    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
-    z-index: 1000;
-    padding: 5px 0;
-}
-
-#edgeContextMenu button {
-    display: block;
-    width: 100%;
-    text-align: left;
-    padding: 5px 10px;
-    background: none;
-    border: none;
-    cursor: pointer;
-}
-
-#edgeContextMenu button:hover {
-    background-color: #f0f0f0;
-}
-
-.light-mode #edgeContextMenu {
-    background-color: #fff;
-}
-
-.light-mode #edgeContextMenu button {
-    color: #1f2a44 !important;
-}
-
-.light-mode #edgeContextMenu button:hover {
-    color: #1f2a44 !important;
-    background-color: #f0f0f0;
-}
-
-.dark-mode #edgeContextMenu {
-    background-color: #2d3748;
-    border: 1px solid var(--border-dark);
-}
-
-.dark-mode #edgeContextMenu button {
-    color: #e2e8f0;
-}
-
-.dark-mode #edgeContextMenu button:hover {
-    background-color: #4b5563;
-}
-
+/* Search Input */
 #search-input {
     padding: 6px 10px;
     border-radius: 4px;
@@ -731,32 +794,46 @@
     border-color: #3b82f6;
 }
 
-/* Progress Bar Styles */
-#progress-bar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    padding: 10px;
-    text-align: center;
-    color: white;
-    font-size: 14px;
-    font-weight: bold;
-    z-index: 2000;
-    transition: opacity 0.5s ease-in-out;
+/* Checkbox Labels */
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    margin: 4px 0;
+    font-size: 12px;
 }
 
-.progress-active {
-    background-color: #dc2626; /* Red for in progress */
+.light-mode .checkbox-label {
+    color: #1f2a44;
 }
 
-.progress-complete {
-    background-color: #22c55e; /* Green for complete */
+.dark-mode .checkbox-label {
+    color: #e2e8f0;
 }
 
-.progress-hidden {
-    opacity: 0;
-    pointer-events: none;
+input[type="checkbox"] {
+    margin-right: 8px;
+    width: auto;
+}
+
+/* Media Queries */
+@media (max-width: 768px) {
+    #controls:not(.collapsed) {
+        width: 100%;
+    }
+    
+    #controls:not(.collapsed) ~ #myNetwork {
+        margin-left: 0;
+        display: none;
+    }
+    
+    #controls.collapsed ~ #myNetwork {
+        margin-left: 50px;
+        display: block;
+    }
+    
+    #properties-panel.active ~ #myNetwork {
+        margin-right: 300px;
+    }
 }
 </style>
     <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/dist/vis-network.min.js"></script>
@@ -765,6 +842,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body class="dark-mode">
+    <div id="top-bar">
+        <span id="version">Crime Mapper v0.274 experimental</span>
+        <a href="https://github.com/mr-r3b00t/crime-mapper" target="_blank" id="github-link">GitHub Repo</a>
+    </div>
     <div id="notes-modal">
         <h3>Edit Node Notes</h3>
         <textarea id="notes-textarea" placeholder="Enter notes here (max 1000 characters)"></textarea>
@@ -1112,7 +1193,7 @@
         <!-- Suggested -->
         <footer id="controls-footer"> 
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.273 experimental</p>
+    <p>© Xservus Limited - v0.274 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
