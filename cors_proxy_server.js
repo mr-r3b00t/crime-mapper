@@ -21,7 +21,8 @@ const allowList = [
   'urlscan.io',
   'proxy',
   'api.securitytrails.com',
-  'urlhaus-api.abuse.ch'
+  'urlhaus-api.abuse.ch',
+  'api.any.run'
 ];
 
 // Middleware setup
@@ -83,7 +84,7 @@ function validateTargetUrl(req, res, next) {
   next();
 }
 
-// Proxy handler function with fix for 'apikey' header
+// Proxy handler function with POST response logging
 async function proxyRequest(req, res) {
   try {
     const axiosConfig = {
@@ -102,24 +103,45 @@ async function proxyRequest(req, res) {
       axiosConfig.data = req.body;
     }
 
-    // Forward specific headers including 'apikey'
-    ['api-key', 'key', 'apikey'].forEach(header => {
-      if (req.headers[header]) {
-        axiosConfig.headers[header] = req.headers[header];
+    // Forward specific headers including 'Auth-Key'
+    ['api-key', 'key', 'apikey', 'Auth-Key'].forEach(header => {
+      if (req.headers[header.toLowerCase()]) { // Case-insensitive header matching
+        axiosConfig.headers[header] = req.headers[header.toLowerCase()];
       }
     });
 
-    // Optionally forward 'Accept' header if needed by the target API
-    if (req.headers['accept']) {
-      axiosConfig.headers['Accept'] = req.headers['accept'];
-    }
+    // Forward 'Accept' header if present, default to 'application/json'
+    axiosConfig.headers['Accept'] = req.headers['accept'] || 'application/json';
 
     const response = await axios(axiosConfig);
-    console.log(`Response from ${req.targetUrl}: ${response.status}`);
+    
+    // Log POST response details
+    if (req.method === 'POST') {
+      console.log(`POST Response from ${req.targetUrl}:`, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+        data: response.data,
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      console.log(`Response from ${req.targetUrl}: ${response.status}`);
+    }
+
     res.status(response.status).send(response.data);
   } catch (error) {
     console.error(`Proxy error for ${req.targetUrl}:`, error);
     if (error.response) {
+      // Log error response details for POST requests
+      if (req.method === 'POST') {
+        console.log(`POST Error Response from ${req.targetUrl}:`, {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          headers: error.response.headers,
+          data: error.response.data,
+          timestamp: new Date().toISOString()
+        });
+      }
       res.status(error.response.status).json({
         error: 'Proxy request failed',
         status: error.response.status,
@@ -135,7 +157,7 @@ async function proxyRequest(req, res) {
       res.status(500).json({
         error: 'Proxy error',
         message: error.message,
-        stack: error.stack, // Include stack trace for debugging
+        stack: error.stack,
         request: {
           url: req.targetUrl,
           method: req.method
@@ -154,7 +176,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({
     error: 'Internal server error',
     message: err.message,
-    stack: err.stack, // Include stack trace for debugging
+    stack: err.stack,
     request: {
       url: req.originalUrl,
       method: req.method,
@@ -171,6 +193,6 @@ app.listen(port, () => {
   console.log('  GET:  http://localhost:3000/proxy?url=<target-url>');
   console.log('  POST: http://localhost:3000/proxy with body { "url": "<target-url>" } or form data');
   console.log('Example (URLhaus POST):');
-  console.log(`  curl -X POST http://localhost:${port}/proxy -d "url=https://example.com"`);
+  console.log(`  curl -X POST http://localhost:${port}/proxy -H "Auth-Key: YOUR-AUTH-KEY-HERE" -d "url=https://example.com"`);
   console.log('Allowed domains:', allowList.join(', '));
 });
