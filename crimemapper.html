@@ -3,97 +3,163 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Crime Mapper - Experimental</title>
+    <title>Baddie Mapper - Experimental</title>
     <style>
-
-/* Properties Panel */
-#properties-panel {
-    position: fixed;
-    right: -310px; /* Start offscreen on the right */
-    top: 0;
-    width: 300px;
-    height: 100vh;
-    background-color: #fff;
-    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.2); /* Shadow on left side */
-    z-index: 2000; /* Ensure it’s above other elements */
-    padding: 20px;
-    overflow-y: auto;
-    transition: right 0.3s ease-in-out; /* Transition right property */
-    box-sizing: border-box;
+/* CSS Variables */
+:root {
+    --transition: 0.3s;
+    --shadow-light: 0 2px 10px rgba(0, 0, 0, 0.1);
+    --shadow-dark: 0 2px 10px rgba(0, 0, 0, 0.3);
+    --border-light: #d1d5db;
+    --border-dark: #4b5563;
+    --top-bar-height: 40px;
 }
 
-.dark-mode #properties-panel {
-    background-color: #2d3748;
-    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.4); /* Adjusted shadow direction */
+/* Base Styles */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    height: calc(100vh - var(--top-bar-height));
+    font-size: 12px;
+    transition: background-color var(--transition), color var(--transition);
+    margin-top: var(--top-bar-height);
+}
+
+body.light-mode {
+    background-color: #f0f2f5;
+    color: #1f2a44;
+}
+
+body.dark-mode {
+    background-color: #1e293b;
     color: #e2e8f0;
 }
 
-#properties-panel.active {
-    right: 0; /* Slide to the right edge */
+/* Top Bar */
+#top-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: var(--top-bar-height);
+    background-color: #2d3748;
+    color: #e2e8f0;
+    display: flex;
+    justify-content: space-between; /* Explicitly separate version and links */
+    align-items: center;
+    padding: 0 20px;
+    z-index: 1000;
+    box-shadow: var(--shadow-dark);
+    box-sizing: border-box;
 }
 
-/* Adjust close button positioning */
-#properties-panel .close-button {
-    position: absolute;
-    top: 10px;
-    right: 10px; /* Keep it on the right side */
-    background: none;
-    border: none;
-    font-size: 18px;
-    cursor: pointer;
+.light-mode #top-bar {
+    background-color: #f0f2f5;
     color: #1f2a44;
-    transition: color 0.3s;
+    box-shadow: var(--shadow-light);
 }
 
-/* Remove or adjust conflicting layout rules */
-#properties-panel.active ~ #controls:not(.collapsed) {
-    left: 0; /* Don’t shift controls left; keep them in place */
+#version {
+    font-size: 14px;
+    font-weight: 500;
+    flex-shrink: 0; /* Prevent shrinking */
+    margin-right: 20px; /* Add space to separate from links */
 }
 
-#properties-panel.active ~ #controls.collapsed {
-    left: 0; /* Don’t shift collapsed controls */
+#top-bar-links {
+    display: flex;
+    align-items: center;
+    gap: 30px; /* Increased spacing between links */
+    /* Fallback absolute positioning */
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    /* Diagnostic border to confirm application */
+    border: 1px solid red !important;
 }
 
-#properties-panel.active ~ #myNetwork {
-    margin-right: 300px; /* Reduce right margin to make space */
-    margin-left: 0; /* Reset left margin adjustment */
+#cyberchef-link,
+#github-link {
+    font-size: 14px;
+    color: #60a5fa;
+    text-decoration: none;
+    transition: color var(--transition);
 }
 
-#properties-panel.active ~ #controls.collapsed ~ #myNetwork {
-    margin-right: 300px; /* Adjust for collapsed controls */
-    margin-left: 50px; /* Maintain left margin for collapsed controls */
+#cyberchef-link:hover,
+#github-link:hover {
+    color: #3b82f6;
 }
 
-/* Ensure controls panel adjusts when properties panel is open */
+.light-mode #cyberchef-link,
+.light-mode #github-link {
+    color: #3b82f6;
+}
+
+.light-mode #cyberchef-link:hover,
+.light-mode #github-link:hover {
+    color: #2563eb;
+}
+/* Controls Panel */
 #controls {
-    transition: left 0.3s ease-in-out, width 0.3s ease-in-out;
+    position: fixed;
+    top: var(--top-bar-height);
+    left: 0;
+    height: calc(100vh - var(--top-bar-height));
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    transition: width var(--transition);
+    background-color: #fff;
 }
 
-#controls.collapsed ~ #myNetwork {
-    margin-left: 50px;
+.light-mode #controls {
+    background-color: #fff;
+    box-shadow: var(--shadow-light);
 }
 
-#controls:not(.collapsed) ~ #myNetwork {
-    margin-left: 300px;
+.dark-mode #controls {
+    background-color: #2d3748;
+    box-shadow: var(--shadow-dark);
+    color: #e2e8f0;
 }
 
-#properties-panel.active ~ #controls:not(.collapsed) {
-    left: 300px; /* Shift controls right when properties panel is open */
+#controls.collapsed {
+    width: 50px;
 }
 
-#properties-panel.active ~ #controls.collapsed {
-    left: 300px; /* Keep collapsed controls aligned */
+#controls:not(.collapsed) {
+    width: 350px;
 }
 
-#properties-panel.active ~ #myNetwork {
-    margin-left: 350px; /* Account for both panels when expanded */
+#controls-header {
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }
 
-#properties-panel.active ~ #controls.collapsed ~ #myNetwork {
-    margin-left: 350px; /* Adjust network margin when controls are collapsed */
+#controls-footer {
+    text-align: center;
+    padding: 10px;
+    font-size: 10px;
+    margin-top: auto;
+    transition: color var(--transition);
 }
 
+.light-mode #controls-footer {
+    color: #6b7280;
+}
 
+.dark-mode #controls-footer {
+    color: #94a3b8;
+}
+
+/* Menu Toggle Button */
 #menu-toggle {
     padding: 6px 12px;
     background-color: #3b82f6;
@@ -102,37 +168,32 @@
     border-radius: 4px;
     font-size: 12px;
     cursor: pointer;
-    transition: background-color var(--transition), transform var(--transition);
-    width: 100%; /* Match other buttons */
+    transition: background-color var(--transition);
+    width: 100%;
     box-sizing: border-box;
-    margin: 0;
-}
-
-#controls-footer { /* Adjusted selector */
-    text-align: center;
-    padding: 10px;
-    font-size: 10px;
-    margin-top: auto;
-    transition: color var(--transition);
 }
 
 #controls.collapsed #menu-toggle {
-    width: 100%; /* Ensure it fits the collapsed width */
-    display: block; /* Always visible when collapsed */
+    width: 100%;
+    display: block;
 }
 
 .light-mode #menu-toggle {
-    background-color: #3b82f6; /* Ensure light mode is blue */
+    background-color: #3b82f6;
 }
 
 #menu-toggle:hover {
-    background-color: #2563eb; /* Darker blue for hover in light mode */
+    background-color: #2563eb;
 }
 
 .dark-mode #menu-toggle:hover {
-    background-color: #3b82f6; /* Slightly darker blue for hover in dark mode */
+    background-color: #3b82f6;
 }
-/* Specific styling for summary button to match other buttons */
+
+/* Top Buttons */
+#mode-toggle,
+#pause-toggle,
+#reset-layout,
 #summary-button {
     padding: 6px 12px;
     background-color: #6b7280;
@@ -142,34 +203,374 @@
     font-size: 12px;
     cursor: pointer;
     transition: background-color var(--transition);
-    width: 100%; /* Makes it match the width of other buttons */
-    box-sizing: border-box; /* Ensures padding doesn't affect width */
-    margin: 0; /* Resets any unwanted margins */
+    width: 100%;
+    box-sizing: border-box;
 }
 
+#mode-toggle:hover,
+#pause-toggle:hover,
+#reset-layout:hover,
+#summary-button:hover {
+    background-color: #4b5563;
+}
 
-
-/* Match dark mode styling with other buttons */
+.dark-mode #mode-toggle,
+.dark-mode #pause-toggle,
+.dark-mode #reset-layout,
 .dark-mode #summary-button {
     background-color: #9ca3af;
 }
 
-/* When controls are collapsed, hide summary button consistently */
-#controls.collapsed #summary-button {
+#pause-toggle.paused {
+    background-color: #ef4444;
+}
+
+#controls.collapsed #mode-toggle,
+#controls.collapsed #pause-toggle,
+#controls.collapsed #reset-layout,
+#controls.collapsed #summary-button,
+#controls.collapsed .tab-buttons,
+#controls.collapsed .tab-content,
+#controls.collapsed #controls-footer {
     display: none;
 }
 
-.light-mode #summary-button {
-    background-color: #6b7280;
+/* Tab Navigation */
+.tab-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--border-light);
+    transition: border-color var(--transition);
+    padding: 10px 0;
 }
 
-.dark-mode #summary-button {
+.dark-mode .tab-buttons {
+    border-bottom: 1px solid var(--border-dark);
+}
+
+.tab-button {
+    flex: 1 0 14.28%;
+    padding: 10px;
+    text-align: center;
+    border: none;
+    cursor: pointer;
+    transition: background-color var(--transition), color var(--transition);
+    font-size: 10px;
+}
+
+.light-mode .tab-button {
+    background-color: #f9fafb;
+    color: #1f2a44;
+}
+
+.dark-mode .tab-button {
+    background-color: #374151;
+    color: #e2e8f0;
+}
+
+.tab-button.active {
+    font-weight: bold;
+}
+
+.light-mode .tab-button.active {
+    background-color: #fff;
+    border-bottom: 2px solid #3b82f6;
+}
+
+.dark-mode .tab-button.active {
+    background-color: #2d3748;
+    border-bottom: 2px solid #60a5fa;
+}
+
+.light-mode .tab-button:hover:not(.active) {
+    background-color: #e5e7eb;
+}
+
+.dark-mode .tab-button:hover:not(.active) {
+    background-color: #4b5563;
+}
+
+/* Tab Content */
+.tab-content {
+    padding: 15px;
+    display: none;
+    flex-grow: 1;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.input-group {
+    margin: 15px 0;
+    padding: 10px;
+    border-radius: 6px;
+    transition: background-color var(--transition);
+}
+
+.light-mode .input-group {
+    background-color: #f9fafb;
+}
+
+.dark-mode .input-group {
+    background-color: #374151;
+}
+
+.input-group h3 {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+}
+
+.light-mode .input-group h3 {
+    color: #1f2a44;
+}
+
+.dark-mode .input-group h3 {
+    color: #e2e8f0;
+}
+
+/* Inputs and Buttons */
+input,
+select,
+textarea {
+    margin: 4px 0;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    transition: border-color var(--transition), background-color var(--transition), color var(--transition);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.light-mode input,
+.light-mode select,
+.light-mode textarea {
+    border: 1px solid var(--border-light);
+    background-color: #fff;
+    color: #1f2a44;
+}
+
+.dark-mode input,
+.dark-mode select,
+.dark-mode textarea {
+    border: 1px solid var(--border-dark);
+    background-color: #4b5563;
+    color: #e2e8f0;
+}
+
+textarea {
+    height: 100px;
+    resize: vertical;
+}
+
+button {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background-color var(--transition), color var(--transition);
+    width: 100%;
+    margin: 4px 0;
+}
+
+.light-mode button {
+    background-color: #3b82f6;
+    color: white;
+}
+
+.dark-mode button {
+    background-color: #60a5fa;
+    color: #1e293b;
+}
+
+/* Network Container */
+#myNetwork {
+    flex-grow: 1;
+    height: calc(100vh - var(--top-bar-height));
+    border-radius: 0 8px 8px 0;
+    box-shadow: var(--shadow-light);
+    transition: margin-left var(--transition), margin-right var(--transition);
+    position: relative;
+}
+
+.light-mode #myNetwork {
+    background-color: #fff;
+}
+
+.dark-mode #myNetwork {
+    background-color: #334155;
+    box-shadow: var(--shadow-dark);
+}
+
+#controls:not(.collapsed) ~ #myNetwork {
+    margin-left: 300px;
+}
+
+#controls.collapsed ~ #myNetwork {
+    margin-left: 50px;
+}
+
+/* Properties Panel */
+#properties-panel {
+    position: fixed;
+    top: var(--top-bar-height);
+    right: -310px;
+    width: 350px;
+    height: calc(100vh - var(--top-bar-height));
+    background-color: #fff;
+    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.2);
+    z-index: 2000;
+    padding: 20px;
+    overflow-y: auto;
+    transition: right var(--transition);
+    box-sizing: border-box;
+}
+
+.dark-mode #properties-panel {
+    background-color: #2d3748;
+    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.4);
+    color: #e2e8f0;
+}
+
+#properties-panel.active {
+    right: 0;
+}
+
+#properties-panel .close-button {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: none;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    color: #1f2a44;
+    transition: color var(--transition);
+}
+
+.dark-mode #properties-panel .close-button {
+    color: #e2e8f0;
+}
+
+#properties-panel.active ~ #myNetwork {
+    margin-right: 300px;
+}
+
+#properties-panel.active ~ #controls:not(.collapsed) ~ #myNetwork {
+    margin-left: 300px;
+    margin-right: 300px;
+}
+
+#properties-panel.active ~ #controls.collapsed ~ #myNetwork {
+    margin-left: 50px;
+    margin-right: 300px;
+}
+
+/* Notes Modal */
+#notes-modal {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: var(--shadow-light);
+    z-index: 2000;
+    width: 500px;
+    max-width: 90vw;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-sizing: border-box;
+}
+
+.dark-mode #notes-modal {
+    background-color: #2d3748;
+    box-shadow: var(--shadow-dark);
+    color: #e2e8f0;
+}
+
+#modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1999;
+}
+
+#notes-modal h3 {
+    margin: 0 0 15px 0;
+    font-size: 16px;
+}
+
+#notes-textarea {
+    width: 100%;
+    height: 300px;
+    padding: 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border-light);
+    background-color: #fff;
+    color: #1f2a44;
+    font-size: 12px;
+    resize: vertical;
+    box-sizing: border-box;
+    overflow-y: auto;
+}
+
+.dark-mode #notes-textarea {
+    border: 1px solid var(--border-dark);
+    background-color: #4b5563;
+    color: #e2e8f0;
+}
+
+#notes-modal .button-container {
+    margin-top: 15px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+#notes-modal button {
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background-color var(--transition);
+}
+
+#notes-save {
+    background-color: #3b82f6;
+    color: white;
+}
+
+#notes-cancel {
+    background-color: #6b7280;
+    color: white;
+}
+
+#notes-save:hover {
+    background-color: #2563eb;
+}
+
+#notes-cancel:hover {
+    background-color: #4b5563;
+}
+
+.dark-mode #notes-save {
+    background-color: #60a5fa;
+    color: #1e293b;
+}
+
+.dark-mode #notes-cancel {
     background-color: #9ca3af;
 }
 
-
-
-/* Modal styles */
+/* Summary Modal */
 #summary-modal {
     display: none;
     position: fixed;
@@ -187,6 +588,11 @@
     overflow-y: auto;
 }
 
+.toastify {
+    top: calc(var(--top-bar-height) + 10px) !important;
+    z-index: 3000 !important;
+}
+
 .dark-mode #summary-modal {
     background-color: #2d3748;
     box-shadow: var(--shadow-dark);
@@ -199,13 +605,15 @@
     margin-top: 10px;
 }
 
-#summary-modal th, #summary-modal td {
+#summary-modal th,
+#summary-modal td {
     padding: 8px;
     text-align: left;
     border-bottom: 1px solid var(--border-light);
 }
 
-.dark-mode #summary-modal th, .dark-mode #summary-modal td {
+.dark-mode #summary-modal th,
+.dark-mode #summary-modal td {
     border-bottom: 1px solid var(--border-dark);
 }
 
@@ -230,12 +638,82 @@
     color: #e2e8f0;
 }
 
-/* Ensure nodes maintain consistent size regardless of label */
-#myNetwork .vis-network canvas {
-    overflow: hidden; /* Prevent clipping issues */
+/* Progress Bar */
+#progress-bar {
+    position: fixed;
+    top: var(--top-bar-height);
+    left: 0;
+    width: 100%;
+    padding: 10px;
+    text-align: center;
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
+    z-index: 2000;
+    transition: opacity 0.5s ease-in-out;
 }
 
+.progress-active {
+    background-color: #dc2626;
+}
 
+.progress-complete {
+    background-color: #22c55e;
+}
+
+.progress-hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Context Menus */
+#contextMenu,
+#edgeContextMenu {
+    position: absolute;
+    background-color: #fff;
+    border: 1px solid #ccc;
+    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+    z-index: 2000;
+    padding: 5px 0;
+}
+
+#contextMenu button,
+#edgeContextMenu button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 5px 10px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #1f2a44;
+}
+
+#contextMenu button:hover,
+#edgeContextMenu button:hover {
+    background-color: #f0f0f0;
+}
+
+.dark-mode #contextMenu,
+.dark-mode #edgeContextMenu {
+    background-color: #2d3748;
+    border: 1px solid var(--border-dark);
+}
+
+.dark-mode #contextMenu button,
+.dark-mode #edgeContextMenu button {
+    color: #e2e8f0;
+}
+
+.dark-mode #contextMenu button:hover,
+.dark-mode #edgeContextMenu button:hover {
+    background-color: #4b5563;
+}
+
+/* Network Visualization */
+#myNetwork .vis-network canvas {
+    overflow: hidden;
+}
 
 .vis-network .vis-label {
     display: flex;
@@ -245,33 +723,35 @@
     padding: 0;
     margin: 0;
     overflow: hidden;
-    white-space: normal; /* Allow multi-line labels */
-    max-width: 100%;     /* Keep within node bounds */
+    white-space: normal;
+    max-width: 100%;
 }
 
-/* Optional: Adjust node appearance */
 .vis-network .vis-node {
-    min-width: 40px;    /* Minimum size to accommodate label */
+    min-width: 40px;
     min-height: 40px;
     display: flex;
     justify-content: center;
     align-items: center;
 }
+
+/* Password Toggle */
 .password-container {
-    position: relative;
+    display: flex;
+    flex-direction: column; /* Stack children vertically */
     width: 100%;
     margin-bottom: 8px;
+    gap: 4px; /* Add space between input and button */
 }
 
+/* Inputs - Remove padding-right */
 .password-container input {
-    padding-right: 60px; /* Make room for the toggle button */
+    padding: 6px 10px; /* Adjusted from padding-right: 60px to standard padding */
 }
 
+/* Password Toggle */
 .toggle-password {
-    position: absolute;
-    right: 5px;
-    top: 50%;
-    transform: translateY(-50%);
+    /* Remove absolute positioning */
     padding: 2px 8px;
     background-color: #6b7280;
     color: white;
@@ -279,7 +759,8 @@
     border-radius: 4px;
     font-size: 10px;
     cursor: pointer;
-    width: auto;
+    width: auto; /* Let it size naturally */
+    align-self: flex-start; /* Align to the left */
 }
 
 .light-mode .toggle-password {
@@ -293,10 +774,10 @@
 .toggle-password:hover {
     background-color: #4b5563;
 }
-
+/* Stop Task Button */
 #stop-task {
     padding: 6px 12px;
-    background-color: #dc2626; /* Red color */
+    background-color: #dc2626;
     color: white;
     border: none;
     border-radius: 4px;
@@ -309,7 +790,7 @@
 }
 
 #stop-task:hover {
-    background-color: #b91c1c; /* Darker red on hover */
+    background-color: #b91c1c;
 }
 
 #stop-task:disabled {
@@ -317,295 +798,7 @@
     cursor: not-allowed;
 }
 
-        :root {
-            --transition: 0.3s;
-            --shadow-light: 0 2px 10px rgba(0, 0, 0, 0.1);
-            --shadow-dark: 0 2px 10px rgba(0, 0, 0, 0.3);
-            --border-light: #d1d5db;
-            --border-dark: #4b5563;
-        }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; display: flex; height: 100vh; font-size: 12px; transition: background-color var(--transition), color var(--transition); }
-        body.light-mode { background-color: #f0f2f5; color: #1f2a44; }
-        body.dark-mode { background-color: #1e293b; color: #e2e8f0; }
-       
-
-/* Controls container */
-#controls {
-    transition: width var(--transition);
-    position: fixed;
-    left: 0;
-    top: 0;
-    height: 100vh;
-    z-index: 1000;
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto; /* Allow scrolling if content overflows */
-}
-
-#controls.collapsed {
-    width: 50px;
-}
-
-#controls:not(.collapsed) {
-    width: 300px;
-}
-
-#controls-header {
-    padding: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    align-items: stretch;
-}
-
-
-
-/* Menu toggle button */
-#menu-toggle {
-  
-    transition: transform var(--transition);
-}
-
-
-
-/* Top buttons - no absolute positioning */
-#mode-toggle, #pause-toggle, #reset-layout, #summary-button {
-    padding: 6px 12px;
-    background-color: #6b7280;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    font-size: 12px;
-    cursor: pointer;
-    transition: background-color var(--transition);
-    width: 100%; /* Full width for consistency */
-    box-sizing: border-box;
-    margin: 0; /* Prevent unwanted margins */
-}
-/* Hover states */
-#mode-toggle:hover, #pause-toggle:hover, #reset-layout:hover, #summary-button:hover {
-    background-color: #4b5563;
-}
-
-/* Dark mode states */
-.dark-mode #mode-toggle,
-.dark-mode #pause-toggle,
-.dark-mode #reset-layout,
-.dark-mode #summary-button {
-    background-color: #9ca3af;
-}
-
-/* Paused state for pause-toggle */
-#pause-toggle.paused {
-    background-color: #ef4444;
-}
-
-/* Hide all but menu-toggle when collapsed */
-#controls.collapsed #mode-toggle,
-#controls.collapsed #pause-toggle,
-#controls.collapsed #reset-layout,
-#controls.collapsed #summary-button,
-#controls.collapsed .tab-buttons,
-#controls.collapsed .tab-content,
-#controls.collapsed #footer {
-    display: none;
-}
-.light-mode #pause-toggle, .light-mode #reset-layout {
-    background-color: #6b7280;
-}
-
-.dark-mode #pause-toggle, .dark-mode #reset-layout {
-    background-color: #9ca3af;
-}
-
-#pause-toggle.paused {
-    background-color: #ef4444;
-}
-
-/* Hide buttons when collapsed, except menu toggle */
-#controls.collapsed #mode-toggle,
-#controls.collapsed #pause-toggle,
-#controls.collapsed #reset-layout,
-#controls.collapsed .tab-buttons,
-#controls.collapsed .tab-content,
-#controls.collapsed #footer {
-    display: none;
-}
-
-/* Tab buttons and content */
-.tab-buttons {
-    display: flex;
-    flex-wrap: wrap;
-    border-bottom: 1px solid var(--border-light);
-    transition: border-color var(--transition);
-    margin-top: 10px; /* Small margin after header */
-}
-
-.tab-content {
-    padding: 15px;
-    display: none;
-    flex-grow: 1;
-}
-
-.tab-content.active {
-    display: block;
-}
-
-/* Network margin */
-#myNetwork {
-    transition: margin-left var(--transition);
-}
-
-#controls.collapsed ~ #myNetwork {
-    margin-left: 50px;
-}
-
-#controls:not(.collapsed) ~ #myNetwork {
-    margin-left: 300px;
-}
-
-/* Media query for mobile */
-@media (max-width: 768px) {
-    #controls:not(.collapsed) {
-        width: 100%;
-    }
-    
-    #controls:not(.collapsed) ~ #myNetwork {
-        margin-left: 0;
-        display: none;
-    }
-    
-    #controls.collapsed ~ #myNetwork {
-        margin-left: 50px;
-        display: block;
-    }
-}
-
-
-/* Hide content when collapsed except for toggle button */
-#controls.collapsed > *:not(#menu-toggle) {
-    display: none;
-}
-
-/* Adjust button positions when expanded */
-#controls:not(.collapsed) #mode-toggle {
-    top: 50px;
-}
-
-#controls:not(.collapsed) #pause-toggle {
-    top: 80px;
-}
-
-#controls:not(.collapsed) #reset-layout {
-    top: 110px;
-}
-
-
-        #myNetwork { flex-grow: 1; height: 100%; border-radius: 0 8px 8px 0; box-shadow: var(--shadow-light); transition: background-color var(--transition); }
-        .light-mode #myNetwork { background-color: #fff; }
-        .dark-mode #myNetwork { background-color: #334155; box-shadow: var(--shadow-dark); }
-        .tab-buttons { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--border-light); transition: border-color var(--transition); padding-top: 100px; }
-        .dark-mode .tab-buttons { border-bottom: 1px solid var(--border-dark); }
-        .tab-button { flex: 1 0 14.28%; padding: 10px; text-align: center; border: none; cursor: pointer; transition: background-color var(--transition), color var(--transition); font-size: 10px; }
-        .light-mode .tab-button { background-color: #f9fafb; color: #1f2a44; }
-        .dark-mode .tab-button { background-color: #374151; color: #e2e8f0; }
-        .tab-button.active { font-weight: bold; }
-        .light-mode .tab-button.active { background-color: #fff; border-bottom: 2px solid #3b82f6; }
-        .dark-mode .tab-button.active { background-color: #2d3748; border-bottom: 2px solid #60a5fa; }
-        .light-mode .tab-button:hover:not(.active) { background-color: #e5e7eb; }
-        .dark-mode .tab-button:hover:not(.active) { background-color: #4b5563; }
-        .tab-content { padding: 15px; display: none; flex-grow: 1; }
-        .tab-content.active { display: block; }
-        .input-group { margin: 15px 0; padding: 10px; border-radius: 6px; transition: background-color var(--transition); }
-        .light-mode .input-group { background-color: #f9fafb; }
-        .dark-mode .input-group { background-color: #374151; }
-        .input-group h3 { margin: 0 0 8px 0; font-size: 14px; }
-        .light-mode .input-group h3 { color: #1f2a44; }
-        .dark-mode .input-group h3 { color: #e2e8f0; }
-        input, select, textarea { margin: 4px 0; padding: 6px 10px; border-radius: 4px; font-size: 12px; transition: border-color var(--transition), background-color var(--transition), color var(--transition); width: 100%; box-sizing: border-box; }
-        .light-mode input, .light-mode select, .light-mode textarea { border: 1px solid var(--border-light); background-color: #fff; color: #1f2a44; }
-        .dark-mode input, .dark-mode select, .dark-mode textarea { border: 1px solid var(--border-dark); background-color: #4b5563; color: #e2e8f0; }
-        textarea { height: 100px; resize: vertical; }
-        button { padding: 6px 12px; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; transition: background-color var(--transition), color var(--transition); width: 100%; margin: 4px 0; }
-        .light-mode button { background-color: #3b82f6; color: white; }
-        .dark-mode button { background-color: #60a5fa; color: #1e293b; }
-        #mode-toggle { position: absolute; top: 10px; right: 10px; padding: 6px 12px; background-color: #6b7280; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; }
-        #pause-toggle { position: absolute; top: 40px; right: 10px; padding: 6px 12px; background-color: #6b7280; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; transition: background-color var(--transition); }
-        .light-mode #pause-toggle { background-color: #6b7280; }
-        .dark-mode #pause-toggle { background-color: #9ca3af; }
-        #pause-toggle.paused { background-color: #ef4444; }
-        #reset-layout { position: absolute; top: 70px; right: 10px; padding: 6px 12px; background-color: #6b7280; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; transition: background-color var(--transition); }
-        .light-mode #reset-layout { background-color: #6b7280; }
-        .dark-mode #reset-layout { background-color: #9ca3af; }
-        #footer { text-align: center; padding: 10px; font-size: 10px; margin-top: auto; transition: color var(--transition); }
-        .light-mode #footer { color: #6b7280; }
-        .dark-mode #footer { color: #94a3b8; }
-        #contextMenu { position: absolute; background-color: #fff; border: 1px solid #ccc; box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2); z-index: 1000; padding: 5px 0; }
-        #contextMenu button { display: block; width: 100%; text-align: left; padding: 5px 10px; background: none; border: none; cursor: pointer; }
-        #contextMenu button:hover { background-color: #f0f0f0; }
-        .light-mode #contextMenu button { 
-    color: #1f2a44 !important; 
-}
-.light-mode #contextMenu button:hover { 
-    color: #1f2a44 !important; 
-    background-color: #f0f0f0; 
-}
-        .dark-mode #contextMenu { background-color: #2d3748; border: 1px solid var(--border-dark); }
-        .dark-mode #contextMenu button { color: #e2e8f0; }
-        .dark-mode #contextMenu button:hover { background-color: #4b5563; }
-        .checkbox-label { display: flex; align-items: center; margin: 4px 0; font-size: 12px; }
-        .light-mode .checkbox-label { color: #1f2a44; }
-        .dark-mode .checkbox-label { color: #e2e8f0; }
-        input[type="checkbox"] { margin-right: 8px; width: auto; }
-        #edgeContextMenu {
-    position: absolute;
-    background-color: #fff;
-    border: 1px solid #ccc;
-    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
-    z-index: 1000;
-    padding: 5px 0;
-}
-
-#edgeContextMenu button {
-    display: block;
-    width: 100%;
-    text-align: left;
-    padding: 5px 10px;
-    background: none;
-    border: none;
-    cursor: pointer;
-}
-
-#edgeContextMenu button:hover {
-    background-color: #f0f0f0;
-}
-
-.light-mode #edgeContextMenu {
-    background-color: #fff;
-}
-
-.light-mode #edgeContextMenu button {
-    color: #1f2a44 !important;
-}
-
-.light-mode #edgeContextMenu button:hover {
-    color: #1f2a44 !important;
-    background-color: #f0f0f0;
-}
-
-.dark-mode #edgeContextMenu {
-    background-color: #2d3748;
-    border: 1px solid var(--border-dark);
-}
-
-.dark-mode #edgeContextMenu button {
-    color: #e2e8f0;
-}
-
-.dark-mode #edgeContextMenu button:hover {
-    background-color: #4b5563;
-}
-
+/* Search Input */
 #search-input {
     padding: 6px 10px;
     border-radius: 4px;
@@ -626,43 +819,77 @@
     border-color: #3b82f6;
 }
 
-/* Progress Bar Styles */
-#progress-bar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    padding: 10px;
-    text-align: center;
-    color: white;
-    font-size: 14px;
-    font-weight: bold;
-    z-index: 2000;
-    transition: opacity 0.5s ease-in-out;
+/* Checkbox Labels */
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    margin: 4px 0;
+    font-size: 12px;
 }
 
-.progress-active {
-    background-color: #dc2626; /* Red for in progress */
+.light-mode .checkbox-label {
+    color: #1f2a44;
 }
 
-.progress-complete {
-    background-color: #22c55e; /* Green for complete */
+.dark-mode .checkbox-label {
+    color: #e2e8f0;
 }
 
-.progress-hidden {
-    opacity: 0;
-    pointer-events: none;
+input[type="checkbox"] {
+    margin-right: 8px;
+    width: auto;
+}
+
+/* Media Queries */
+@media (max-width: 768px) {
+    #controls:not(.collapsed) {
+        width: 100%;
+    }
+    
+    #controls:not(.collapsed) ~ #myNetwork {
+        margin-left: 0;
+        display: none;
+    }
+    
+    #controls.collapsed ~ #myNetwork {
+        margin-left: 50px;
+        display: block;
+    }
+    
+    #properties-panel.active ~ #myNetwork {
+        margin-right: 300px;
+    }
+}
+
+#controls.collapsed #manual-save,
+#controls.collapsed #buy-me-a-coffee-container,
+#controls.collapsed #stop-task-container {
+    display: none;
 }
 </style>
-
     <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/dist/vis-network.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/toastify-js/1.12.0/toastify.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastify-js/1.12.0/toastify.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body class="dark-mode">
+    <div id="top-bar">
+        <span id="version">Baddie Mapper Experimental</span>
+        <a href="https://github.com/mr-r3b00t/crime-mapper" target="_blank" id="github-link">GitHub Repo</a>
+        <a href="https://gchq.github.io/CyberChef" target="_blank" id="cyberchef-link">GCHQ CyberChef</a>
+    </div>
+    <div id="notes-modal">
+        <h3>Edit Node Notes</h3>
+        <textarea id="notes-textarea" placeholder="Enter notes here (max 1000 characters)"></textarea>
+        <div class="button-container">
+            <button id="notes-save" onclick="saveNodeNotes()">Save</button>
+            <button id="notes-cancel" onclick="hideNotesModal()">Cancel</button>
+        </div>
+    </div>
         <div id="progress-bar" class="progress-hidden">Task in progress...</div>
         <!-- Rest of your HTML -->
+
+      
 
     <div id="controls">
         <button id="menu-toggle" onclick="toggleMenu()" title="Toggle Menu">></button>
@@ -817,6 +1044,7 @@
             <div class="input-group">
                 <h3>Export/Import</h3>
                 <button onclick="exportGraph()">Export to JSON</button>
+                <button onclick="exportVisibleGraph()">Export Visible to JSON</button>
                 <input type="file" id="importFile" accept=".json">
                 <button onclick="importGraph()">Import from JSON</button>
                 <button onclick="clearGraph()">Clear Graph</button>
@@ -871,6 +1099,28 @@
                 <button onclick="saveUrlscanApiKey()">Save URLscan.io API Key</button>
             </div>
             <div class="input-group">
+                <h3>SecurityTrails API Key</h3>
+                <div class="password-container">
+                    <input type="password" id="securitytrailsApiKey" placeholder="Enter SecurityTrails API Key">
+                    <button type="button" class="toggle-password" data-target="securitytrailsApiKey">Show</button>
+                </div>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="storeSecuritytrailsKey"> Store in local storage
+                </label>
+                <button onclick="saveSecuritytrailsApiKey()">Save SecurityTrails API Key</button>
+                </div>
+                <div class="input-group">
+                    <h3>URLhaus API Key</h3>
+                    <div class="password-container">
+                        <input type="password" id="urlhausApiKey" placeholder="Enter URLhaus API Key">
+                        <button type="button" class="toggle-password" data-target="urlhausApiKey">Show</button>
+                    </div>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="storeUrlhausKey"> Store in local storage
+                    </label>
+                    <button onclick="saveUrlhausApiKey()">Save URLhaus API Key</button>
+                </div>
+            <div class="input-group">
                 <h3>CORS Proxy URL</h3>
                 <div class="password-container">
                     <input type="password" id="corsProxyUrl" placeholder="Enter CORS Proxy URL" value="https://cors-anywhere.herokuapp.com/">
@@ -903,6 +1153,8 @@
                 <button onclick="enrichAllHudsonRockDomains()">Enrich All Domains with Hudson Rock</button>
                 <button onclick="enrichAllGreyNoise()">Enrich All IPs with GreyNoise</button>
                 <button onclick="enrichAllURLscan()">Enrich All URLs with URLscan.io</button>
+                <button onclick="enrichAllSecurityTrails()">Enrich All Domains with SecurityTrails Subdomains</button>
+                <button onclick="enrichAllURLhaus()">Enrich All URLs with URLhaus</button>
             </div>
         </div>
         <div id="import-iocs" class="tab-content active">
@@ -961,7 +1213,7 @@
             </div>
         </div>
          <!-- Buy Me a Coffee Button -->
-         <div style="text-align: center; padding: 10px;">
+         <div id="buy-me-a-coffee-container" style="text-align: center; padding: 10px;">
             <script type="text/javascript" src="https://cdnjs.buymeacoffee.com/1.0.0/button.prod.min.js" 
                 data-name="bmc-button" 
                 data-slug="mrr3b00t" 
@@ -977,14 +1229,14 @@
 
         <button id="manual-save" onclick="saveStateAfterOperation()">Save Now</button>
 
-        <div style="text-align: center; padding: 10px;">
+        <div id="stop-task-container" style="text-align: center; padding: 10px;">
             <button id="stop-task" onclick="stopActiveTask()">Stop Active Task</button>
         </div>
 
         <!-- Suggested -->
         <footer id="controls-footer"> 
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.270 experimental</p>
+    <p>© Xservus Limited - v0.278 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
@@ -1024,6 +1276,8 @@
         let isDarkMode = true;
         let ipinfoApiKey;
         let shodanApiKey;
+        let urlhausApiKey = localStorage.getItem('urlhausApiKey') || '';
+        let securitytrailsApiKey = localStorage.getItem('securitytrailsApiKey') || ''; //security tails api key variable
         let greynoiseApiKey = localStorage.getItem('greynoiseApiKey') || '';
         let urlscanApiKey = localStorage.getItem('urlscanApiKey') || '';
         let corsProxyUrl;
@@ -1034,8 +1288,10 @@
         let activeTaskController = null;
         let nodeLabelsVisible = true;
         let edgeLabelsVisible = true;
+        let currentEditingNodeId = null;
         const RATE_LIMIT_MS = 500;
         const SHODAN_RATE_LIMIT_MS = 1000; // Specific 1-second delay for Shodan
+        const SECURITYTRAILS_RATE_LIMIT_MS = 2000; // 1 second delay for SecurityTrails API
         const ipRegex = { ipv4: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/, ipv6: /^([0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}$/ };
         const domainRegex = /^(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,}$/;
         const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
@@ -1043,6 +1299,73 @@
         let selectedNodes = new Set(); // To track multiple selected nodes
     
         initializeApiKeys();
+
+
+
+        // Define updateTheme first
+function updateTheme() {
+    if (isDarkMode) {
+        document.body.classList.remove('light-mode');
+        document.body.classList.add('dark-mode');
+        options.nodes.font = {
+            size: nodeLabelsVisible ? 12 : 0,
+            color: '#e2e8f0',  // Light color for dark mode
+            multi: true,
+            align: 'center',
+            vadjust: 0,
+            strokeWidth: 0
+        };
+        options.edges.font = {
+            size: edgeLabelsVisible ? 12 : 0,
+            color: '#e2e8f0',  // Light color for dark mode
+            strokeWidth: 0,
+            strokeColor: 'transparent',
+            align: 'middle',
+            multi: true
+        };
+    } else {
+        document.body.classList.remove('dark-mode');
+        document.body.classList.add('light-mode');
+        options.nodes.font = {
+            size: nodeLabelsVisible ? 12 : 0,
+            color: '#1f2a44',  // Dark color for light mode
+            multi: true,
+            align: 'center',
+            vadjust: 0,
+            strokeWidth: 0
+        };
+        options.edges.font = {
+            size: edgeLabelsVisible ? 12 : 0,
+            color: '#1f2a44',  // Dark color for light mode
+            strokeWidth: 0,
+            strokeColor: 'transparent',
+            align: 'middle',
+            multi: true
+        };
+    }
+
+    // Update all existing nodes and edges with the new font settings
+    nodes.forEach(node => {
+        nodes.update({
+            id: node.id,
+            font: options.nodes.font
+        });
+    });
+    
+    edges.forEach(edge => {
+        edges.update({
+            id: edge.id,
+            font: options.edges.font
+        });
+    });
+
+    // Apply the options to the network and force a redraw
+    network.setOptions(options);
+    updateLabelVisibility();
+    ensureInteractionSettings();
+    network.setData({ nodes: nodes, edges: edges });  // Force data refresh
+    network.redraw();
+}
 
 function searchGraph() {
         const searchTerm = document.getElementById('search-input').value.trim().toLowerCase();
@@ -2047,7 +2370,7 @@ network.on('dragEnd', function(params) {
             });
         });
         console.log('Node drag ended, position updated');
-        saveStateAfterOperation(); // Save only when nodes are dragged
+        //saveState(); // Save silently without toast
     } else {
         // View panning ended
         console.log('View pan ended, no save needed');
@@ -2135,8 +2458,8 @@ function finishStabilization(resolve, skipFit) {
 });
 
 network.on('click', function(params) {
- // Only proceed if exactly one node is selected and not dragging
- if (params.nodes.length !== 1 || params.event.type === 'drag') {
+    // Only proceed if exactly one node is selected and not dragging
+    if (params.nodes.length !== 1 || params.event.type === 'drag') {
         console.log('Click event ignored:', params);
         return;
     }
@@ -2163,8 +2486,8 @@ network.on('click', function(params) {
         case 'domain':
             valueToCopy = node.domain;
             break;
-        case 'url': // New case for URL nodes
-            valueToCopy = node.url; // Use the full URL property
+        case 'url':
+            valueToCopy = node.url;
             break;
         case 'contact':
             valueToCopy = node.email || node.name;
@@ -2191,13 +2514,14 @@ network.on('click', function(params) {
             valueToCopy = node.malwareName;
             break;
         case 'vulnerability':
-            valueToCopy = node.cve || node.vulnName; // Prefer CVE if available, else vulnName
+            valueToCopy = node.cve || node.vulnName;
             break;
         case 'favicon':
         case 'http_hash':
         case 'html_hash':
         case 'ssl_hash':
-            valueToCopy = node.hash; // Standardized hash property
+        case 'hash': // New case for file hashes
+            valueToCopy = node.hash; // Use full hash value
             break;
         case 'asn':
             valueToCopy = node.asn;
@@ -2215,7 +2539,7 @@ network.on('click', function(params) {
             valueToCopy = node.product;
             break;
         case 'http_title':
-            valueToCopy = node.title; // Use the title property for http_title
+            valueToCopy = node.title;
             break;
         case 'vpn':
         case 'proxy':
@@ -2224,8 +2548,15 @@ network.on('click', function(params) {
         case 'hosting':
             valueToCopy = node.value;
             break;
+        case 'hash': // Add this case for file hashes
+            if (!node.hash) return;
+            nodeData.hash = node.hash;
+            nodeData.hashType = node.hashType || 'Unknown';
+            nodeData.label = `${node.hashType}: ${node.hash.substring(0, 8)}...`;
+            nodeData.title = `File Hash\nType: ${node.hashType}\nValue: ${node.hash}${node.notes ? '\nNotes: ' + node.notes : ''}`;
+            nodeData.color.background = node.color?.background || '#f97316';
+            break;
         default:
-            // Fallback: Extract value after prefix or use full label
             valueToCopy = node.label.split('\n')[0].split(': ')[1] || node.label.split('\n')[0];
             console.warn(`Unhandled node type "${node.type}", using fallback value:`, valueToCopy);
     }
@@ -2315,7 +2646,7 @@ function removeEdgeDirect(edgeId) {
     hideEdgeContextMenu();
 }
 
-// Update the showContextMenu function to include the new option
+// show context menu on right click
 function showContextMenu(x, y, value, nodeIds, type) {
     const nodesArray = Array.isArray(nodeIds) ? nodeIds : [nodeIds];
     const menu = document.getElementById('contextMenu');
@@ -2325,6 +2656,7 @@ function showContextMenu(x, y, value, nodeIds, type) {
         <button onclick="deleteNodes([${nodesArray.join(',')}])">Delete ${isMultiple ? 'Selected Nodes' : 'Node'}</button>
         ${isMultiple ? '' : `<button onclick="startLinkCreation(${nodesArray[0]})">Create Link From Here</button>`}
         ${isMultiple ? '' : `<button onclick="showPropertiesPanel(${nodesArray[0]}); hideContextMenu();">View Node Properties</button>`}
+        ${isMultiple ? '' : `<button onclick="editNodeNotes(${nodesArray[0]}); hideContextMenu();">Add/Edit Notes</button>`}
     `;
     
     // Check if all selected nodes are of the same type
@@ -2343,7 +2675,7 @@ function showContextMenu(x, y, value, nodeIds, type) {
                 <button onclick="throttledSendHttpsRequestMultiple([${nodesArray.map(id => `'${nodes.get(id).ip}'`).join(',')}], 'ip', 'https')">Send HTTPS Request</button>
                 <button onclick="throttledSendHttpsRequestMultiple([${nodesArray.map(id => `'${nodes.get(id).ip}'`).join(',')}], 'ip', 'http')">Send HTTP Request</button>
                 <button onclick="throttledEnrichURLscan('${nodes.get(nodesArray[0]).ip}', ${nodesArray[0]})">Enrich via URLscan.io</button>
-                `;
+            `;
         } else if (type === 'domain') {
             menuHtml += `
                 <button onclick="throttledEnrichGoogleDNSMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via Google DNS</button>
@@ -2352,7 +2684,8 @@ function showContextMenu(x, y, value, nodeIds, type) {
                 <button onclick="throttledSendHttpsRequestMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], 'domain', 'https')">Send HTTPS Request</button>
                 <button onclick="throttledSendHttpsRequestMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], 'domain', 'http')">Send HTTP Request</button>
                 <button onclick="throttledEnrichURLscan('https://${nodes.get(nodesArray[0]).domain}', ${nodesArray[0]})">Enrich via URLscan.io</button>
-                `;
+                <button onclick="throttledEnrichSecurityTrailsDomainMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via SecurityTrails</button>
+            `;
         } else if (type === 'html_hash') {
             menuHtml += `
                 <button onclick="throttledSearchShodanHtmlHash('${nodesArray[0]}', '${nodes.get(nodesArray[0]).hash}')">Search Shodan for IPs with this HTML Hash</button>
@@ -2362,6 +2695,11 @@ function showContextMenu(x, y, value, nodeIds, type) {
                 <button onclick="throttledEnrichHudsonRockMultiple([${nodesArray.map(id => `'${nodes.get(id).email}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via Hudson Rock</button>
             `;
         }
+    } else if (type === 'url') {
+            menuHtml += `
+                <button onclick="throttledEnrichURLhausMultiple([${nodesArray.map(id => `'${nodes.get(id).url}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via URLhaus</button>
+            `;
+        
     }
 
     menu.innerHTML = menuHtml;
@@ -2373,8 +2711,9 @@ function showContextMenu(x, y, value, nodeIds, type) {
 }
 
 
-
+// why is this here?
 let linkFromNode = null;
+// set variable above - move to top
 
 function saveState() {
     try {
@@ -2390,7 +2729,8 @@ function saveState() {
                     x: node.x,
                     y: node.y,
                     size: node.size,
-                    originalLabel: node.originalLabel // Preserve original label for toggling visibility
+                    originalLabel: node.originalLabel,
+                    notes: node.notes // Include notes for all types
                 };
 
                 // Add type-specific properties
@@ -2437,11 +2777,13 @@ function saveState() {
                         nodeData.url = node.url;
                         break;
                     case 'favicon':
+                        nodeData.hash = node.hash;
+                        nodeData.location = node.location;
+                        break;
                     case 'http_hash':
                     case 'html_hash':
                     case 'ssl_hash':
-                        nodeData.hash = node.hash; // Standardized hash property
-                        if (node.type === 'favicon') nodeData.location = node.location; // Favicon-specific
+                        nodeData.hash = node.hash;
                         break;
                     case 'asn':
                         nodeData.asn = node.asn;
@@ -2468,6 +2810,30 @@ function saveState() {
                     case 'hosting':
                         nodeData.value = node.value;
                         break;
+                    case 'tag':
+                        nodeData.tag = node.tag;
+                        break;
+                    case 'cpe':
+                        nodeData.cpe = node.cpe;
+                        break;
+                    case 'service':
+                        nodeData.name = node.name;
+                        break;
+                    case 'timestamp':
+                        nodeData.timestamp = node.timestamp;
+                        break;
+                    case 'url':
+                        nodeData.url = node.url;
+                        break;
+                    case 'port_title':
+                        nodeData.portType = node.portType;
+                        nodeData.portNumber = node.portNumber;
+                        nodeData.title = node.title;
+                        break;
+                    case 'hash': // Add this case for file hashes
+                        nodeData.hash = node.hash;
+                        nodeData.hashType = node.hashType;
+                        break;
                     default:
                         console.warn(`Unhandled node type in saveState: ${node.type}`);
                 }
@@ -2479,7 +2845,7 @@ function saveState() {
                 from: edge.from,
                 to: edge.to,
                 label: edge.label,
-                originalLabel: edge.originalLabel // Preserve original label for toggling visibility
+                originalLabel: edge.originalLabel
             })),
             nextId: nextId,
             isDarkMode: isDarkMode,
@@ -2495,31 +2861,6 @@ function saveState() {
         showToast('Failed to save state: ' + e.message, 'error');
     }
 }
-
-function deleteNodes(nodeIds) {
-    const idsToDelete = Array.isArray(nodeIds) ? nodeIds.map(id => parseInt(id)) : [parseInt(nodeIds)];
-
-    idsToDelete.forEach(nodeId => {
-        const node = nodes.get(nodeId);
-        if (!node) {
-            showToast(`Node ${nodeId} not found`, 'error');
-            return;
-        }
-
-        const connectedEdges = edges.get({
-            filter: edge => edge.from === nodeId || edge.to === nodeId
-        });
-        edges.remove(connectedEdges.map(edge => edge.id));
-        nodes.remove({ id: nodeId });
-    });
-
-    updateSelectOptions();
-    updateNodeSizes();
-    stabilizeNetwork();
-    saveStateAfterOperation();
-    showToast(`${idsToDelete.length > 1 ? 'Nodes' : 'Node'} deleted`, 'success');
-}
-
 
 
 
@@ -2779,30 +3120,38 @@ function constructUrl(baseUrl, useApiKey = true) {
         }
 
         function showToast(message, type = 'info') {
-            const toastOptions = {
-                text: message,
-                duration: 6500,
-                position: "center",
-                style: {
-                    background: isDarkMode ? '#2d3748' : '#fff',
-                    color: isDarkMode ? '#e2e8f0' : '#1f2a44',
-                    border: `1px solid ${isDarkMode ? '#4b5563' : '#d1d5db'}`,
-                    boxShadow: isDarkMode ? '0 2px 10px rgba(0, 0, 0, 0.3)' : '0 2px 10px rgba(0, 0, 0, 0.1)',
-                    position: 'fixed',
-                    top: '50px',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    width: 'auto',
-                    maxWidth: '80%',
-                    zIndex: 1000
-                }
-            };
-            switch (type) {
-                case 'success': toastOptions.style.background = isDarkMode ? '#166534' : '#22c55e'; toastOptions.style.color = '#fff'; break;
-                case 'error': toastOptions.style.background = isDarkMode ? '#991b1b' : '#ef4444'; toastOptions.style.color = '#fff'; break;
-            }
-            Toastify(toastOptions).showToast();
+    const topBarHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--top-bar-height')) || 40; // Default to 40px if variable not found
+    const buffer = 10; // Additional pixels to push toast below top bar
+    const toastOptions = {
+        text: message,
+        duration: 6500,
+        position: "center",
+        style: {
+            background: isDarkMode ? '#2d3748' : '#fff',
+            color: isDarkMode ? '#e2e8f0' : '#1f2a44',
+            border: `1px solid ${isDarkMode ? '#4b5563' : '#d1d5db'}`,
+            boxShadow: isDarkMode ? '0 2px 10px rgba(0, 0, 0, 0.3)' : '0 2px 10px rgba(0, 0, 0, 0.1)',
+            position: 'fixed',
+            top: `${topBarHeight + buffer}px`, // Position below top bar with buffer
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: 'auto',
+            maxWidth: '80%',
+            zIndex: 3000 // Increased z-index to ensure it’s above other elements
         }
+    };
+    switch (type) {
+        case 'success': 
+            toastOptions.style.background = isDarkMode ? '#166534' : '#22c55e'; 
+            toastOptions.style.color = '#fff'; 
+            break;
+        case 'error': 
+            toastOptions.style.background = isDarkMode ? '#991b1b' : '#ef4444'; 
+            toastOptions.style.color = '#fff'; 
+            break;
+    }
+    Toastify(toastOptions).showToast();
+}
 
         async function stabilizeNetwork(skipFit = false) {
     return new Promise(resolve => {
@@ -3663,23 +4012,31 @@ const throttledEnrichShodan = throttleRequest(async function enrichShodan(ip, ip
 
 
 async function importIOCsFromText() {
-    const text = document.getElementById('iocText').value.trim();
-    if (!text) { showToast('Please enter some text containing IOCs', 'error'); return; }
+    let text = document.getElementById('iocText').value.trim();
+    if (!text) { 
+        showToast('Please enter some text containing IOCs', 'error'); 
+        return; 
+    }
+    // Apply comprehensive refanging
+    text = refangText(text);
     await processIOCs(text);
     document.getElementById('iocText').value = '';
     saveStateAfterOperation();
     showToast('IOCs (including emails) import completed', 'success');
 }
 
-
-
 async function importIOCsFromFile() {
     const fileInput = document.getElementById('iocFile');
     const file = fileInput.files[0];
-    if (!file) { showToast('Please select a text file containing IOCs', 'error'); return; }
+    if (!file) { 
+        showToast('Please select a text file containing IOCs', 'error'); 
+        return; 
+    }
     const reader = new FileReader();
     reader.onload = async function(event) { 
-        await processIOCs(event.target.result); 
+        // Apply comprehensive refanging
+        let text = refangText(event.target.result);
+        await processIOCs(text); 
         fileInput.value = ''; 
         saveStateAfterOperation();
         showToast('IOCs (including emails) import completed', 'success');
@@ -3687,37 +4044,272 @@ async function importIOCsFromFile() {
     reader.readAsText(file);
 }
 
-
-
-        async function processIOCs(text) {
-    // Disable physics for the duration of the import
+async function processIOCs(text) {
     network.setOptions({ physics: { enabled: false } });
-    
-    // Pre-collect all matches to avoid multiple regex passes
-    const ipMatches = new Set(text.match(/(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)|(?:[0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}/g) || []);
-    const domainMatches = new Set(text.match(/(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,}/g) || []);
-    const emailMatches = new Set(text.match(emailRegex) || []);
 
-    const totalItems = ipMatches.size + domainMatches.size + emailMatches.size;
+    // Regex patterns
+    const urlRegex = /^(https?:\/\/)([^\s/:]+)(?::(\d{1,5}))?(\/.*)?$/i; // Matches http(s)://<host>[:port][/path]
+    const domainRegex = /^([a-zA-Z0-9-_]+\.)+[a-zA-Z]{2,}$/; // Matches domain with TLD
+    const ipRegex = { 
+        ipv4: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/, 
+        ipv6: /^([0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}$/ 
+    };
+    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+    const hashRegex = {
+        sha256: /^[0-9a-fA-F]{64}$/,
+        md5: /^[0-9a-fA-F]{32}$/,
+        sha1: /^[0-9a-fA-F]{40}$/
+    };
+    const hashPattern = /[0-9a-fA-F]{32,64}/g;
+
+    // Split text into tokens
+    const tokens = text.split(/[\s,\n]+/).filter(token => token.trim().length > 0);
+    console.log('Tokens:', tokens);
+
+    // Extract matches
+    const urlMatches = new Set();
+    const ipMatches = new Set();
+    const domainMatches = new Set();
+    const emailMatches = new Set(tokens.map(token => token.match(emailRegex)?.[0]).filter(Boolean));
+    const hashCandidates = new Set(tokens.map(token => token.match(hashPattern)?.[0]).filter(Boolean));
+
+    // Process each token
+    for (const token of tokens) {
+        const urlMatch = token.match(urlRegex);
+        if (urlMatch) {
+            const [, protocol, host, port, path] = urlMatch;
+            urlMatches.add(token);
+            console.log(`URL Match: ${token}, Protocol: ${protocol}, Host: ${host}, Port: ${port || 'none'}, Path: ${path || 'none'}`);
+
+            // Determine if host is IP or domain
+            if (ipRegex.ipv4.test(host) || ipRegex.ipv6.test(host)) {
+                ipMatches.add(host);
+            } else if (domainRegex.test(host)) {
+                domainMatches.add(host);
+            }
+            continue;
+        }
+
+        // Check for standalone IPs
+        if (ipRegex.ipv4.test(token) || ipRegex.ipv6.test(token)) {
+            ipMatches.add(token);
+            continue;
+        }
+
+        // Check for standalone domains
+        if (domainRegex.test(token) && !urlMatches.has(token)) {
+            domainMatches.add(token);
+            continue;
+        }
+    }
+
+    // Filter hash candidates
+    const hashMatches = new Set();
+    hashCandidates.forEach(hash => {
+        if (hashRegex.sha256.test(hash)) hashMatches.add({ value: hash, type: 'sha256' });
+        else if (hashRegex.md5.test(hash)) hashMatches.add({ value: hash, type: 'md5' });
+        else if (hashRegex.sha1.test(hash)) hashMatches.add({ value: hash, type: 'sha1' });
+    });
+
+    const totalItems = urlMatches.size + ipMatches.size + domainMatches.size + emailMatches.size + hashMatches.size;
     if (totalItems === 0) {
         showToast('No IOCs found in text', 'info');
         return;
     }
 
-    // Maps to track existing nodes and avoid lookups
+    console.log('URL Matches:', Array.from(urlMatches));
+    console.log('IP Matches:', Array.from(ipMatches));
+    console.log('Domain Matches:', Array.from(domainMatches));
+    console.log('Email Matches:', Array.from(emailMatches));
+    console.log('Hash Matches:', Array.from(hashMatches));
+
+    // Maps for deduplication
     const existingNodes = new Map();
     nodes.forEach(node => {
+        if (node.type === 'url' && node.url) existingNodes.set(`url:${node.url}`, node);
         if (node.type === 'ip' && node.ip) existingNodes.set(`ip:${node.ip}`, node);
         if (node.type === 'domain' && node.domain) existingNodes.set(`domain:${node.domain}`, node);
         if (node.type === 'contact' && node.email) existingNodes.set(`email:${node.email}`, node);
+        if (node.type === 'hash' && node.hash) existingNodes.set(`hash:${node.hash}`, node);
+        if (node.type === 'port' && node.portNumber) existingNodes.set(`port:${node.portType}/${node.portNumber}`, node);
     });
 
     const newNodes = [];
     const newEdges = [];
     let processedCount = 0;
-    const batchSize = 50; // Process in batches of 50
+    const batchSize = 50;
 
-    // Process IPs
+    // Helper function to extract apex domain
+    function getApexDomain(fullDomain) {
+        const parts = fullDomain.split('.');
+        if (parts.length >= 2) {
+            return parts.slice(-2).join('.'); // Last two parts (e.g., "gov.uk")
+        }
+        return fullDomain; // Fallback if no TLD (unlikely)
+    }
+
+    // Process URLs
+    for (const url of urlMatches) {
+        const urlMatch = url.match(urlRegex);
+        if (!urlMatch) continue;
+        const [, protocol, host, port, path] = urlMatch;
+
+        if (!existingNodes.has(`url:${url}`)) {
+            const urlNodeId = nextId++;
+            const label = `URL: ${url.length > 30 ? url.substring(0, 27) + '...' : url}`;
+            newNodes.push({
+                id: urlNodeId,
+                type: 'url',
+                label: label,
+                title: `Full URL: ${url}`,
+                color: { background: '#3b82f6' },
+                url: url,
+                size: 15
+            });
+            existingNodes.set(`url:${url}`, { id: urlNodeId });
+            console.log(`Added URL node: ${url}, ID: ${urlNodeId}`);
+
+            // Handle host (IP or domain)
+            if (ipRegex.ipv4.test(host) || ipRegex.ipv6.test(host)) {
+                if (!existingNodes.has(`ip:${host}`)) {
+                    const ipNodeId = nextId++;
+                    newNodes.push({
+                        id: ipNodeId,
+                        type: 'ip',
+                        label: `IP: ${host}`,
+                        title: `IP Address: ${host}`,
+                        color: { background: '#f87171' },
+                        ip: host,
+                        size: 20
+                    });
+                    existingNodes.set(`ip:${host}`, { id: ipNodeId });
+                    newEdges.push({
+                        id: `edge_${urlNodeId}_${ipNodeId}_${Date.now()}`,
+                        from: urlNodeId,
+                        to: ipNodeId,
+                        label: 'Resolves to'
+                    });
+                    console.log(`Added IP node: ${host}, ID: ${ipNodeId}, Edge to URL: ${urlNodeId}`);
+                } else {
+                    const existingIpNode = existingNodes.get(`ip:${host}`);
+                    newEdges.push({
+                        id: `edge_${urlNodeId}_${existingIpNode.id}_${Date.now()}`,
+                        from: urlNodeId,
+                        to: existingIpNode.id,
+                        label: 'Resolves to'
+                    });
+                    console.log(`Linked URL ${urlNodeId} to existing IP: ${existingIpNode.id}`);
+                }
+            } else if (domainRegex.test(host)) {
+                if (!existingNodes.has(`domain:${host}`)) {
+                    const domainNodeId = nextId++;
+                    newNodes.push({
+                        id: domainNodeId,
+                        type: 'domain',
+                        label: `Domain: ${host}`,
+                        title: `Domain: ${host}`,
+                        color: { background: '#60a5fa' },
+                        domain: host,
+                        size: 20
+                    });
+                    existingNodes.set(`domain:${host}`, { id: domainNodeId });
+                    newEdges.push({
+                        id: `edge_${urlNodeId}_${domainNodeId}_${Date.now()}`,
+                        from: urlNodeId,
+                        to: domainNodeId,
+                        label: 'Belongs to'
+                    });
+                    console.log(`Added Domain node: ${host}, ID: ${domainNodeId}, Edge to URL: ${urlNodeId}`);
+
+                    // Create apex domain
+                    const apexDomain = getApexDomain(host);
+                    if (apexDomain !== host && !existingNodes.has(`domain:${apexDomain}`)) {
+                        const apexNodeId = nextId++;
+                        newNodes.push({
+                            id: apexNodeId,
+                            type: 'domain',
+                            label: `Apex: ${apexDomain}`,
+                            title: `Apex Domain: ${apexDomain}`,
+                            color: { background: '#60a5fa' },
+                            domain: apexDomain,
+                            size: 20
+                        });
+                        existingNodes.set(`domain:${apexDomain}`, { id: apexNodeId });
+                        newEdges.push({
+                            id: `edge_${domainNodeId}_${apexNodeId}_${Date.now()}`,
+                            from: domainNodeId,
+                            to: apexNodeId,
+                            label: 'Apex of'
+                        });
+                        console.log(`Added Apex Domain node: ${apexDomain}, ID: ${apexNodeId}, Edge to Domain: ${domainNodeId}`);
+                    } else if (apexDomain !== host) {
+                        const existingApexNode = existingNodes.get(`domain:${apexDomain}`);
+                        newEdges.push({
+                            id: `edge_${domainNodeId}_${existingApexNode.id}_${Date.now()}`,
+                            from: domainNodeId,
+                            to: existingApexNode.id,
+                            label: 'Apex of'
+                        });
+                        console.log(`Linked Domain ${domainNodeId} to existing Apex: ${existingApexNode.id}`);
+                    }
+                } else {
+                    const existingDomainNode = existingNodes.get(`domain:${host}`);
+                    newEdges.push({
+                        id: `edge_${urlNodeId}_${existingDomainNode.id}_${Date.now()}`,
+                        from: urlNodeId,
+                        to: existingDomainNode.id,
+                        label: 'Belongs to'
+                    });
+                    console.log(`Linked URL ${urlNodeId} to existing Domain: ${existingDomainNode.id}`);
+                }
+            }
+
+            // Handle port
+            if (port && parseInt(port) >= 1 && parseInt(port) <= 65535) {
+                const portKey = `port:TCP/${port}`;
+                if (!existingNodes.has(portKey)) {
+                    const portNodeId = nextId++;
+                    newNodes.push({
+                        id: portNodeId,
+                        type: 'port',
+                        label: `TCP/${port}`,
+                        title: `Port\nType: TCP\nNumber: ${port}`,
+                        color: { background: '#a78bfa' },
+                        portType: 'TCP',
+                        portNumber: port,
+                        size: 10
+                    });
+                    existingNodes.set(portKey, { id: portNodeId });
+                    newEdges.push({
+                        id: `edge_${urlNodeId}_${portNodeId}_${Date.now()}`,
+                        from: urlNodeId,
+                        to: portNodeId,
+                        label: 'Uses port'
+                    });
+                    console.log(`Added Port node: TCP/${port}, ID: ${portNodeId}, Edge to URL: ${urlNodeId}`);
+                } else {
+                    const existingPortNode = existingNodes.get(portKey);
+                    newEdges.push({
+                        id: `edge_${urlNodeId}_${existingPortNode.id}_${Date.now()}`,
+                        from: urlNodeId,
+                        to: existingPortNode.id,
+                        label: 'Uses port'
+                    });
+                    console.log(`Linked URL ${urlNodeId} to existing Port: ${existingPortNode.id}`);
+                }
+            }
+        }
+        processedCount++;
+        if (processedCount % batchSize === 0) {
+            nodes.add(newNodes);
+            edges.add(newEdges);
+            newNodes.length = 0;
+            newEdges.length = 0;
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
+    }
+
+    // Process standalone IPs
     for (const ip of ipMatches) {
         if ((ipRegex.ipv4.test(ip) || ipRegex.ipv6.test(ip)) && !existingNodes.has(`ip:${ip}`)) {
             const nodeId = nextId++;
@@ -3731,10 +4323,19 @@ async function importIOCsFromFile() {
                 size: 20
             });
             existingNodes.set(`ip:${ip}`, { id: nodeId });
+            console.log(`Added standalone IP node: ${ip}, ID: ${nodeId}`);
+        }
+        processedCount++;
+        if (processedCount % batchSize === 0) {
+            nodes.add(newNodes);
+            edges.add(newEdges);
+            newNodes.length = 0;
+            newEdges.length = 0;
+            await new Promise(resolve => setTimeout(resolve, 0));
         }
     }
 
-    // Process domains from domain matches
+    // Process standalone Domains
     for (const domain of domainMatches) {
         if (domainRegex.test(domain) && !existingNodes.has(`domain:${domain}`)) {
             const nodeId = nextId++;
@@ -3748,16 +4349,46 @@ async function importIOCsFromFile() {
                 size: 20
             });
             existingNodes.set(`domain:${domain}`, { id: nodeId });
+            console.log(`Added standalone Domain node: ${domain}, ID: ${nodeId}`);
+
+            // Create apex domain for standalone domains
+            const apexDomain = getApexDomain(domain);
+            if (apexDomain !== domain && !existingNodes.has(`domain:${apexDomain}`)) {
+                const apexNodeId = nextId++;
+                newNodes.push({
+                    id: apexNodeId,
+                    type: 'domain',
+                    label: `Apex: ${apexDomain}`,
+                    title: `Apex Domain: ${apexDomain}`,
+                    color: { background: '#60a5fa' },
+                    domain: apexDomain,
+                    size: 20
+                });
+                existingNodes.set(`domain:${apexDomain}`, { id: apexNodeId });
+                newEdges.push({
+                    id: `edge_${nodeId}_${apexNodeId}_${Date.now()}`,
+                    from: nodeId,
+                    to: apexNodeId,
+                    label: 'Apex of'
+                });
+                console.log(`Added Apex Domain node: ${apexDomain}, ID: ${apexNodeId}, Edge to Domain: ${nodeId}`);
+            }
+        }
+        processedCount++;
+        if (processedCount % batchSize === 0) {
+            nodes.add(newNodes);
+            edges.add(newEdges);
+            newNodes.length = 0;
+            newEdges.length = 0;
+            await new Promise(resolve => setTimeout(resolve, 0));
         }
     }
 
-    // Process emails and link to domains
+    // Process Emails
     for (const email of emailMatches) {
         if (!existingNodes.has(`email:${email}`)) {
             const emailNodeId = nextId++;
             const emailDomain = email.split('@')[1];
-
-            // Add email node
             newNodes.push({
                 id: emailNodeId,
                 type: 'contact',
@@ -3770,9 +4401,8 @@ async function importIOCsFromFile() {
             });
             existingNodes.set(`email:${email}`, { id: emailNodeId });
 
-            // Find or create domain node
             let domainNode = existingNodes.get(`domain:${emailDomain}`);
-            if (!domainNode) {
+            if (!domainNode && domainRegex.test(emailDomain)) {
                 const domainNodeId = nextId++;
                 newNodes.push({
                     id: domainNodeId,
@@ -3785,132 +4415,93 @@ async function importIOCsFromFile() {
                 });
                 domainNode = { id: domainNodeId };
                 existingNodes.set(`domain:${emailDomain}`, domainNode);
-            }
 
-            // Add edge
-            const edgeId = `edge_${emailNodeId}_${domainNode.id}_${Date.now()}`;
-            if (!edges.get({ filter: e => e.from === emailNodeId && e.to === domainNode.id }).length) {
+                // Create apex domain for email domain
+                const apexDomain = getApexDomain(emailDomain);
+                if (apexDomain !== emailDomain && !existingNodes.has(`domain:${apexDomain}`)) {
+                    const apexNodeId = nextId++;
+                    newNodes.push({
+                        id: apexNodeId,
+                        type: 'domain',
+                        label: `Apex: ${apexDomain}`,
+                        title: `Apex Domain: ${apexDomain}`,
+                        color: { background: '#60a5fa' },
+                        domain: apexDomain,
+                        size: 20
+                    });
+                    existingNodes.set(`domain:${apexDomain}`, { id: apexNodeId });
+                    newEdges.push({
+                        id: `edge_${domainNodeId}_${apexNodeId}_${Date.now()}`,
+                        from: domainNodeId,
+                        to: apexNodeId,
+                        label: 'Apex of'
+                    });
+                    console.log(`Added Apex Domain node: ${apexDomain}, ID: ${apexNodeId}, Edge to Domain: ${domainNodeId}`);
+                }
+            }
+            if (domainNode) {
                 newEdges.push({
-                    id: edgeId,
+                    id: `edge_${emailNodeId}_${domainNode.id}_${Date.now()}`,
                     from: emailNodeId,
                     to: domainNode.id,
                     label: 'Registered with'
                 });
             }
+            console.log(`Added Email node: ${email}, ID: ${emailNodeId}`);
+        }
+        processedCount++;
+        if (processedCount % batchSize === 0) {
+            nodes.add(newNodes);
+            edges.add(newEdges);
+            newNodes.length = 0;
+            newEdges.length = 0;
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
+    }
 
-            // Batch processing
-            processedCount++;
-            if (processedCount % batchSize === 0) {
-                nodes.add(newNodes);
-                edges.add(newEdges);
-                newNodes.length = 0;
-                newEdges.length = 0;
-                await new Promise(resolve => setTimeout(resolve, 0)); // Allow UI to breathe
-                showToast(`Processed ${processedCount} of ${emailMatches.size} emails`, 'info');
-            }
+    // Process Hashes
+    for (const hashObj of hashMatches) {
+        const hash = hashObj.value;
+        if (!existingNodes.has(`hash:${hash}`)) {
+            const hashNodeId = nextId++;
+            const hashType = hashObj.type.toUpperCase();
+            newNodes.push({
+                id: hashNodeId,
+                type: 'hash',
+                label: `${hashType}: ${hash.substring(0, 8)}...`,
+                title: `File Hash\nType: ${hashType}\nValue: ${hash}`,
+                color: { background: '#f97316' },
+                hash: hash,
+                hashType: hashType,
+                size: 15
+            });
+            existingNodes.set(`hash:${hash}`, { id: hashNodeId });
+            console.log(`Added Hash node: ${hash}, Type: ${hashType}, ID: ${hashNodeId}`);
+        }
+        processedCount++;
+        if (processedCount % batchSize === 0) {
+            nodes.add(newNodes);
+            edges.add(newEdges);
+            newNodes.length = 0;
+            newEdges.length = 0;
+            await new Promise(resolve => setTimeout(resolve, 0));
         }
     }
 
     // Add remaining items
-    if (newNodes.length > 0) nodes.add(newNodes);
-    if (newEdges.length > 0) edges.add(newEdges);
-
-    // Update UI once at the end
-    updateNodeSizes();
-    updateSelectOptions();
-
-    // Re-enable physics and stabilize
-    await stabilizeNetwork();
-    showToast(`Imported ${ipMatches.size} IPs, ${domainMatches.size} domains, and ${emailMatches.size} emails`, 'success');
-}
-
-        function saveIpinfoApiKey() {
-            ipinfoApiKey = document.getElementById('ipinfoApiKey').value.trim();
-            const storeKey = document.getElementById('storeIpinfoKey').checked;
-            if (ipinfoApiKey) {
-                if (storeKey) localStorage.setItem('ipinfoApiKey', ipinfoApiKey); else localStorage.removeItem('ipinfoApiKey');
-                showToast('IPinfo API key saved successfully!', 'success');
-            } else {
-                localStorage.removeItem('ipinfoApiKey');
-                showToast('Please enter a valid IPinfo API key.', 'error');
-            }
-        }
-
-        function saveShodanApiKey() {
-            shodanApiKey = document.getElementById('shodanApiKey').value.trim();
-            const storeKey = document.getElementById('storeShodanKey').checked;
-            if (shodanApiKey) {
-                if (storeKey) localStorage.setItem('shodanApiKey', shodanApiKey); else localStorage.removeItem('shodanApiKey');
-                showToast('Shodan API key saved successfully!', 'success');
-            } else {
-                localStorage.removeItem('shodanApiKey');
-                showToast('Please enter a valid Shodan API key.', 'error');
-            }
-        }
-        
-        function updateTheme() {
-    if (isDarkMode) {
-        document.body.classList.remove('light-mode');
-        document.body.classList.add('dark-mode');
-        options.nodes.font = {
-            size: nodeLabelsVisible ? 12 : 0,
-            color: '#e2e8f0',  // Light color for dark mode
-            multi: true,
-            align: 'center',
-            vadjust: 0,
-            strokeWidth: 0
-        };
-        options.edges.font = {
-            size: edgeLabelsVisible ? 12 : 0,
-            color: '#e2e8f0',  // Light color for dark mode
-            strokeWidth: 0,
-            strokeColor: 'transparent',
-            align: 'middle',
-            multi: true
-        };
-    } else {
-        document.body.classList.remove('dark-mode');
-        document.body.classList.add('light-mode');
-        options.nodes.font = {
-            size: nodeLabelsVisible ? 12 : 0,
-            color: '#1f2a44',  // Dark color for light mode
-            multi: true,
-            align: 'center',
-            vadjust: 0,
-            strokeWidth: 0
-        };
-        options.edges.font = {
-            size: edgeLabelsVisible ? 12 : 0,
-            color: '#1f2a44',  // Dark color for light mode
-            strokeWidth: 0,
-            strokeColor: 'transparent',
-            align: 'middle',
-            multi: true
-        };
+    if (newNodes.length > 0) {
+        console.log('Final batch processing:', { newNodes, newEdges });
+        nodes.add(newNodes);
+        edges.add(newEdges);
     }
 
-    // Update all existing nodes and edges with the new font settings
-    nodes.forEach(node => {
-        nodes.update({
-            id: node.id,
-            font: options.nodes.font
-        });
-    });
-    
-    edges.forEach(edge => {
-        edges.update({
-            id: edge.id,
-            font: options.edges.font
-        });
-    });
-
-    // Apply the options to the network and force a redraw
-    network.setOptions(options);
-    updateLabelVisibility();
-    ensureInteractionSettings();
-    network.setData({ nodes: nodes, edges: edges });  // Force data refresh
-    network.redraw();
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork().catch(err => console.error('Error stabilizing network:', err));
+    showToast(`Imported ${urlMatches.size} URLs, ${ipMatches.size} IPs, ${domainMatches.size} domains, ${emailMatches.size} emails, ${hashMatches.size} hashes`, 'success');
 }
+
+
 
 function toggleMode() {
     isDarkMode = !isDarkMode;
@@ -4176,7 +4767,7 @@ function setHierarchicalLayout() {
             document.getElementById('addMalwareType').style.display = type === 'malware' ? 'block' : 'none';
         });
 
-function createNodeData(type, values) {
+        function createNodeData(type, values) {
     const nodeData = { 
         id: nextId++, 
         size: 10,
@@ -4188,157 +4779,92 @@ function createNodeData(type, values) {
     const configs = {
         vulnerability: { 
             fields: ['vulnName'], 
-            optionalFields: ['cve', 'url'], 
-            color: '#dc2626', // Red color for vulnerabilities
-            label: v => {
-                let label = `Vulnerability: ${v.vulnName}`;
-                if (v.cve) label += `\nCVE: ${v.cve}`;
-                if (v.url) label += `\nURL: ${v.url}`;
-                return label;
-            }, 
-            title: v => {
-                let title = `Vulnerability\nName: ${v.vulnName}`;
-                if (v.cve) title += `\nCVE: ${v.cve}`;
-                if (v.url) title += `\nURL: ${v.url}`;
-                return title;
-            }
+            optionalFields: ['cve', 'url', 'notes'], 
+            color: '#dc2626',
+            label: v => `Vulnerability: ${v.vulnName}${v.cve ? '\nCVE: ' + v.cve : ''}${v.url ? '\nURL: ' + v.url : ''}`,
+            title: v => `Vulnerability\nName: ${v.vulnName}${v.cve ? '\nCVE: ' + v.cve : ''}${v.url ? '\nURL: ' + v.url : ''}${v.notes ? '\nNotes: ' + v.notes : ''}`
         },
         contact: { 
             fields: ['name'], 
-            optionalFields: ['email'], 
+            optionalFields: ['email', 'notes'], 
             color: '#4ade80', 
             label: v => `Contact: ${v.name}${v.email ? '\n' + v.email : ''}`, 
-            title: v => v.email ? `Contact\nName: ${v.name}\nEmail: ${v.email}` : `Contact\nName: ${v.name}` 
+            title: v => `Contact\nName: ${v.name}${v.email ? '\nEmail: ' + v.email : ''}${v.notes ? '\nNotes: ' + v.notes : ''}`
         },
         ip: { 
             fields: ['ip'], 
+            optionalFields: ['notes'],
             color: '#f87171', 
             label: v => `IP: ${v.ip}`, 
-            title: v => `IP Address: ${v.ip}`,
+            title: v => `IP Address: ${v.ip}${v.notes ? '\nNotes: ' + v.notes : ''}`,
             validate: v => ipRegex.ipv4.test(v.ip) || ipRegex.ipv6.test(v.ip) 
         },
         domain: { 
             fields: ['domain'], 
+            optionalFields: ['notes'],
             color: '#60a5fa', 
             label: v => `Domain: ${v.domain}`, 
-            title: v => `Domain: ${v.domain}` 
+            title: v => `Domain: ${v.domain}${v.notes ? '\nNotes: ' + v.notes : ''}` 
         },
         organization: { 
             fields: ['organization'], 
+            optionalFields: ['notes'],
             color: '#facc15', 
             label: v => `Organization: ${v.organization}`, 
-            title: v => `Organization: ${v.organization}` 
+            title: v => `Organization: ${v.organization}${v.notes ? '\nNotes: ' + v.notes : ''}` 
         },
         port: { 
             fields: ['portNumber', 'portType'], 
+            optionalFields: ['notes'],
             color: '#a78bfa', 
             label: v => `Port: ${v.portType}/${v.portNumber}`, 
-            title: v => `Port\nType: ${v.portType}\nNumber: ${v.portNumber}` 
+            title: v => `Port\nType: ${v.portType}\nNumber: ${v.portNumber}${v.notes ? '\nNotes: ' + v.notes : ''}` 
         },
         wallet: { 
             fields: ['address'], 
+            optionalFields: ['notes'],
             color: '#fb923c', 
             label: v => `Wallet: ${v.address}`, 
-            title: v => `Wallet\nAddress: ${v.address}` 
+            title: v => `Wallet\nAddress: ${v.address}${v.notes ? '\nNotes: ' + v.notes : ''}` 
         },
         bank: { 
             fields: ['accountNumber', 'sortCode'], 
+            optionalFields: ['notes'],
             color: '#10b981', 
             label: v => `Bank: ${v.accountNumber}\nSort Code: ${v.sortCode}`, 
-            title: v => `Bank Account\nAccount Number: ${v.accountNumber}\nSort Code: ${v.sortCode}` 
+            title: v => `Bank Account\nAccount Number: ${v.accountNumber}\nSort Code: ${v.sortCode}${v.notes ? '\nNotes: ' + v.notes : ''}` 
         },
         technology: { 
-            fields: ['techName', 'techVersion'], 
+            fields: ['techName'], 
+            optionalFields: ['techVersion', 'notes'], 
             color: '#ec4899', 
-            label: v => `Technology: ${v.techName}\nVersion: ${v.techVersion}`, 
-            title: v => `Technology\nName: ${v.techName}\nVersion: ${v.techVersion}` 
+            label: v => `Technology: ${v.techName}${v.techVersion ? '\nVersion: ' + v.techVersion : ''}`, 
+            title: v => `Technology\nName: ${v.techName}${v.techVersion ? '\nVersion: ' + v.techVersion : ''}${v.notes ? '\nNotes: ' + v.notes : ''}` 
         },
         device: { 
             fields: ['deviceCategory', 'deviceName'], 
+            optionalFields: ['notes'],
             color: '#14b8a6', 
             label: v => `Device: ${v.deviceName}\nCategory: ${v.deviceCategory}`, 
-            title: v => `Device\nName: ${v.deviceName}\nCategory: ${v.deviceCategory}` 
+            title: v => `Device\nName: ${v.deviceName}\nCategory: ${v.deviceCategory}${v.notes ? '\nNotes: ' + v.notes : ''}` 
         },
         malware: { 
             fields: ['malwareName', 'malwareType'], 
+            optionalFields: ['notes'],
             color: '#ef4444', 
             label: v => `Malware: ${v.malwareName}\nType: ${v.malwareType}`, 
-            title: v => `Malware\nName: ${v.malwareName}\nType: ${v.malwareType}` 
+            title: v => `Malware\nName: ${v.malwareName}\nType: ${v.malwareType}${v.notes ? '\nNotes: ' + v.notes : ''}` 
         },
+        // Add notes to other types as needed
         favicon: { 
             fields: ['hash'], 
-            optionalFields: ['location'], 
+            optionalFields: ['location', 'notes'], 
             color: '#22d3ee',
             label: v => `Favicon: ${v.hash.substring(0, 8)}...`, 
-            title: v => `Favicon\nHash: ${v.hash}${v.location ? '\nPath: ' + v.location : ''}` 
+            title: v => `Favicon\nHash: ${v.hash}${v.location ? '\nPath: ' + v.location : ''}${v.notes ? '\nNotes: ' + v.notes : ''}` 
         },
-        http_hash: { 
-            fields: ['hash'], 
-            color: '#f97316', 
-            label: v => `HTTP Hash: ${v.hash.substring(0, 8)}...`, 
-            title: v => `HTTP Headers Hash\nSHA256: ${v.hash}` 
-        },
-        html_hash: { 
-            fields: ['hash'], 
-            color: '#f59e0b', 
-            label: v => `HTML Hash: ${v.hash.substring(0, 8)}...`, 
-            title: v => `HTML Hash\nSHA256: ${v.hash}` 
-        },
-        ssl_hash: { 
-            fields: ['hash'], // Changed from 'fingerprint' to 'hash'
-            color: '#8b5cf6', 
-            label: v => `SSL Hash: ${v.hash.substring(0, 8)}...`, 
-            title: v => `SSL Certificate Hash\nSHA256: ${v.hash}` // Updated title
-        },
-        // Fixed entries for privacy types
-        vpn: { 
-            fields: ['value'], 
-            color: '#9333ea', 
-            label: v => `VPN: ${v.value}`, 
-            title: v => `VPN for IP: ${v.value}` 
-        },
-        proxy: { 
-            fields: ['value'], 
-            color: '#f43f5e', 
-            label: v => `Proxy: ${v.value}`, 
-            title: v => `Proxy for IP: ${v.value}` 
-        },
-        tor: { 
-            fields: ['value'], 
-            color: '#64748b', 
-            label: v => `Tor: ${v.value}`, 
-            title: v => `Tor for IP: ${v.value}` 
-        },
-        relay: { 
-            fields: ['value'], 
-            color: '#eab308', 
-            label: v => `Relay: ${v.value}`, 
-            title: v => `Relay for IP: ${v.value}` 
-        },
-        hosting: { 
-            fields: ['value'], 
-            color: '#14b8a6', 
-            label: v => `Hosting: ${v.value}`, 
-            title: v => `Hosting for IP: ${v.value}` 
-        },
-        tag: { 
-            fields: ['tag'], 
-            color: '#6d28d9', // Purple for tags
-            label: v => `Tag: ${v.tag}`, 
-            title: v => `Tag: ${v.tag}` 
-        },
-        cpe: { 
-            fields: ['cpe'], 
-            color: '#0d9488', // Teal for CPEs
-            label: v => `CPE: ${v.cpe.split(':')[3] || v.cpe}`, // Show vendor or full CPE
-            title: v => `CPE: ${v.cpe}` 
-        }
-
+        // ... add 'notes' to optionalFields for all other types similarly ...
     };
-
-    configs.asn = { fields: ['asn'], color: '#a3e635', label: v => `ASN: ${v.asn}`, title: v => `ASN: ${v.asn}` };
-    configs.city = { fields: ['city'], color: '#f97316', label: v => `City: ${v.city}`, title: v => `City: ${v.city}` };
-    configs.country = { fields: ['country'], color: '#34d399', label: v => `Country: ${v.country}`, title: v => `Country: ${v.country}` };
 
     const config = configs[type];
     if (!config || config.fields.some(f => !values[f])) { 
@@ -4411,14 +4937,12 @@ function addNode() {
         }
     };
 
-    // Get the node data using the inputs for the selected type
     const nodeData = createNodeData(type, inputs[type]);
     if (!nodeData) {
-        // createNodeData already shows a toast for validation errors
         return;
     }
 
-    // Check for duplicates based on key fields
+    // Check for duplicates based on key fields with corrected syntax
     const existingNodes = nodes.get({
         filter: n => n.type === type && (
             (type === 'contact' && n.name === inputs[type].name && (!inputs[type].email || n.email === inputs[type].email)) ||
@@ -4430,7 +4954,7 @@ function addNode() {
             (type === 'bank' && n.accountNumber === inputs[type].accountNumber && n.sortCode === inputs[type].sortCode) ||
             (type === 'technology' && n.techName === inputs[type].techName && n.techVersion === inputs[type].techVersion) ||
             (type === 'device' && n.deviceCategory === inputs[type].deviceCategory && n.deviceName === inputs[type].deviceName) ||
-            (type === 'malware' && n.malwareName === inputs[type].malwareName && n.malwareType === inputs[type].malwareType)
+            (type === 'malware' && n.malwareName === inputs[type].malwareName && n.malwareType === inputs[type].malwareType) ||
             (type === 'vulnerability' && n.vulnName === inputs[type].vulnName && 
              (!inputs[type].cve || n.cve === inputs[type].cve) && 
              (!inputs[type].url || n.url === inputs[type].url))
@@ -4442,15 +4966,13 @@ function addNode() {
         return;
     }
 
-    // Add the node
     nodes.add({
         ...nodeData,
-        size: 10, // Fixed initial size
+        size: 10,
         widthConstraint: false,
         heightConstraint: false
     });
 
-    // Update UI and network
     updateSelectOptions();
     clearAddInputs();
     updateNodeSizes();
@@ -4458,6 +4980,7 @@ function addNode() {
     saveStateAfterOperation();
     showToast(`${type} added successfully`, 'success');
 }
+
 
         function editNode() {
             const nodeId = document.getElementById('editNodeSelect').value;
@@ -6603,24 +7126,13 @@ const throttledEnrichHudsonRockDomainMultiple = throttleRequest(async function e
 
 
 function showPropertiesPanel(nodeId) {
-    console.log('Attempting to show properties for node ID:', nodeId);
     const node = nodes.get(nodeId);
-    
     if (!node) {
-        console.error('Node not found for ID:', nodeId);
         showToast('Node not found', 'error');
         return;
     }
 
-    console.log('Node data:', JSON.stringify(node, null, 2));
-
     const tbody = document.querySelector('#properties-table tbody');
-    if (!tbody) {
-        console.error('Properties table body not found');
-        showToast('Properties table not found', 'error');
-        return;
-    }
-    
     tbody.innerHTML = '';
 
     const properties = {};
@@ -6644,26 +7156,14 @@ function showPropertiesPanel(nodeId) {
     });
 
     const panel = document.getElementById('properties-panel');
-    if (!panel) {
-        console.error('Properties panel element not found');
-        showToast('Properties panel not found', 'error');
-        return;
-    }
-
-    // Ensure panel is visible and trigger transition
-    panel.style.display = 'block'; // Ensure it’s not hidden
+    panel.style.display = 'block';
     panel.classList.add('active');
 
-    // Force reflow for transition
-    void panel.offsetHeight;
-
-    // Adjust network layout
     const controls = document.getElementById('controls');
     const myNetwork = document.getElementById('myNetwork');
     myNetwork.style.marginRight = '300px';
     myNetwork.style.marginLeft = controls.classList.contains('collapsed') ? '50px' : '300px';
 
-    console.log('Properties panel should now be visible on the right');
     network.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
 }
 
@@ -6950,15 +7450,19 @@ function initializeApiKeys() {
     ipinfoApiKey = localStorage.getItem('ipinfoApiKey') || '';
     shodanApiKey = localStorage.getItem('shodanApiKey') || '';
     greynoiseApiKey = localStorage.getItem('greynoiseApiKey') || '';
+    urlscanApiKey = localStorage.getItem('urlscanApiKey') || '';
+    securitytrailsApiKey = localStorage.getItem('securitytrailsApiKey') || '';
+    urlhausApiKey = localStorage.getItem('urlhausApiKey') || '';
     corsProxyUrl = localStorage.getItem('corsProxyUrl') || 'https://cors-anywhere.herokuapp.com/';
     routeViaProxy = localStorage.getItem('routeViaProxy') === 'true';
     ignoreApiKeysViaProxy = localStorage.getItem('ignoreApiKeysViaProxy') === 'true';
-    urlscanApiKey = localStorage.getItem('urlscanApiKey') || '';
-    
-    // Set initial values in UI
+
     document.getElementById('ipinfoApiKey').value = ipinfoApiKey;
     document.getElementById('shodanApiKey').value = shodanApiKey;
     document.getElementById('greynoiseApiKey').value = greynoiseApiKey;
+    document.getElementById('urlscanApiKey').value = urlscanApiKey;
+    document.getElementById('securitytrailsApiKey').value = securitytrailsApiKey;
+    document.getElementById('urlhausApiKey').value = urlhausApiKey;
     document.getElementById('corsProxyUrl').value = corsProxyUrl;
     document.getElementById('routeViaProxy').checked = routeViaProxy;
     document.getElementById('ignoreApiKeysViaProxy').checked = ignoreApiKeysViaProxy;
@@ -6966,6 +7470,8 @@ function initializeApiKeys() {
     document.getElementById('storeShodanKey').checked = !!localStorage.getItem('shodanApiKey');
     document.getElementById('storeGreynoiseKey').checked = !!localStorage.getItem('greynoiseApiKey');
     document.getElementById('storeUrlscanKey').checked = !!localStorage.getItem('urlscanApiKey');
+    document.getElementById('storeSecuritytrailsKey').checked = !!localStorage.getItem('securitytrailsApiKey');
+    document.getElementById('storeUrlhausKey').checked = !!localStorage.getItem('urlhausApiKey');
 }
 
 
@@ -7199,96 +7705,6 @@ const throttledEnrichGreyNoiseMultiple = throttleRequest(async function enrichGr
         showToast(`GreyNoise enrichment completed: ${successfulEnrichments}/${totalIPs} IPs enriched`, 'success');
     }
 }, RATE_LIMIT_MS);
-
-async function enrichAllGreyNoise() {
-    if (!greynoiseApiKey && !ignoreApiKeysViaProxy) {
-        showToast('Please set your GreyNoise API key in the "Config" tab first.', 'error');
-        return;
-    }
-
-    showProgressBar();
-    network.setOptions({ physics: { enabled: false } });
-    const ipNodes = nodes.get({ filter: n => n.type === 'ip' && n.ip });
-    const totalIPs = ipNodes.length;
-    let successfulEnrichments = 0;
-
-    if (totalIPs === 0) {
-        showToast('No IP nodes found to enrich', 'info');
-        completeProgressBar();
-        return;
-    }
-
-    const batchSize = 50;
-    const delayBetweenBatches = 200;
-    const totalBatches = Math.ceil(totalIPs / batchSize);
-    const estimatedTimeMs = (totalIPs * RATE_LIMIT_MS) + (totalBatches - 1) * delayBetweenBatches;
-    const estimatedSeconds = Math.ceil(estimatedTimeMs / 1000);
-    const estimatedMinutes = Math.floor(estimatedSeconds / 60);
-    const remainingSeconds = estimatedSeconds % 60;
-    const timeEstimateStr = estimatedMinutes > 0 
-        ? `${estimatedMinutes}m ${remainingSeconds}s` 
-        : `${estimatedSeconds}s`;
-
-    showToast(`Estimated time for GreyNoise enrichment: ~${timeEstimateStr}`, 'info');
-    document.getElementById('progress-bar').textContent = 
-        `GreyNoise Enrichment: 0/${totalIPs} IPs (0%) - Est. ${timeEstimateStr}`;
-
-    async function processBatch(batch) {
-        const promises = batch.map(node => {
-            if (activeTaskController && activeTaskController.signal.aborted) {
-                return Promise.resolve(null);
-            }
-            return throttledEnrichGreyNoise(node.ip, node.id, true)
-                .then(() => successfulEnrichments++)
-                .catch(error => console.error(`Failed to enrich ${node.ip}: ${error.message}`));
-        });
-        await Promise.all(promises);
-    }
-
-    let lastProgressUpdate = 0;
-    const progressUpdateInterval = 1000;
-
-    for (let i = 0; i < totalIPs; i += batchSize) {
-        if (activeTaskController && activeTaskController.signal.aborted) {
-            showToast('GreyNoise enrichment stopped', 'info');
-            document.getElementById('progress-bar').textContent = 
-                `GreyNoise Enrichment: Stopped at ${successfulEnrichments}/${totalIPs} IPs`;
-            break;
-        }
-
-        const batch = ipNodes.slice(i, Math.min(i + batchSize, totalIPs));
-        await processBatch(batch);
-
-        const currentTime = Date.now();
-        if (currentTime - lastProgressUpdate >= progressUpdateInterval || i + batchSize >= totalIPs) {
-            const progress = ((successfulEnrichments / totalIPs) * 100).toFixed(1);
-            document.getElementById('progress-bar').textContent = 
-                `GreyNoise Enrichment: ${successfulEnrichments}/${totalIPs} IPs (${progress}%)`;
-            lastProgressUpdate = currentTime;
-            updateSelectOptions();
-        }
-
-        await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
-    }
-
-    updateNodeSizes();
-    updateSelectOptions();
-    await stabilizeNetwork();
-    ensureInteractionSettings();
-
-    if (!(activeTaskController && activeTaskController.signal.aborted)) {
-        completeProgressBar();
-        showToast(`GreyNoise enrichment completed: ${successfulEnrichments}/${totalIPs} IPs enriched`, 'success');
-    }
-
-    if (window.innerWidth <= 768) {
-        const controls = document.getElementById('controls');
-        controls.classList.add('collapsed');
-        document.getElementById('myNetwork').style.display = 'block';
-        network.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
-    }
-}
-
 
 
 async function enrichAllGreyNoise() {
@@ -7640,6 +8056,887 @@ function addOrGetNode(type, value, newNodes, properties) {
     });
     return nodeId;
 }
+
+//security trails API key save
+function saveSecuritytrailsApiKey() {
+    securitytrailsApiKey = document.getElementById('securitytrailsApiKey').value.trim();
+    const storeKey = document.getElementById('storeSecuritytrailsKey').checked;
+    if (securitytrailsApiKey) {
+        if (storeKey) localStorage.setItem('securitytrailsApiKey', securitytrailsApiKey);
+        else localStorage.removeItem('securitytrailsApiKey');
+        showToast('SecurityTrails API key saved successfully!', 'success');
+    } else {
+        localStorage.removeItem('securitytrailsApiKey');
+        showToast('Please enter a valid SecurityTrails API key.', 'error');
+    }
+}
+
+
+
+//Export visable only
+
+function exportVisibleGraph() {
+    // Filter for only visible nodes
+    const visibleNodes = nodes.get().filter(node => !node.hidden).map(node => ({ 
+        id: node.id,
+        type: node.type,
+        name: node.name,
+        email: node.email,
+        ip: node.ip,
+        domain: node.domain,
+        organization: node.organization,
+        portType: node.portType,
+        portNumber: node.portNumber,
+        address: node.address,
+        accountNumber: node.accountNumber,
+        sortCode: node.sortCode,
+        techName: node.techName,
+        techVersion: node.techVersion,
+        deviceCategory: node.deviceCategory,
+        deviceName: node.deviceName,
+        malwareName: node.malwareName,
+        malwareType: node.malwareType,
+        country: node.country,
+        asn: node.asn,
+        city: node.city,
+        value: node.value,
+        vulnName: node.vulnName,
+        cve: node.cve,
+        url: node.url,
+        x: node.x,
+        y: node.y,
+        label: node.label,
+        title: node.title,
+        color: node.color,
+        size: node.size
+    }));
+
+    // Get all edges and filter for those connecting visible nodes
+    const visibleNodeIds = new Set(visibleNodes.map(node => node.id));
+    const visibleEdges = edges.get().filter(edge => 
+        !edge.hidden && 
+        visibleNodeIds.has(edge.from) && 
+        visibleNodeIds.has(edge.to)
+    ).map(edge => ({
+        id: edge.id,
+        from: edge.from,
+        to: edge.to,
+        label: edge.label
+    }));
+
+    // Create export data object
+    const exportData = {
+        nodes: visibleNodes,
+        edges: visibleEdges
+    };
+
+    // Convert to JSON and trigger download
+    const json = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `visible_network_graph_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    showToast('Visible graph exported to JSON', 'success');
+}
+
+
+// Single Domain Enrichment with SecurityTrails
+const throttledEnrichSecurityTrailsDomain = throttleRequest(async function enrichSecurityTrailsDomain(domain, domainNodeId, isBulk = false, signal) {
+    if (!securitytrailsApiKey && !ignoreApiKeysViaProxy) {
+        showToast('Please set your SecurityTrails API key in the "Config" tab first.', 'error');
+        return;
+    }
+
+    if (!isBulk) network.setOptions({ physics: { enabled: false } });
+
+    try {
+        const baseUrl = `https://api.securitytrails.com/v1/domain/${domain}/subdomains`;
+        const url = constructUrl(baseUrl);
+        console.log('Requesting SecurityTrails URL:', url);
+
+        const response = await fetch(url, {
+            headers: { 
+                'apikey': securitytrailsApiKey, // Updated to 'apikey'
+                'Accept': 'application/json' 
+            },
+            signal
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            if (response.status === 404) {
+                showToast(`No subdomains found for domain ${domain} in SecurityTrails`, 'info');
+                return;
+            }
+            throw new Error(`Failed to fetch SecurityTrails data: ${response.statusText} - ${errorText}`);
+        }
+
+        const data = await response.json();
+        console.log('SecurityTrails Response:', data);
+
+        if (!data.subdomains || data.subdomains.length === 0) {
+            showToast(`No subdomains associated with domain ${domain} in SecurityTrails`, 'info');
+            return;
+        }
+
+        const newNodes = [];
+        const newEdges = [];
+        const existingDomains = new Map(nodes.get({ filter: n => n.type === 'domain' }).map(n => [n.domain, n.id]));
+
+        data.subdomains.forEach(subdomain => {
+            const fullSubdomain = `${subdomain}.${domain}`;
+            let subdomainId = existingDomains.get(fullSubdomain);
+            if (!subdomainId) {
+                subdomainId = nextId++;
+                newNodes.push({
+                    id: subdomainId,
+                    type: 'domain',
+                    label: `Subdomain: ${fullSubdomain}`,
+                    title: `Subdomain: ${fullSubdomain}\nFrom SecurityTrails`,
+                    color: { background: '#60a5fa' },
+                    domain: fullSubdomain
+                });
+                existingDomains.set(fullSubdomain, subdomainId);
+            }
+            const edgeId = `${domainNodeId}-${subdomainId}-SubdomainOf`;
+            if (!edges.get(edgeId) && !newEdges.some(e => e.id === edgeId)) {
+                newEdges.push({ id: edgeId, from: domainNodeId, to: subdomainId, label: 'Subdomain of' });
+            }
+        });
+
+        if (newNodes.length > 0) nodes.add(newNodes);
+        if (newEdges.length > 0) edges.add(newEdges);
+
+        updateNodeSizes();
+        updateSelectOptions();
+        if (!isBulk) {
+            await stabilizeNetwork();
+            showToast(`Domain ${domain} enriched with ${data.subdomains.length} subdomains from SecurityTrails`, 'success');
+        }
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            showToast(`Enrichment of domain ${domain} cancelled`, 'info');
+            return;
+        }
+        console.error(`Error enriching domain ${domain} with SecurityTrails: ${error.message}`);
+        showToast(`Error enriching domain ${domain}: ${error.message}`, 'error');
+        if (!isBulk) await stabilizeNetwork();
+    }
+}, SECURITYTRAILS_RATE_LIMIT_MS);
+
+
+async function enrichAllSecurityTrails() {
+    if (!securitytrailsApiKey && !ignoreApiKeysViaProxy) {
+        showToast('Please set your SecurityTrails API key in the "Config" tab first.', 'error');
+        return;
+    }
+
+    showProgressBar();
+    network.setOptions({ physics: { enabled: false } });
+    const domainNodes = nodes.get({ filter: n => n.type === 'domain' && n.domain });
+    const totalDomains = domainNodes.length;
+    let successfulEnrichments = 0;
+
+    if (totalDomains === 0) {
+        showToast('No domain nodes found to enrich', 'info');
+        completeProgressBar();
+        return;
+    }
+
+    const delayBetweenRequests = SECURITYTRAILS_RATE_LIMIT_MS; // Use the defined rate limit
+    const estimatedTimeMs = totalDomains * delayBetweenRequests;
+    const estimatedSeconds = Math.ceil(estimatedTimeMs / 1000);
+    const timeEstimateStr = estimatedSeconds > 60 
+        ? `${Math.floor(estimatedSeconds / 60)}m ${estimatedSeconds % 60}s` 
+        : `${estimatedSeconds}s`;
+
+    showToast(`Starting SecurityTrails enrichment for ${totalDomains} domains`, 'info');
+    document.getElementById('progress-bar').textContent = `SecurityTrails Enrichment: 0/${totalDomains} Domains (0%) - Est. ${timeEstimateStr}`;
+
+    for (let i = 0; i < totalDomains; i++) {
+        if (activeTaskController?.signal.aborted) {
+            showToast('SecurityTrails enrichment stopped', 'info');
+            document.getElementById('progress-bar').textContent = `SecurityTrails Enrichment: Stopped at ${successfulEnrichments}/${totalDomains} Domains`;
+            break;
+        }
+
+        const node = domainNodes[i];
+        let attempts = 0;
+        const maxAttempts = 3;
+        let success = false;
+
+        while (attempts < maxAttempts && !success) {
+            try {
+                await throttledEnrichSecurityTrailsDomain(node.domain, node.id, true);
+                successfulEnrichments++;
+                success = true;
+            } catch (error) {
+                if (error.message.includes('429')) {
+                    attempts++;
+                    if (attempts < maxAttempts) {
+                        const backoffTime = delayBetweenRequests * attempts; // Exponential backoff: 2s, 4s, 6s
+                        showToast(`Rate limit hit for ${node.domain}, retrying in ${backoffTime / 1000}s (Attempt ${attempts}/${maxAttempts})`, 'warning');
+                        await new Promise(resolve => setTimeout(resolve, backoffTime));
+                    } else {
+                        showToast(`Failed to enrich ${node.domain} after ${maxAttempts} attempts: ${error.message}`, 'error');
+                    }
+                } else {
+                    showToast(`Error enriching ${node.domain}: ${error.message}`, 'error');
+                    break; // Non-429 errors skip retries
+                }
+            }
+        }
+
+        const progress = ((successfulEnrichments / totalDomains) * 100).toFixed(1);
+        document.getElementById('progress-bar').textContent = `SecurityTrails Enrichment: ${successfulEnrichments}/${totalDomains} Domains (${progress}%)`;
+
+        // Wait between requests, even on success, to respect rate limits
+        if (i < totalDomains - 1) { // No delay after the last domain
+            await new Promise(resolve => setTimeout(resolve, delayBetweenRequests));
+        }
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    ensureInteractionSettings();
+    completeProgressBar();
+    showToast(`SecurityTrails enrichment completed: ${successfulEnrichments}/${totalDomains} domains enriched`, 'success');
+}
+
+
+
+// Multiple Domain Enrichment with SecurityTrails (Context Menu)
+const throttledEnrichSecurityTrailsDomainMultiple = throttleRequest(async function enrichSecurityTrailsDomainMultiple(domains, nodeIds) {
+    if (!Array.isArray(domains) || !Array.isArray(nodeIds) || domains.length !== nodeIds.length) {
+        showToast('Invalid input for multiple SecurityTrails enrichment', 'error');
+        return;
+    }
+
+    if (!securitytrailsApiKey && !ignoreApiKeysViaProxy) {
+        showToast('Please set your SecurityTrails API key in the "Config" tab first.', 'error');
+        return;
+    }
+
+    showProgressBar();
+    let successfulEnrichments = 0;
+    const totalDomains = domains.length;
+
+    document.getElementById('progress-bar').textContent = `SecurityTrails Enrichment: 0/${totalDomains} Domains (0%)`;
+
+    for (let i = 0; i < domains.length; i++) {
+        if (activeTaskController?.signal.aborted) {
+            showToast('SecurityTrails enrichment stopped', 'info');
+            document.getElementById('progress-bar').textContent = `SecurityTrails Enrichment: Stopped at ${successfulEnrichments}/${totalDomains} Domains`;
+            break;
+        }
+        await throttledEnrichSecurityTrailsDomain(domains[i], nodeIds[i], true)
+            .then(() => successfulEnrichments++)
+            .catch(error => console.error(`Failed to enrich ${domains[i]}: ${error.message}`));
+        
+        const progress = ((successfulEnrichments / totalDomains) * 100).toFixed(1);
+        document.getElementById('progress-bar').textContent = `SecurityTrails Enrichment: ${successfulEnrichments}/${totalDomains} Domains (${progress}%)`;
+        await new Promise(resolve => setTimeout(resolve, 200)); // Small delay between requests
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    completeProgressBar();
+    showToast(`Enriched ${successfulEnrichments}/${domains.length} domains with SecurityTrails subdomains`, 'success');
+}, SECURITYTRAILS_RATE_LIMIT_MS);
+
+//Refang IOCs
+
+function refangText(text) {
+    if (typeof text !== 'string') return text;
+
+    let refanged = text;
+
+    // URL-specific defanging patterns
+    refanged = refanged.replace(/hxxps/gi, 'https');          // hxxps → https
+    refanged = refanged.replace(/hxxp/gi, 'http');           // hxxp → http
+    refanged = refanged.replace(/\[hxxps\]/gi, 'https');     // [hxxps] → https
+    refanged = refanged.replace(/\[hxxp\]/gi, 'http');       // [hxxp] → http
+    refanged = refanged.replace(/\[https\]/gi, 'https');     // [https] → https
+    refanged = refanged.replace(/\[http\]/gi, 'http');       // [http] → http
+    refanged = refanged.replace(/\[colon\]/gi, ':');         // [colon] → :
+    refanged = refanged.replace(/\[\/\]/g, '/');             // [/] → /
+    refanged = refanged.replace(/\[ \/\]/g, '/');            // [ /] → /
+    refanged = refanged.replace(/\[slash\]/gi, '/');         // [slash] → /
+    refanged = refanged.replace(/\[\.\]/g, '.');             // [.] → .
+    refanged = refanged.replace(/\[dot\]/gi, '.');           // [dot] or [DOT] → .
+    refanged = refanged.replace(/\[ \. \]/g, '.');           // [ . ] → .
+
+    // Email-specific defanging (unchanged)
+    refanged = refanged.replace(/\[at\]/gi, '@');            // [at] or [AT] → @
+    refanged = refanged.replace(/\[ @ \]/g, '@');            // [ @ ] → @
+    refanged = refanged.replace(/ at /gi, '@');              // " at " → @
+
+    // General cleanup
+    refanged = refanged.replace(/\[\s*\]/g, '');             // Empty brackets [] → ''
+    refanged = refanged.replace(/\[([^\]]+)\]/g, '$1');      // [text] → text (non-special cases)
+    refanged = refanged.replace(/\s+/g, ' ').trim();         // Normalize spaces
+
+    return refanged;
+}
+
+
+
+//notes 
+function editNodeNotes(nodeId) {
+    console.log('Attempting to open notes for node:', nodeId);
+    const node = nodes.get(nodeId);
+    if (!node) {
+        showToast('Node not found', 'error');
+        return;
+    }
+
+    const modal = document.getElementById('notes-modal');
+    const notesTextarea = document.getElementById('notes-textarea');
+    if (!modal || !notesTextarea) {
+        console.error('Modal or textarea not found');
+        showToast('Notes interface unavailable', 'error');
+        return;
+    }
+
+    // Get the modal title element
+    const modalTitle = modal.querySelector('h3');
+    if (!modalTitle) {
+        console.error('Modal title element not found');
+        showToast('Modal title unavailable', 'error');
+        return;
+    }
+
+    // Determine the entity name
+    let entityName;
+    switch (node.type) {
+        case 'contact':
+            entityName = node.name || node.email || node.label.split('\n')[0];
+            break;
+        case 'ip':
+            entityName = node.ip || node.label.split('\n')[0];
+            break;
+        case 'domain':
+            entityName = node.domain || node.label.split('\n')[0];
+            break;
+        case 'organization':
+            entityName = node.organization || node.label.split('\n')[0];
+            break;
+        case 'port':
+            entityName = `${node.portType}/${node.portNumber}` || node.label.split('\n')[0];
+            break;
+        case 'wallet':
+            entityName = node.address || node.label.split('\n')[0];
+            break;
+        case 'bank':
+            entityName = node.accountNumber || node.label.split('\n')[0];
+            break;
+        case 'technology':
+            entityName = node.techName || node.label.split('\n')[0];
+            break;
+        case 'device':
+            entityName = node.deviceName || node.label.split('\n')[0];
+            break;
+        case 'malware':
+            entityName = node.malwareName || node.label.split('\n')[0];
+            break;
+        case 'vulnerability':
+            entityName = node.vulnName || node.cve || node.label.split('\n')[0];
+            break;
+        default:
+            entityName = node.label.split('\n')[0]; // Fallback to first line of label
+    }
+
+    // Set the modal title
+    modalTitle.textContent = `Edit Notes for ${entityName}`;
+
+    currentEditingNodeId = nodeId;
+    notesTextarea.value = node.notes || '';
+
+    // Remove existing overlay if any
+    let overlay = document.getElementById('modal-overlay');
+    if (overlay) overlay.remove();
+
+    // Create new overlay
+    overlay = document.createElement('div');
+    overlay.id = 'modal-overlay';
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1999;
+    `;
+    document.body.appendChild(overlay);
+
+    // Reset modal styles
+    modal.style.position = 'fixed';
+    modal.style.top = '50%';
+    modal.style.left = '50%';
+    modal.style.transform = 'translate(-50%, -50%)';
+    modal.style.zIndex = '2000';
+    modal.style.display = 'block';
+
+    // Force reflow
+    void modal.offsetWidth;
+    console.log('Modal display set to:', modal.style.display);
+
+    notesTextarea.focus();
+
+    // Remove any existing click handler to prevent accumulation
+    if (window.notesClickHandler) {
+        document.removeEventListener('click', window.notesClickHandler);
+    }
+
+    // Define and add new click handler
+    const clickHandler = (event) => {
+        if (modal.style.display === 'block' && !modal.contains(event.target)) {
+            hideNotesModal();
+        }
+    };
+    setTimeout(() => {
+        document.addEventListener('click', clickHandler);
+        window.notesClickHandler = clickHandler; // Store globally for cleanup
+    }, 100);
+
+    // Remove any existing resize handler
+    if (modal.dataset.resizeHandler) {
+        window.removeEventListener('resize', modal.dataset.resizeHandler);
+    }
+
+    // Add resize handler
+    const resizeHandler = () => {
+        modal.style.top = '50%';
+        modal.style.left = '50%';
+        modal.style.transform = 'translate(-50%, -50%)';
+    };
+    window.addEventListener('resize', resizeHandler);
+    modal.dataset.resizeHandler = resizeHandler;
+}
+
+
+// save notes
+
+function saveNodeNotes() {
+    if (currentEditingNodeId === null) return;
+
+    const node = nodes.get(currentEditingNodeId);
+    if (!node) {
+        showToast('Node not found', 'error');
+        hideNotesModal();
+        return;
+    }
+
+    const notesTextarea = document.getElementById('notes-textarea');
+    const newNotes = notesTextarea.value.trim();
+
+    if (newNotes.length > 1000) {
+        showToast('Notes cannot exceed 1000 characters', 'error');
+        return;
+    }
+
+    // Define configs as in createNodeData (or move this to a global scope if reused elsewhere)
+    const configs = {
+        contact: {
+            title: v => `Contact\nName: ${v.name}${v.email ? '\nEmail: ' + v.email : ''}${v.notes ? '\nNotes: ' + v.notes : ''}`
+        },
+        ip: {
+            title: v => `IP Address: ${v.ip}${v.notes ? '\nNotes: ' + v.notes : ''}`
+        },
+        domain: {
+            title: v => `Domain: ${v.domain}${v.notes ? '\nNotes: ' + v.notes : ''}`
+        },
+        organization: {
+            title: v => `Organization: ${v.organization}${v.notes ? '\nNotes: ' + v.notes : ''}`
+        },
+        port: {
+            title: v => `Port\nType: ${v.portType}\nNumber: ${v.portNumber}${v.notes ? '\nNotes: ' + v.notes : ''}`
+        },
+        wallet: {
+            title: v => `Wallet\nAddress: ${v.address}${v.notes ? '\nNotes: ' + v.notes : ''}`
+        },
+        bank: {
+            title: v => `Bank Account\nAccount Number: ${v.accountNumber}\nSort Code: ${v.sortCode}${v.notes ? '\nNotes: ' + v.notes : ''}`
+        },
+        technology: {
+            title: v => `Technology\nName: ${v.techName}${v.techVersion ? '\nVersion: ' + v.techVersion : ''}${v.notes ? '\nNotes: ' + v.notes : ''}`
+        },
+        device: {
+            title: v => `Device\nName: ${v.deviceName}\nCategory: ${v.deviceCategory}${v.notes ? '\nNotes: ' + v.notes : ''}`
+        },
+        malware: {
+            title: v => `Malware\nName: ${v.malwareName}\nType: ${v.malwareType}${v.notes ? '\nNotes: ' + v.notes : ''}`
+        },
+        vulnerability: {
+            title: v => `Vulnerability\nName: ${v.vulnName}${v.cve ? '\nCVE: ' + v.cve : ''}${v.url ? '\nURL: ' + v.url : ''}${v.notes ? '\nNotes: ' + v.notes : ''}`
+        },
+        // Add other types as needed
+    };
+
+    const config = configs[node.type];
+    if (!config) {
+        showToast(`Unsupported node type: ${node.type}`, 'error');
+        hideNotesModal();
+        return;
+    }
+
+    const updatedNode = { ...node, notes: newNotes };
+    nodes.update({
+        id: currentEditingNodeId,
+        notes: newNotes,
+        title: config.title(updatedNode) // Call the function directly
+    });
+
+    saveStateAfterOperation();
+    showToast('Notes saved successfully', 'success');
+    hideNotesModal();
+}
+
+function hideNotesModal() {
+    const modal = document.getElementById('notes-modal');
+    if (!modal) return;
+
+    modal.style.display = 'none';
+    const overlay = document.getElementById('modal-overlay');
+    if (overlay) overlay.remove();
+
+    // Clean up click handler
+    if (window.notesClickHandler) {
+        document.removeEventListener('click', window.notesClickHandler);
+        delete window.notesClickHandler;
+    }
+
+    // Clean up resize handler
+    const resizeHandler = modal.dataset.resizeHandler;
+    if (resizeHandler) {
+        window.removeEventListener('resize', resizeHandler);
+        delete modal.dataset.resizeHandler;
+    }
+
+    currentEditingNodeId = null;
+}
+
+
+
+
+
+// delete nodes
+
+function deleteNodes(nodeIds) {
+    console.log('deleteNodes called with:', nodeIds);
+    
+    if (!nodeIds || !Array.isArray(nodeIds) || nodeIds.length === 0) {
+        showToast('No nodes selected to delete', 'error');
+        return;
+    }
+
+    // Filter out invalid or non-existent node IDs
+    const validNodeIds = nodeIds.filter(id => {
+        const node = nodes.get(id);
+        if (!node) {
+            console.warn(`Node with ID ${id} not found`);
+            return false;
+        }
+        return true;
+    });
+
+    if (validNodeIds.length === 0) {
+        showToast('No valid nodes found to delete', 'error');
+        return;
+    }
+
+    // Remove all edges connected to these nodes
+    edges.forEach(edge => {
+        if (validNodeIds.includes(edge.from) || validNodeIds.includes(edge.to)) {
+            edges.remove({ id: edge.id });
+        }
+    });
+
+    // Remove the nodes
+    nodes.remove(validNodeIds);
+
+    // Update UI and network
+    updateNodeSizes();
+    updateSelectOptions();
+    stabilizeNetwork();
+    saveStateAfterOperation();
+
+    showToast(`${validNodeIds.length} node${validNodeIds.length > 1 ? 's' : ''} deleted`, 'success');
+}
+
+// save URLHAUS keys
+
+function saveUrlhausApiKey() {
+    urlhausApiKey = document.getElementById('urlhausApiKey').value.trim();
+    const storeKey = document.getElementById('storeUrlhausKey').checked;
+    if (urlhausApiKey) {
+        if (storeKey) {
+            localStorage.setItem('urlhausApiKey', urlhausApiKey);
+            showToast('URLhaus API key saved successfully!', 'success');
+        } else {
+            localStorage.removeItem('urlhausApiKey');
+            showToast('URLhaus API key set for this session only', 'success');
+        }
+    } else {
+        localStorage.removeItem('urlhausApiKey');
+        showToast('Please enter a valid URLhaus API key.', 'error');
+    }
+}
+
+
+// URL HAUS
+
+const throttledEnrichURLhaus = throttleRequest(async function enrichURLhaus(url, urlNodeId, isBulk = false, signal) {
+    if (!urlhausApiKey && !ignoreApiKeysViaProxy) {
+        showToast('Please set your URLhaus API key in the "Config" tab first.', 'error');
+        return;
+    }
+
+    if (!isBulk) network.setOptions({ physics: { enabled: false } });
+
+    try {
+        const baseUrl = 'https://urlhaus-api.abuse.ch/v1/url/';
+        const urlToQuery = constructUrl(baseUrl);
+        const postData = `url=${encodeURIComponent(url)}`;
+        const headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept': 'application/json'
+        };
+        if (urlhausApiKey && !ignoreApiKeysViaProxy) {
+            headers['Auth-Key'] = urlhausApiKey;
+        }
+
+        const response = await fetch(urlToQuery, {
+            method: 'POST',
+            headers: headers,
+            body: postData,
+            signal
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Failed to fetch URLhaus data: ${response.statusText} - ${errorText}`);
+        }
+
+        const data = await response.json();
+
+        if (data.query_status !== 'ok') {
+            if (data.query_status === 'no_results') {
+                if (!isBulk) showToast(`No URLhaus data found for ${url}`, 'info');
+                return;
+            }
+            throw new Error(`URLhaus query failed: ${data.query_status}`);
+        }
+
+        const newNodes = [];
+        const newEdges = [];
+        const existingNodes = new Map();
+
+        // Cache existing nodes for deduplication
+        nodes.forEach(node => {
+            if (node.type === 'url' && node.url) existingNodes.set(`url:${node.url}`, node.id);
+            if (node.type === 'tag' && node.tag) existingNodes.set(`tag:${node.tag}`, node.id);
+            if (node.type === 'timestamp' && node.timestamp) existingNodes.set(`timestamp:${node.timestamp}`, node.id);
+            if (node.type === 'threat' && node.threat) existingNodes.set(`threat:${node.threat}`, node.id);
+        });
+
+        // URL Status
+        if (data.url_status) {
+            const statusId = existingNodes.get(`tag:${data.url_status}`) || nextId++;
+            if (!existingNodes.has(`tag:${data.url_status}`)) {
+                newNodes.push({
+                    id: statusId,
+                    type: 'tag',
+                    label: `Status: ${data.url_status}`,
+                    title: `URLhaus Status: ${data.url_status}`,
+                    color: { background: '#6d28d9' },
+                    tag: data.url_status
+                });
+                existingNodes.set(`tag:${data.url_status}`, statusId);
+            }
+            newEdges.push({ id: `${urlNodeId}-${statusId}-Status`, from: urlNodeId, to: statusId, label: 'Status' });
+        }
+
+        // Threat Type
+        if (data.threat) {
+            const threatId = existingNodes.get(`threat:${data.threat}`) || nextId++;
+            if (!existingNodes.has(`threat:${data.threat}`)) {
+                newNodes.push({
+                    id: threatId,
+                    type: 'threat',
+                    label: `Threat: ${data.threat}`,
+                    title: `URLhaus Threat: ${data.threat}`,
+                    color: { background: '#ef4444' },
+                    threat: data.threat
+                });
+                existingNodes.set(`threat:${data.threat}`, threatId);
+            }
+            newEdges.push({ id: `${urlNodeId}-${threatId}-Threat`, from: urlNodeId, to: threatId, label: 'Threat' });
+        }
+
+        // Date Added
+        if (data.date_added) {
+            const dateId = existingNodes.get(`timestamp:${data.date_added}`) || nextId++;
+            if (!existingNodes.has(`timestamp:${data.date_added}`)) {
+                newNodes.push({
+                    id: dateId,
+                    type: 'timestamp',
+                    label: `Added: ${data.date_added}`,
+                    title: `Date Added: ${data.date_added}`,
+                    color: { background: '#f97316' },
+                    timestamp: data.date_added
+                });
+                existingNodes.set(`timestamp:${data.date_added}`, dateId);
+            }
+            newEdges.push({ id: `${urlNodeId}-${dateId}-AddedOn`, from: urlNodeId, to: dateId, label: 'Added on' });
+        }
+
+        // Tags
+        if (data.tags && Array.isArray(data.tags)) {
+            data.tags.forEach(tag => {
+                const tagId = existingNodes.get(`tag:${tag}`) || nextId++;
+                if (!existingNodes.has(`tag:${tag}`)) {
+                    newNodes.push({
+                        id: tagId,
+                        type: 'tag',
+                        label: `Tag: ${tag}`,
+                        title: `URLhaus Tag: ${tag}`,
+                        color: { background: '#6d28d9' },
+                        tag: tag
+                    });
+                    existingNodes.set(`tag:${tag}`, tagId);
+                }
+                newEdges.push({ id: `${urlNodeId}-${tagId}-Tagged`, from: urlNodeId, to: tagId, label: 'Tagged' });
+            });
+        }
+
+        // Update node with URLhaus reference
+        nodes.update({
+            id: urlNodeId,
+            title: `${nodes.get(urlNodeId).title || url}\nURLhaus Ref: ${data.urlhaus_reference || 'N/A'}`
+        });
+
+        if (newNodes.length) nodes.add(newNodes);
+        if (newEdges.length) edges.add(newEdges);
+
+        updateNodeSizes();
+        updateSelectOptions();
+        if (!isBulk) {
+            await stabilizeNetwork();
+            showToast(`URL ${url} enriched with URLhaus data`, 'success');
+        }
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            showToast(`Enrichment of URL ${url} cancelled`, 'info');
+            return;
+        }
+        console.error(`Error enriching URL ${url} with URLhaus: ${error.message}`);
+        showToast(`Error enriching URL ${url}: ${error.message}`, 'error');
+        if (!isBulk) await stabilizeNetwork();
+    }
+}, RATE_LIMIT_MS);
+
+const throttledEnrichURLhausMultiple = throttleRequest(async function enrichURLhausMultiple(urls, nodeIds) {
+    if (!Array.isArray(urls) || !Array.isArray(nodeIds) || urls.length !== nodeIds.length) {
+        showToast('Invalid input for multiple URLhaus enrichment', 'error');
+        return;
+    }
+
+    if (!urlhausApiKey && !ignoreApiKeysViaProxy) {
+        showToast('Please set your URLhaus API key in the "Config" tab first.', 'error');
+        return;
+    }
+
+    showProgressBar();
+    network.setOptions({ physics: { enabled: false } });
+    const totalURLs = urls.length;
+    let successfulEnrichments = 0;
+
+    document.getElementById('progress-bar').textContent = `URLhaus Enrichment: 0/${totalURLs} URLs (0%)`;
+
+    for (let i = 0; i < totalURLs; i++) {
+        if (activeTaskController?.signal.aborted) {
+            showToast('URLhaus enrichment stopped', 'info');
+            document.getElementById('progress-bar').textContent = `URLhaus Enrichment: Stopped at ${successfulEnrichments}/${totalURLs} URLs`;
+            break;
+        }
+        await throttledEnrichURLhaus(urls[i], nodeIds[i], true);
+        successfulEnrichments++;
+        const progress = ((successfulEnrichments / totalURLs) * 100).toFixed(1);
+        document.getElementById('progress-bar').textContent = `URLhaus Enrichment: ${successfulEnrichments}/${totalURLs} URLs (${progress}%)`;
+        await new Promise(resolve => setTimeout(resolve, 200)); // Rate limiting
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    completeProgressBar();
+    showToast(`Enriched ${successfulEnrichments}/${totalURLs} URLs with URLhaus`, 'success');
+}, RATE_LIMIT_MS);
+
+async function enrichAllURLhaus() {
+    if (!urlhausApiKey && !ignoreApiKeysViaProxy) {
+        showToast('Please set your URLhaus API key in the "Config" tab first.', 'error');
+        return;
+    }
+
+    showProgressBar();
+    network.setOptions({ physics: { enabled: false } });
+    const urlNodes = nodes.get({ filter: n => n.type === 'url' && n.url });
+    const totalURLs = urlNodes.length;
+    let successfulEnrichments = 0;
+
+    if (totalURLs === 0) {
+        showToast('No URL nodes found to enrich', 'info');
+        completeProgressBar();
+        return;
+    }
+
+    const batchSize = 10;
+    const delayBetweenBatches = 500;
+    const totalBatches = Math.ceil(totalURLs / batchSize);
+    const estimatedTimeMs = totalBatches * delayBetweenBatches;
+    const timeEstimateStr = Math.ceil(estimatedTimeMs / 60000) + 'm';
+
+    document.getElementById('progress-bar').textContent = `URLhaus Enrichment: 0/${totalURLs} URLs (0%) - Est. ${timeEstimateStr}`;
+
+    for (let i = 0; i < totalURLs; i += batchSize) {
+        if (activeTaskController?.signal.aborted) {
+            showToast('URLhaus enrichment stopped', 'info');
+            document.getElementById('progress-bar').textContent = `URLhaus Enrichment: Stopped at ${successfulEnrichments}/${totalURLs} URLs`;
+            break;
+        }
+
+        const batch = urlNodes.slice(i, Math.min(i + batchSize, totalURLs));
+        const promises = batch.map(node => 
+            throttledEnrichURLhaus(node.url, node.id, true)
+                .then(() => successfulEnrichments++)
+                .catch(error => console.error(`Error for ${node.url}: ${error.message}`))
+        );
+
+        await Promise.all(promises);
+
+        const progress = ((successfulEnrichments / totalURLs) * 100).toFixed(1);
+        document.getElementById('progress-bar').textContent = `URLhaus Enrichment: ${successfulEnrichments}/${totalURLs} URLs (${progress}%)`;
+        await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    ensureInteractionSettings();
+    completeProgressBar();
+    showToast(`URLhaus enrichment completed: ${successfulEnrichments}/${totalURLs} URLs enriched`, 'success');
+}
+
+
 
 // Add this at the end of the script section
 window.addEventListener('beforeunload', function() {
