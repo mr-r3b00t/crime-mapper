@@ -4041,29 +4041,15 @@ async function importIOCsFromFile() {
     reader.readAsText(file);
 }
 
-// Helper function to break down a domain into all subdomain levels, treating the last part as the TLD
-function extractDomainLevels(fullDomain) {
-    const parts = fullDomain.toLowerCase().split('.');
-    const levels = [];
-
-    // Generate all subdomain levels from full domain to TLD
-    for (let i = 0; i < parts.length; i++) {
-        const subdomain = parts.slice(i).join('.');
-        levels.push(subdomain);
-    }
-
-    return levels; // e.g., ['www.ncsc.gov.uk', 'ncsc.gov.uk', 'gov.uk', 'uk']
-}
-
 async function processIOCs(text) {
     network.setOptions({ physics: { enabled: false } });
 
-    // Regex patterns (unchanged)
-    const urlRegex = /^(https?:\/\/)([^\s/:]+)(?::(\d{1,5}))?(\/.*)?$/i;
-    const domainRegex = /^([a-zA-Z0-9-_]+\.)+[a-zA-Z]{2,}$/;
+    // Regex patterns
+    const urlRegex = /^(https?:\/\/)([^\s/:]+)(?::(\d{1,5}))?(\/.*)?$/i; // Matches http(s)://<host>[:port][/path]
+    const domainRegex = /^([a-zA-Z0-9-_]+\.)+[a-zA-Z]{2,}$/; // Matches domain with TLD
     const ipRegex = { 
         ipv4: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/, 
-        ipv6: /^([0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}$/ 
+        ipv6: /^([0-9a-fA-F]{0,4}:){0,7}[0-9a-fA-F]{0,4}(:[0-9a-fA-F]{0,4}){0,7}$/ // Updated for shorthand IPv6
     };
     const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
     const hashRegex = {
@@ -4073,17 +4059,18 @@ async function processIOCs(text) {
     };
     const hashPattern = /[0-9a-fA-F]{32,64}/g;
 
-    // Split text into tokens (unchanged)
+    // Split text into tokens
     const tokens = text.split(/[\s,\n]+/).filter(token => token.trim().length > 0);
     console.log('Tokens:', tokens);
 
-    // Extract matches (unchanged)
+    // Extract matches
     const urlMatches = new Set();
     const ipMatches = new Set();
     const domainMatches = new Set();
     const emailMatches = new Set(tokens.map(token => token.match(emailRegex)?.[0]).filter(Boolean));
     const hashCandidates = new Set(tokens.map(token => token.match(hashPattern)?.[0]).filter(Boolean));
 
+    // Process each token
     for (const token of tokens) {
         const urlMatch = token.match(urlRegex);
         if (urlMatch) {
@@ -4091,6 +4078,7 @@ async function processIOCs(text) {
             urlMatches.add(token);
             console.log(`URL Match: ${token}, Protocol: ${protocol}, Host: ${host}, Port: ${port || 'none'}, Path: ${path || 'none'}`);
 
+            // Determine if host is IP or domain
             if (ipRegex.ipv4.test(host) || ipRegex.ipv6.test(host)) {
                 ipMatches.add(host);
             } else if (domainRegex.test(host)) {
@@ -4099,18 +4087,20 @@ async function processIOCs(text) {
             continue;
         }
 
+        // Check for standalone IPs
         if (ipRegex.ipv4.test(token) || ipRegex.ipv6.test(token)) {
             ipMatches.add(token);
             continue;
         }
 
+        // Check for standalone domains
         if (domainRegex.test(token) && !urlMatches.has(token)) {
             domainMatches.add(token);
             continue;
         }
     }
 
-    // Filter hash candidates (unchanged)
+    // Filter hash candidates
     const hashMatches = new Set();
     hashCandidates.forEach(hash => {
         if (hashRegex.sha256.test(hash)) hashMatches.add({ value: hash, type: 'sha256' });
@@ -4130,7 +4120,7 @@ async function processIOCs(text) {
     console.log('Email Matches:', Array.from(emailMatches));
     console.log('Hash Matches:', Array.from(hashMatches));
 
-    // Maps for deduplication (unchanged)
+    // Maps for deduplication
     const existingNodes = new Map();
     nodes.forEach(node => {
         if (node.type === 'url' && node.url) existingNodes.set(`url:${node.url}`, node);
@@ -4145,6 +4135,15 @@ async function processIOCs(text) {
     const newEdges = [];
     let processedCount = 0;
     const batchSize = 50;
+
+    // Helper function to extract apex domain
+    function getApexDomain(fullDomain) {
+        const parts = fullDomain.split('.');
+        if (parts.length >= 2) {
+            return parts.slice(-2).join('.'); // Last two parts (e.g., "gov.uk")
+        }
+        return fullDomain; // Fallback if no TLD (unlikely)
+    }
 
     // Process URLs
     for (const url of urlMatches) {
@@ -4199,41 +4198,70 @@ async function processIOCs(text) {
                     console.log(`Linked URL ${urlNodeId} to existing IP: ${existingIpNode.id}`);
                 }
             } else if (domainRegex.test(host)) {
-                const domainLevels = extractDomainLevels(host); // e.g., ['www.ncsc.gov.uk', 'ncsc.gov.uk', 'gov.uk', 'uk']
-                let previousNodeId = urlNodeId;
-                let previousLabel = 'Belongs to';
+                if (!existingNodes.has(`domain:${host}`)) {
+                    const domainNodeId = nextId++;
+                    newNodes.push({
+                        id: domainNodeId,
+                        type: 'domain',
+                        label: `Domain: ${host}`,
+                        title: `Domain: ${host}`,
+                        color: { background: '#60a5fa' },
+                        domain: host,
+                        size: 20
+                    });
+                    existingNodes.set(`domain:${host}`, { id: domainNodeId });
+                    newEdges.push({
+                        id: `edge_${urlNodeId}_${domainNodeId}_${Date.now()}`,
+                        from: urlNodeId,
+                        to: domainNodeId,
+                        label: 'Belongs to'
+                    });
+                    console.log(`Added Domain node: ${host}, ID: ${domainNodeId}, Edge to URL: ${urlNodeId}`);
 
-                for (const domain of domainLevels) {
-                    if (!existingNodes.has(`domain:${domain}`)) {
-                        const domainNodeId = nextId++;
+                    // Create apex domain
+                    const apexDomain = getApexDomain(host);
+                    if (apexDomain !== host && !existingNodes.has(`domain:${apexDomain}`)) {
+                        const apexNodeId = nextId++;
                         newNodes.push({
-                            id: domainNodeId,
+                            id: apexNodeId,
                             type: 'domain',
-                            label: `Domain: ${domain}`,
-                            title: `Domain: ${domain}`,
+                            label: `Apex: ${apexDomain}`,
+                            title: `Apex Domain: ${apexDomain}`,
                             color: { background: '#60a5fa' },
-                            domain: domain,
+                            domain: apexDomain,
                             size: 20
                         });
-                        existingNodes.set(`domain:${domain}`, { id: domainNodeId });
-                        console.log(`Added Domain node: ${domain}, ID: ${domainNodeId}`);
+                        existingNodes.set(`domain:${apexDomain}`, { id: apexNodeId });
+                        newEdges.push({
+                            id: `edge_${domainNodeId}_${apexNodeId}_${Date.now()}`,
+                            from: domainNodeId,
+                            to: apexNodeId,
+                            label: 'Apex of'
+                        });
+                        console.log(`Added Apex Domain node: ${apexDomain}, ID: ${apexNodeId}, Edge to Domain: ${domainNodeId}`);
+                    } else if (apexDomain !== host) {
+                        const existingApexNode = existingNodes.get(`domain:${apexDomain}`);
+                        newEdges.push({
+                            id: `edge_${domainNodeId}_${existingApexNode.id}_${Date.now()}`,
+                            from: domainNodeId,
+                            to: existingApexNode.id,
+                            label: 'Apex of'
+                        });
+                        console.log(`Linked Domain ${domainNodeId} to existing Apex: ${existingApexNode.id}`);
                     }
-
-                    const domainNode = existingNodes.get(`domain:${domain}`);
+                } else {
+                    const existingDomainNode = existingNodes.get(`domain:${host}`);
                     newEdges.push({
-                        id: `edge_${previousNodeId}_${domainNode.id}_${Date.now()}`,
-                        from: previousNodeId,
-                        to: domainNode.id,
-                        label: previousLabel
+                        id: `edge_${urlNodeId}_${existingDomainNode.id}_${Date.now()}`,
+                        from: urlNodeId,
+                        to: existingDomainNode.id,
+                        label: 'Belongs to'
                     });
-                    console.log(`Linked ${previousNodeId} to Domain: ${domainNode.id} with label '${previousLabel}'`);
-
-                    previousNodeId = domainNode.id;
-                    previousLabel = 'Subdomain of';
+                    console.log(`Linked URL ${urlNodeId} to existing Domain: ${existingDomainNode.id}`);
                 }
             }
 
-            // Handle port (unchanged)
+            // Handle port
             if (port && parseInt(port) >= 1 && parseInt(port) <= 65535) {
                 const portKey = `port:TCP/${port}`;
                 if (!existingNodes.has(portKey)) {
@@ -4278,7 +4306,7 @@ async function processIOCs(text) {
         }
     }
 
-    // Process standalone IPs (unchanged)
+    // Process standalone IPs
     for (const ip of ipMatches) {
         if ((ipRegex.ipv4.test(ip) || ipRegex.ipv6.test(ip)) && !existingNodes.has(`ip:${ip}`)) {
             const nodeId = nextId++;
@@ -4307,47 +4335,40 @@ async function processIOCs(text) {
     // Process standalone Domains
     for (const domain of domainMatches) {
         if (domainRegex.test(domain) && !existingNodes.has(`domain:${domain}`)) {
-            const domainLevels = extractDomainLevels(domain); // e.g., ['www.ncsc.gov.uk', 'ncsc.gov.uk', 'gov.uk', 'uk']
-            let previousNodeId = null;
+            const nodeId = nextId++;
+            newNodes.push({
+                id: nodeId,
+                type: 'domain',
+                label: `Domain: ${domain}`,
+                title: `Domain: ${domain}`,
+                color: { background: '#60a5fa' },
+                domain: domain,
+                size: 20
+            });
+            existingNodes.set(`domain:${domain}`, { id: nodeId });
+            console.log(`Added standalone Domain node: ${domain}, ID: ${nodeId}`);
 
-            for (const subdomain of domainLevels) {
-                if (!existingNodes.has(`domain:${subdomain}`)) {
-                    const nodeId = nextId++;
-                    newNodes.push({
-                        id: nodeId,
-                        type: 'domain',
-                        label: `Domain: ${subdomain}`,
-                        title: `Domain: ${subdomain}`,
-                        color: { background: '#60a5fa' },
-                        domain: subdomain,
-                        size: 20
-                    });
-                    existingNodes.set(`domain:${subdomain}`, { id: nodeId });
-                    console.log(`Added standalone Domain node: ${subdomain}, ID: ${nodeId}`);
-
-                    if (previousNodeId) {
-                        newEdges.push({
-                            id: `edge_${nodeId}_${previousNodeId}_${Date.now()}`,
-                            from: nodeId,
-                            to: previousNodeId,
-                            label: 'Subdomain of'
-                        });
-                        console.log(`Linked ${nodeId} to ${previousNodeId} as subdomain`);
-                    }
-                    previousNodeId = nodeId;
-                } else {
-                    const existingNode = existingNodes.get(`domain:${subdomain}`);
-                    if (previousNodeId && existingNode.id !== previousNodeId) {
-                        newEdges.push({
-                            id: `edge_${existingNode.id}_${previousNodeId}_${Date.now()}`,
-                            from: existingNode.id,
-                            to: previousNodeId,
-                            label: 'Subdomain of'
-                        });
-                        console.log(`Linked existing ${existingNode.id} to ${previousNodeId} as subdomain`);
-                    }
-                    previousNodeId = existingNode.id;
-                }
+            // Create apex domain for standalone domains
+            const apexDomain = getApexDomain(domain);
+            if (apexDomain !== domain && !existingNodes.has(`domain:${apexDomain}`)) {
+                const apexNodeId = nextId++;
+                newNodes.push({
+                    id: apexNodeId,
+                    type: 'domain',
+                    label: `Apex: ${apexDomain}`,
+                    title: `Apex Domain: ${apexDomain}`,
+                    color: { background: '#60a5fa' },
+                    domain: apexDomain,
+                    size: 20
+                });
+                existingNodes.set(`domain:${apexDomain}`, { id: apexNodeId });
+                newEdges.push({
+                    id: `edge_${nodeId}_${apexNodeId}_${Date.now()}`,
+                    from: nodeId,
+                    to: apexNodeId,
+                    label: 'Apex of'
+                });
+                console.log(`Added Apex Domain node: ${apexDomain}, ID: ${apexNodeId}, Edge to Domain: ${nodeId}`);
             }
         }
         processedCount++;
@@ -4360,7 +4381,7 @@ async function processIOCs(text) {
         }
     }
 
-    // Process Emails (unchanged except for domain extraction)
+    // Process Emails
     for (const email of emailMatches) {
         if (!existingNodes.has(`email:${email}`)) {
             const emailNodeId = nextId++;
@@ -4377,38 +4398,53 @@ async function processIOCs(text) {
             });
             existingNodes.set(`email:${email}`, { id: emailNodeId });
 
-            const domainLevels = extractDomainLevels(emailDomain);
-            let previousNodeId = emailNodeId;
-            let previousLabel = 'Registered with';
+            let domainNode = existingNodes.get(`domain:${emailDomain}`);
+            if (!domainNode && domainRegex.test(emailDomain)) {
+                const domainNodeId = nextId++;
+                newNodes.push({
+                    id: domainNodeId,
+                    type: 'domain',
+                    label: `Domain: ${emailDomain}`,
+                    title: `Domain: ${emailDomain}`,
+                    color: { background: '#60a5fa' },
+                    domain: emailDomain,
+                    size: 20
+                });
+                domainNode = { id: domainNodeId };
+                existingNodes.set(`domain:${emailDomain}`, domainNode);
 
-            for (const domain of domainLevels) {
-                if (!existingNodes.has(`domain:${domain}`)) {
-                    const domainNodeId = nextId++;
+                // Create apex domain for email domain
+                const apexDomain = getApexDomain(emailDomain);
+                if (apexDomain !== emailDomain && !existingNodes.has(`domain:${apexDomain}`)) {
+                    const apexNodeId = nextId++;
                     newNodes.push({
-                        id: domainNodeId,
+                        id: apexNodeId,
                         type: 'domain',
-                        label: `Domain: ${domain}`,
-                        title: `Domain: ${domain}`,
+                        label: `Apex: ${apexDomain}`,
+                        title: `Apex Domain: ${apexDomain}`,
                         color: { background: '#60a5fa' },
-                        domain: domain,
+                        domain: apexDomain,
                         size: 20
                     });
-                    existingNodes.set(`domain:${domain}`, { id: domainNodeId });
-                    console.log(`Added Domain node from email: ${domain}, ID: ${domainNodeId}`);
+                    existingNodes.set(`domain:${apexDomain}`, { id: apexNodeId });
+                    newEdges.push({
+                        id: `edge_${domainNodeId}_${apexNodeId}_${Date.now()}`,
+                        from: domainNodeId,
+                        to: apexNodeId,
+                        label: 'Apex of'
+                    });
+                    console.log(`Added Apex Domain node: ${apexDomain}, ID: ${apexNodeId}, Edge to Domain: ${domainNodeId}`);
                 }
-
-                const domainNode = existingNodes.get(`domain:${domain}`);
-                newEdges.push({
-                    id: `edge_${previousNodeId}_${domainNode.id}_${Date.now()}`,
-                    from: previousNodeId,
-                    to: domainNode.id,
-                    label: previousLabel
-                });
-                console.log(`Linked ${previousNodeId} to Domain: ${domainNode.id} with label '${previousLabel}'`);
-
-                previousNodeId = domainNode.id;
-                previousLabel = 'Subdomain of';
             }
+            if (domainNode) {
+                newEdges.push({
+                    id: `edge_${emailNodeId}_${domainNode.id}_${Date.now()}`,
+                    from: emailNodeId,
+                    to: domainNode.id,
+                    label: 'Registered with'
+                });
+            }
+            console.log(`Added Email node: ${email}, ID: ${emailNodeId}`);
         }
         processedCount++;
         if (processedCount % batchSize === 0) {
@@ -4420,7 +4456,7 @@ async function processIOCs(text) {
         }
     }
 
-    // Process Hashes (unchanged)
+    // Process Hashes
     for (const hashObj of hashMatches) {
         const hash = hashObj.value;
         if (!existingNodes.has(`hash:${hash}`)) {
@@ -4449,7 +4485,7 @@ async function processIOCs(text) {
         }
     }
 
-    // Add remaining items (unchanged)
+    // Add remaining items
     if (newNodes.length > 0) {
         console.log('Final batch processing:', { newNodes, newEdges });
         nodes.add(newNodes);
