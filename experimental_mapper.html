@@ -415,7 +415,7 @@ button {
 #properties-panel {
     position: fixed;
     top: var(--top-bar-height);
-    right: -310px;
+    right: -310px; /* Off-screen initially */
     width: 350px;
     height: calc(100vh - var(--top-bar-height));
     background-color: #fff;
@@ -425,17 +425,21 @@ button {
     overflow-y: auto;
     transition: right var(--transition);
     box-sizing: border-box;
+    display: none; /* Add this to hide by default */
+}
+
+#properties-panel.active {
+    right: 0;
+    display: block; /* Explicitly show when active */
 }
 
 .dark-mode #properties-panel {
     background-color: #2d3748;
     box-shadow: -2px 0 10px rgba(0, 0, 0, 0.4);
     color: #e2e8f0;
+    display: block; /* Explicitly show when active */
 }
 
-#properties-panel.active {
-    right: 0;
-}
 
 #properties-panel .close-button {
     position: absolute;
@@ -2014,7 +2018,7 @@ window.onload = function() {
         edges = new vis.DataSet([]);
         nextId = 1;
     }
-
+    document.getElementById('properties-panel').style.display = 'none'; // Ensure hidden on load
     document.getElementById('ipinfoApiKey').value = ipinfoApiKey;
     document.getElementById('shodanApiKey').value = shodanApiKey;
     document.getElementById('corsProxyUrl').value = corsProxyUrl;
