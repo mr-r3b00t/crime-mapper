@@ -1236,7 +1236,7 @@ input[type="checkbox"] {
         <!-- Suggested -->
         <footer id="controls-footer"> 
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.276 experimental</p>
+    <p>© Xservus Limited - v0.277 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
@@ -4087,7 +4087,7 @@ async function processIOCs(text) {
             } else if (domainRegex.test(host)) {
                 domainMatches.add(host);
             }
-            continue; // Skip further processing for this token
+            continue;
         }
 
         // Check for standalone IPs
@@ -4139,6 +4139,15 @@ async function processIOCs(text) {
     let processedCount = 0;
     const batchSize = 50;
 
+    // Helper function to extract apex domain
+    function getApexDomain(fullDomain) {
+        const parts = fullDomain.split('.');
+        if (parts.length >= 2) {
+            return parts.slice(-2).join('.'); // Last two parts (e.g., "hudsonrock.com")
+        }
+        return fullDomain; // Fallback if no TLD (unlikely)
+    }
+
     // Process URLs
     for (const url of urlMatches) {
         const urlMatch = url.match(urlRegex);
@@ -4182,25 +4191,50 @@ async function processIOCs(text) {
                     });
                     console.log(`Added IP node: ${host}, ID: ${ipNodeId}, Edge to URL: ${urlNodeId}`);
                 }
-            } else if (domainRegex.test(host) && !existingNodes.has(`domain:${host}`)) {
-                const domainNodeId = nextId++;
-                newNodes.push({
-                    id: domainNodeId,
-                    type: 'domain',
-                    label: `Domain: ${host}`,
-                    title: `Domain: ${host}`,
-                    color: { background: '#60a5fa' },
-                    domain: host,
-                    size: 20
-                });
-                existingNodes.set(`domain:${host}`, { id: domainNodeId });
-                newEdges.push({
-                    id: `edge_${urlNodeId}_${domainNodeId}_${Date.now()}`,
-                    from: urlNodeId,
-                    to: domainNodeId,
-                    label: 'Belongs to'
-                });
-                console.log(`Added Domain node: ${host}, ID: ${domainNodeId}, Edge to URL: ${urlNodeId}`);
+            } else if (domainRegex.test(host)) {
+                if (!existingNodes.has(`domain:${host}`)) {
+                    const domainNodeId = nextId++;
+                    newNodes.push({
+                        id: domainNodeId,
+                        type: 'domain',
+                        label: `Domain: ${host}`,
+                        title: `Domain: ${host}`,
+                        color: { background: '#60a5fa' },
+                        domain: host,
+                        size: 20
+                    });
+                    existingNodes.set(`domain:${host}`, { id: domainNodeId });
+                    newEdges.push({
+                        id: `edge_${urlNodeId}_${domainNodeId}_${Date.now()}`,
+                        from: urlNodeId,
+                        to: domainNodeId,
+                        label: 'Belongs to'
+                    });
+                    console.log(`Added Domain node: ${host}, ID: ${domainNodeId}, Edge to URL: ${urlNodeId}`);
+
+                    // Create apex domain
+                    const apexDomain = getApexDomain(host);
+                    if (apexDomain !== host && !existingNodes.has(`domain:${apexDomain}`)) {
+                        const apexNodeId = nextId++;
+                        newNodes.push({
+                            id: apexNodeId,
+                            type: 'domain',
+                            label: `Apex: ${apexDomain}`,
+                            title: `Apex Domain: ${apexDomain}`,
+                            color: { background: '#60a5fa' },
+                            domain: apexDomain,
+                            size: 20
+                        });
+                        existingNodes.set(`domain:${apexDomain}`, { id: apexNodeId });
+                        newEdges.push({
+                            id: `edge_${domainNodeId}_${apexNodeId}_${Date.now()}`,
+                            from: domainNodeId,
+                            to: apexNodeId,
+                            label: 'Apex of'
+                        });
+                        console.log(`Added Apex Domain node: ${apexDomain}, ID: ${apexNodeId}, Edge to Domain: ${domainNodeId}`);
+                    }
+                }
             }
 
             // Handle port
@@ -4277,6 +4311,29 @@ async function processIOCs(text) {
             });
             existingNodes.set(`domain:${domain}`, { id: nodeId });
             console.log(`Added standalone Domain node: ${domain}, ID: ${nodeId}`);
+
+            // Create apex domain for standalone domains
+            const apexDomain = getApexDomain(domain);
+            if (apexDomain !== domain && !existingNodes.has(`domain:${apexDomain}`)) {
+                const apexNodeId = nextId++;
+                newNodes.push({
+                    id: apexNodeId,
+                    type: 'domain',
+                    label: `Apex: ${apexDomain}`,
+                    title: `Apex Domain: ${apexDomain}`,
+                    color: { background: '#60a5fa' },
+                    domain: apexDomain,
+                    size: 20
+                });
+                existingNodes.set(`domain:${apexDomain}`, { id: apexNodeId });
+                newEdges.push({
+                    id: `edge_${nodeId}_${apexNodeId}_${Date.now()}`,
+                    from: nodeId,
+                    to: apexNodeId,
+                    label: 'Apex of'
+                });
+                console.log(`Added Apex Domain node: ${apexDomain}, ID: ${apexNodeId}, Edge to Domain: ${nodeId}`);
+            }
         }
         processedCount++;
         if (processedCount % batchSize === 0) {
@@ -4319,6 +4376,29 @@ async function processIOCs(text) {
                 });
                 domainNode = { id: domainNodeId };
                 existingNodes.set(`domain:${emailDomain}`, domainNode);
+
+                // Create apex domain for email domain
+                const apexDomain = getApexDomain(emailDomain);
+                if (apexDomain !== emailDomain && !existingNodes.has(`domain:${apexDomain}`)) {
+                    const apexNodeId = nextId++;
+                    newNodes.push({
+                        id: apexNodeId,
+                        type: 'domain',
+                        label: `Apex: ${apexDomain}`,
+                        title: `Apex Domain: ${apexDomain}`,
+                        color: { background: '#60a5fa' },
+                        domain: apexDomain,
+                        size: 20
+                    });
+                    existingNodes.set(`domain:${apexDomain}`, { id: apexNodeId });
+                    newEdges.push({
+                        id: `edge_${domainNodeId}_${apexNodeId}_${Date.now()}`,
+                        from: domainNodeId,
+                        to: apexNodeId,
+                        label: 'Apex of'
+                    });
+                    console.log(`Added Apex Domain node: ${apexDomain}, ID: ${apexNodeId}, Edge to Domain: ${domainNodeId}`);
+                }
             }
             if (domainNode) {
                 newEdges.push({
