@@ -1236,7 +1236,7 @@ input[type="checkbox"] {
         <!-- Suggested -->
         <footer id="controls-footer"> 
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.277 experimental</p>
+    <p>© Xservus Limited - v0.278 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
@@ -4048,7 +4048,7 @@ async function processIOCs(text) {
     network.setOptions({ physics: { enabled: false } });
 
     // Regex patterns
-    const urlRegex = /^(https?:\/\/)([^\s/]+)(?::(\d{1,5}))?(\/.*)?$/i; // Matches http(s)://<host>[:port][/path]
+    const urlRegex = /^(https?:\/\/)([^\s/:]+)(?::(\d{1,5}))?(\/.*)?$/i; // Matches http(s)://<host>[:port][/path]
     const domainRegex = /^([a-zA-Z0-9-_]+\.)+[a-zA-Z]{2,}$/; // Matches domain with TLD
     const ipRegex = { 
         ipv4: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/, 
@@ -4143,7 +4143,7 @@ async function processIOCs(text) {
     function getApexDomain(fullDomain) {
         const parts = fullDomain.split('.');
         if (parts.length >= 2) {
-            return parts.slice(-2).join('.'); // Last two parts (e.g., "hudsonrock.com")
+            return parts.slice(-2).join('.'); // Last two parts (e.g., "gov.uk")
         }
         return fullDomain; // Fallback if no TLD (unlikely)
     }
@@ -4190,6 +4190,15 @@ async function processIOCs(text) {
                         label: 'Resolves to'
                     });
                     console.log(`Added IP node: ${host}, ID: ${ipNodeId}, Edge to URL: ${urlNodeId}`);
+                } else {
+                    const existingIpNode = existingNodes.get(`ip:${host}`);
+                    newEdges.push({
+                        id: `edge_${urlNodeId}_${existingIpNode.id}_${Date.now()}`,
+                        from: urlNodeId,
+                        to: existingIpNode.id,
+                        label: 'Resolves to'
+                    });
+                    console.log(`Linked URL ${urlNodeId} to existing IP: ${existingIpNode.id}`);
                 }
             } else if (domainRegex.test(host)) {
                 if (!existingNodes.has(`domain:${host}`)) {
@@ -4233,31 +4242,61 @@ async function processIOCs(text) {
                             label: 'Apex of'
                         });
                         console.log(`Added Apex Domain node: ${apexDomain}, ID: ${apexNodeId}, Edge to Domain: ${domainNodeId}`);
+                    } else if (apexDomain !== host) {
+                        const existingApexNode = existingNodes.get(`domain:${apexDomain}`);
+                        newEdges.push({
+                            id: `edge_${domainNodeId}_${existingApexNode.id}_${Date.now()}`,
+                            from: domainNodeId,
+                            to: existingApexNode.id,
+                            label: 'Apex of'
+                        });
+                        console.log(`Linked Domain ${domainNodeId} to existing Apex: ${existingApexNode.id}`);
                     }
+                } else {
+                    const existingDomainNode = existingNodes.get(`domain:${host}`);
+                    newEdges.push({
+                        id: `edge_${urlNodeId}_${existingDomainNode.id}_${Date.now()}`,
+                        from: urlNodeId,
+                        to: existingDomainNode.id,
+                        label: 'Belongs to'
+                    });
+                    console.log(`Linked URL ${urlNodeId} to existing Domain: ${existingDomainNode.id}`);
                 }
             }
 
             // Handle port
-            if (port && parseInt(port) >= 1 && parseInt(port) <= 65535 && !existingNodes.has(`port:TCP/${port}`)) {
-                const portNodeId = nextId++;
-                newNodes.push({
-                    id: portNodeId,
-                    type: 'port',
-                    label: `TCP/${port}`,
-                    title: `Port\nType: TCP\nNumber: ${port}`,
-                    color: { background: '#a78bfa' },
-                    portType: 'TCP',
-                    portNumber: port,
-                    size: 10
-                });
-                existingNodes.set(`port:TCP/${port}`, { id: portNodeId });
-                newEdges.push({
-                    id: `edge_${urlNodeId}_${portNodeId}_${Date.now()}`,
-                    from: urlNodeId,
-                    to: portNodeId,
-                    label: 'Uses port'
-                });
-                console.log(`Added Port node: TCP/${port}, ID: ${portNodeId}, Edge to URL: ${urlNodeId}`);
+            if (port && parseInt(port) >= 1 && parseInt(port) <= 65535) {
+                const portKey = `port:TCP/${port}`;
+                if (!existingNodes.has(portKey)) {
+                    const portNodeId = nextId++;
+                    newNodes.push({
+                        id: portNodeId,
+                        type: 'port',
+                        label: `TCP/${port}`,
+                        title: `Port\nType: TCP\nNumber: ${port}`,
+                        color: { background: '#a78bfa' },
+                        portType: 'TCP',
+                        portNumber: port,
+                        size: 10
+                    });
+                    existingNodes.set(portKey, { id: portNodeId });
+                    newEdges.push({
+                        id: `edge_${urlNodeId}_${portNodeId}_${Date.now()}`,
+                        from: urlNodeId,
+                        to: portNodeId,
+                        label: 'Uses port'
+                    });
+                    console.log(`Added Port node: TCP/${port}, ID: ${portNodeId}, Edge to URL: ${urlNodeId}`);
+                } else {
+                    const existingPortNode = existingNodes.get(portKey);
+                    newEdges.push({
+                        id: `edge_${urlNodeId}_${existingPortNode.id}_${Date.now()}`,
+                        from: urlNodeId,
+                        to: existingPortNode.id,
+                        label: 'Uses port'
+                    });
+                    console.log(`Linked URL ${urlNodeId} to existing Port: ${existingPortNode.id}`);
+                }
             }
         }
         processedCount++;
@@ -4461,7 +4500,6 @@ async function processIOCs(text) {
     await stabilizeNetwork().catch(err => console.error('Error stabilizing network:', err));
     showToast(`Imported ${urlMatches.size} URLs, ${ipMatches.size} IPs, ${domainMatches.size} domains, ${emailMatches.size} emails, ${hashMatches.size} hashes`, 'success');
 }
-
 
 
 
