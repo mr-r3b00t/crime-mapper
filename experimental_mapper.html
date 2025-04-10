@@ -2040,9 +2040,6 @@ window.onload = function() {
     document.getElementById('menu-toggle').textContent = '<';  // Set to "<" since menu starts expanded
     ensureInteractionSettings();
     
-    container.removeEventListener('mousedown', handleMouseDown);
-    container.removeEventListener('mousemove', handleMouseMove);
-    container.removeEventListener('mouseup', handleMouseUp);
     container.addEventListener('wheel', handleWheel, { passive: false });
 
     if (window.innerWidth <= 768) {
