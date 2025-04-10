@@ -1247,7 +1247,7 @@ input[type="checkbox"] {
         <!-- Suggested -->
         <footer id="controls-footer"> 
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.278 experimental</p>
+    <p>© Xservus Limited - v0.279 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
@@ -4062,6 +4062,8 @@ async function importIOCsFromFile() {
     reader.readAsText(file);
 }
 
+//process iocs
+
 async function processIOCs(text) {
     network.setOptions({ physics: { enabled: false } });
 
@@ -4070,8 +4072,9 @@ async function processIOCs(text) {
     const domainRegex = /^([a-zA-Z0-9-_]+\.)+[a-zA-Z]{2,}$/; // Matches domain with TLD
     const ipRegex = { 
         ipv4: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/, 
-        ipv6: /^([0-9a-fA-F]{0,4}:){0,7}[0-9a-fA-F]{0,4}(:[0-9a-fA-F]{0,4}){0,7}$/ // Updated for shorthand IPv6
+        ipv6: /^([0-9a-fA-F]{0,4}:){0,7}[0-9a-fA-F]{0,4}(:[0-9a-fA-F]{0,4}){0,7}$/ 
     };
+    const subnetRegex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\/(\d{1,2})$/; // Matches CIDR (e.g., 192.168.1.0/24)
     const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
     const hashRegex = {
         sha256: /^[0-9a-fA-F]{64}$/,
@@ -4087,6 +4090,7 @@ async function processIOCs(text) {
     // Extract matches
     const urlMatches = new Set();
     const ipMatches = new Set();
+    const subnetMatches = new Set(); // New set for subnets
     const domainMatches = new Set();
     const emailMatches = new Set(tokens.map(token => token.match(emailRegex)?.[0]).filter(Boolean));
     const hashCandidates = new Set(tokens.map(token => token.match(hashPattern)?.[0]).filter(Boolean));
@@ -4099,12 +4103,20 @@ async function processIOCs(text) {
             urlMatches.add(token);
             console.log(`URL Match: ${token}, Protocol: ${protocol}, Host: ${host}, Port: ${port || 'none'}, Path: ${path || 'none'}`);
 
-            // Determine if host is IP or domain
-            if (ipRegex.ipv4.test(host) || ipRegex.ipv6.test(host)) {
+            // Determine if host is IP, subnet, or domain
+            if (subnetRegex.test(host)) {
+                subnetMatches.add(host);
+            } else if (ipRegex.ipv4.test(host) || ipRegex.ipv6.test(host)) {
                 ipMatches.add(host);
             } else if (domainRegex.test(host)) {
                 domainMatches.add(host);
             }
+            continue;
+        }
+
+        // Check for standalone subnets
+        if (subnetRegex.test(token)) {
+            subnetMatches.add(token);
             continue;
         }
 
@@ -4129,7 +4141,7 @@ async function processIOCs(text) {
         else if (hashRegex.sha1.test(hash)) hashMatches.add({ value: hash, type: 'sha1' });
     });
 
-    const totalItems = urlMatches.size + ipMatches.size + domainMatches.size + emailMatches.size + hashMatches.size;
+    const totalItems = urlMatches.size + ipMatches.size + subnetMatches.size + domainMatches.size + emailMatches.size + hashMatches.size;
     if (totalItems === 0) {
         showToast('No IOCs found in text', 'info');
         return;
@@ -4137,6 +4149,7 @@ async function processIOCs(text) {
 
     console.log('URL Matches:', Array.from(urlMatches));
     console.log('IP Matches:', Array.from(ipMatches));
+    console.log('Subnet Matches:', Array.from(subnetMatches));
     console.log('Domain Matches:', Array.from(domainMatches));
     console.log('Email Matches:', Array.from(emailMatches));
     console.log('Hash Matches:', Array.from(hashMatches));
@@ -4146,6 +4159,7 @@ async function processIOCs(text) {
     nodes.forEach(node => {
         if (node.type === 'url' && node.url) existingNodes.set(`url:${node.url}`, node);
         if (node.type === 'ip' && node.ip) existingNodes.set(`ip:${node.ip}`, node);
+        if (node.type === 'subnet' && node.subnet) existingNodes.set(`subnet:${node.subnet}`, node);
         if (node.type === 'domain' && node.domain) existingNodes.set(`domain:${node.domain}`, node);
         if (node.type === 'contact' && node.email) existingNodes.set(`email:${node.email}`, node);
         if (node.type === 'hash' && node.hash) existingNodes.set(`hash:${node.hash}`, node);
@@ -4187,8 +4201,33 @@ async function processIOCs(text) {
             existingNodes.set(`url:${url}`, { id: urlNodeId });
             console.log(`Added URL node: ${url}, ID: ${urlNodeId}`);
 
-            // Handle host (IP or domain)
-            if (ipRegex.ipv4.test(host) || ipRegex.ipv6.test(host)) {
+            // Handle host (IP, subnet, or domain)
+            if (subnetRegex.test(host)) {
+                if (!existingNodes.has(`subnet:${host}`)) {
+                    const subnetNodeData = createNodeData('subnet', { subnet: host });
+                    if (subnetNodeData) {
+                        subnetNodeData.id = nextId++;
+                        newNodes.push(subnetNodeData);
+                        existingNodes.set(`subnet:${host}`, { id: subnetNodeData.id });
+                        newEdges.push({
+                            id: `edge_${urlNodeId}_${subnetNodeData.id}_${Date.now()}`,
+                            from: urlNodeId,
+                            to: subnetNodeData.id,
+                            label: 'Resolves to'
+                        });
+                        console.log(`Added Subnet node: ${host}, ID: ${subnetNodeData.id}, Edge to URL: ${urlNodeId}`);
+                    }
+                } else {
+                    const existingSubnetNode = existingNodes.get(`subnet:${host}`);
+                    newEdges.push({
+                        id: `edge_${urlNodeId}_${existingSubnetNode.id}_${Date.now()}`,
+                        from: urlNodeId,
+                        to: existingSubnetNode.id,
+                        label: 'Resolves to'
+                    });
+                    console.log(`Linked URL ${urlNodeId} to existing Subnet: ${existingSubnetNode.id}`);
+                }
+            } else if (ipRegex.ipv4.test(host) || ipRegex.ipv6.test(host)) {
                 if (!existingNodes.has(`ip:${host}`)) {
                     const ipNodeId = nextId++;
                     newNodes.push({
@@ -4315,6 +4354,27 @@ async function processIOCs(text) {
                     });
                     console.log(`Linked URL ${urlNodeId} to existing Port: ${existingPortNode.id}`);
                 }
+            }
+        }
+        processedCount++;
+        if (processedCount % batchSize === 0) {
+            nodes.add(newNodes);
+            edges.add(newEdges);
+            newNodes.length = 0;
+            newEdges.length = 0;
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
+    }
+
+    // Process standalone Subnets
+    for (const subnet of subnetMatches) {
+        if (subnetRegex.test(subnet) && !existingNodes.has(`subnet:${subnet}`)) {
+            const subnetNodeData = createNodeData('subnet', { subnet: subnet });
+            if (subnetNodeData) {
+                subnetNodeData.id = nextId++;
+                newNodes.push(subnetNodeData);
+                existingNodes.set(`subnet:${subnet}`, { id: subnetNodeData.id });
+                console.log(`Added standalone Subnet node: ${subnet}, ID: ${subnetNodeData.id}, Private: ${subnetNodeData.isPrivate}`);
             }
         }
         processedCount++;
@@ -4516,7 +4576,7 @@ async function processIOCs(text) {
     updateNodeSizes();
     updateSelectOptions();
     await stabilizeNetwork().catch(err => console.error('Error stabilizing network:', err));
-    showToast(`Imported ${urlMatches.size} URLs, ${ipMatches.size} IPs, ${domainMatches.size} domains, ${emailMatches.size} emails, ${hashMatches.size} hashes`, 'success');
+    showToast(`Imported ${urlMatches.size} URLs, ${ipMatches.size} IPs, ${subnetMatches.size} subnets, ${domainMatches.size} domains, ${emailMatches.size} emails, ${hashMatches.size} hashes`, 'success');
 }
 
 
