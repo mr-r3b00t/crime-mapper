@@ -4048,8 +4048,8 @@ async function processIOCs(text) {
     network.setOptions({ physics: { enabled: false } });
 
     // Regex patterns
-    const urlRegex = /(?:https?:\/\/)?(?:\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|[a-zA-Z0-9-]+\.[a-zA-Z]{2,})(?::\d+)?(?:\/[^\s]*)?/gi;
-    const domainRegex = /^(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,}$/;
+    const urlRegex = /^(https?:\/\/)([^\s/]+)(?::(\d{1,5}))?(\/.*)?$/i; // Matches http(s)://<host>[:port][/path]
+    const domainRegex = /^([a-zA-Z0-9-_]+\.)+[a-zA-Z]{2,}$/; // Matches domain with TLD
     const ipRegex = { 
         ipv4: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/, 
         ipv6: /^([0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}$/ 
@@ -4062,40 +4062,48 @@ async function processIOCs(text) {
     };
     const hashPattern = /[0-9a-fA-F]{32,64}/g;
 
-    // Extract matches with error handling
-    console.log('Input text:', text);
-    let urlMatches;
-    try {
-        urlMatches = new Set((text.match(urlRegex) || []).map(url => url.trim()));
-    } catch (e) {
-        console.error('Error initializing urlMatches:', e);
-        urlMatches = new Set();
-    }
-    let ipMatches;
-    try {
-        const ipCandidates = text.match(/(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)|(?:[0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}/g) || [];
-        ipMatches = new Set(ipCandidates.filter(ip => !Array.from(urlMatches).some(url => url.includes(ip))));
-    } catch (e) {
-        console.error('Error initializing ipMatches:', e);
-        ipMatches = new Set();
-    }
-    let domainMatches;
-    try {
-        domainMatches = new Set((text.match(domainRegex) || []).filter(domain => !Array.from(urlMatches).some(url => url.includes(domain))));
-    } catch (e) {
-        console.error('Error initializing domainMatches:', e);
-        domainMatches = new Set();
-    }
-    const emailMatches = new Set((text.match(emailRegex) || []));
-    const hashCandidates = new Set((text.match(hashPattern) || []).filter(hash => 
-        !urlMatches.has(hash) && !ipMatches.has(hash) && !domainMatches.has(hash) && !emailMatches.has(hash)
-    ));
+    // Split text into tokens
+    const tokens = text.split(/[\s,\n]+/).filter(token => token.trim().length > 0);
+    console.log('Tokens:', tokens);
 
-    console.log('URL Matches:', Array.from(urlMatches));
-    console.log('IP Matches:', Array.from(ipMatches));
-    console.log('Domain Matches:', Array.from(domainMatches));
+    // Extract matches
+    const urlMatches = new Set();
+    const ipMatches = new Set();
+    const domainMatches = new Set();
+    const emailMatches = new Set(tokens.map(token => token.match(emailRegex)?.[0]).filter(Boolean));
+    const hashCandidates = new Set(tokens.map(token => token.match(hashPattern)?.[0]).filter(Boolean));
 
-    // Filter hash candidates by specific types
+    // Process each token
+    for (const token of tokens) {
+        const urlMatch = token.match(urlRegex);
+        if (urlMatch) {
+            const [, protocol, host, port, path] = urlMatch;
+            urlMatches.add(token);
+            console.log(`URL Match: ${token}, Protocol: ${protocol}, Host: ${host}, Port: ${port || 'none'}, Path: ${path || 'none'}`);
+
+            // Determine if host is IP or domain
+            if (ipRegex.ipv4.test(host) || ipRegex.ipv6.test(host)) {
+                ipMatches.add(host);
+            } else if (domainRegex.test(host)) {
+                domainMatches.add(host);
+            }
+            continue; // Skip further processing for this token
+        }
+
+        // Check for standalone IPs
+        if (ipRegex.ipv4.test(token) || ipRegex.ipv6.test(token)) {
+            ipMatches.add(token);
+            continue;
+        }
+
+        // Check for standalone domains
+        if (domainRegex.test(token) && !urlMatches.has(token)) {
+            domainMatches.add(token);
+            continue;
+        }
+    }
+
+    // Filter hash candidates
     const hashMatches = new Set();
     hashCandidates.forEach(hash => {
         if (hashRegex.sha256.test(hash)) hashMatches.add({ value: hash, type: 'sha256' });
@@ -4108,6 +4116,12 @@ async function processIOCs(text) {
         showToast('No IOCs found in text', 'info');
         return;
     }
+
+    console.log('URL Matches:', Array.from(urlMatches));
+    console.log('IP Matches:', Array.from(ipMatches));
+    console.log('Domain Matches:', Array.from(domainMatches));
+    console.log('Email Matches:', Array.from(emailMatches));
+    console.log('Hash Matches:', Array.from(hashMatches));
 
     // Maps for deduplication
     const existingNodes = new Map();
@@ -4125,123 +4139,72 @@ async function processIOCs(text) {
     let processedCount = 0;
     const batchSize = 50;
 
-    // Helper function to normalize URL with protocol
-    function normalizeUrl(url) {
-        const trimmedUrl = url.trim();
-        if (trimmedUrl.match(/^https?:\/\//i)) return trimmedUrl;
-        return `http://${trimmedUrl}`;
-    }
-
-    // Helper function to extract components from URL
-    function extractUrlComponents(url) {
-        const normalizedUrl = normalizeUrl(url);
-        try {
-            const urlObj = new URL(normalizedUrl);
-            const hostname = urlObj.hostname;
-            const port = urlObj.port || '';
-            const path = urlObj.pathname + urlObj.search + urlObj.hash;
-            const parts = hostname.split('.');
-            const apexDomain = parts.length > 2 ? parts.slice(-2).join('.') : null;
-            const isIp = ipRegex.ipv4.test(hostname) || ipRegex.ipv6.test(hostname);
-            console.log(`URL Components for ${normalizedUrl}:`, { fullUrl: normalizedUrl, hostname, port, path, isIp, apexDomain });
-            return {
-                fullUrl: normalizedUrl,
-                hostname: hostname,
-                apexDomain: apexDomain,
-                port: port,
-                path: path === '/' ? '' : path,
-                isIp: isIp
-            };
-        } catch (e) {
-            console.warn(`Invalid URL: ${url}`, e);
-            return { fullUrl: normalizedUrl, hostname: null, apexDomain: null, port: null, path: null, isIp: false };
-        }
-    }
-
     // Process URLs
     for (const url of urlMatches) {
-        const { fullUrl, hostname, apexDomain, port, path, isIp } = extractUrlComponents(url);
-        if (!existingNodes.has(`url:${fullUrl}`)) {
+        const urlMatch = url.match(urlRegex);
+        if (!urlMatch) continue;
+        const [, protocol, host, port, path] = urlMatch;
+
+        if (!existingNodes.has(`url:${url}`)) {
             const urlNodeId = nextId++;
-            const label = `URL: ${fullUrl.length > 30 ? fullUrl.substring(0, 27) + '...' : fullUrl}`;
+            const label = `URL: ${url.length > 30 ? url.substring(0, 27) + '...' : url}`;
             newNodes.push({
                 id: urlNodeId,
                 type: 'url',
                 label: label,
-                title: `Full URL: ${fullUrl}`,
+                title: `Full URL: ${url}`,
                 color: { background: '#3b82f6' },
-                url: fullUrl,
+                url: url,
                 size: 15
             });
-            existingNodes.set(`url:${fullUrl}`, { id: urlNodeId });
-            console.log(`Added URL node: ${fullUrl}, ID: ${urlNodeId}`);
+            existingNodes.set(`url:${url}`, { id: urlNodeId });
+            console.log(`Added URL node: ${url}, ID: ${urlNodeId}`);
 
-            // Handle hostname (domain or IP)
-            if (hostname) {
-                if (isIp && !existingNodes.has(`ip:${hostname}`)) {
+            // Handle host (IP or domain)
+            if (ipRegex.ipv4.test(host) || ipRegex.ipv6.test(host)) {
+                if (!existingNodes.has(`ip:${host}`)) {
                     const ipNodeId = nextId++;
                     newNodes.push({
                         id: ipNodeId,
                         type: 'ip',
-                        label: `IP: ${hostname}`,
-                        title: `IP Address: ${hostname}`,
+                        label: `IP: ${host}`,
+                        title: `IP Address: ${host}`,
                         color: { background: '#f87171' },
-                        ip: hostname,
+                        ip: host,
                         size: 20
                     });
-                    existingNodes.set(`ip:${hostname}`, { id: ipNodeId });
+                    existingNodes.set(`ip:${host}`, { id: ipNodeId });
                     newEdges.push({
                         id: `edge_${urlNodeId}_${ipNodeId}_${Date.now()}`,
                         from: urlNodeId,
                         to: ipNodeId,
                         label: 'Resolves to'
                     });
-                    console.log(`Added IP node: ${hostname}, ID: ${ipNodeId}, Edge to URL: ${urlNodeId}`);
-                } else if (!isIp && domainRegex.test(hostname) && !existingNodes.has(`domain:${hostname}`)) {
-                    const domainNodeId = nextId++;
-                    newNodes.push({
-                        id: domainNodeId,
-                        type: 'domain',
-                        label: `Domain: ${hostname}`,
-                        title: `Domain: ${hostname}`,
-                        color: { background: '#60a5fa' },
-                        domain: hostname,
-                        size: 20
-                    });
-                    existingNodes.set(`domain:${hostname}`, { id: domainNodeId });
-                    newEdges.push({
-                        id: `edge_${urlNodeId}_${domainNodeId}_${Date.now()}`,
-                        from: urlNodeId,
-                        to: domainNodeId,
-                        label: 'Belongs to'
-                    });
-                    console.log(`Added Domain node: ${hostname}, ID: ${domainNodeId}, Edge to URL: ${urlNodeId}`);
-
-                    if (apexDomain && !existingNodes.has(`domain:${apexDomain}`)) {
-                        const apexNodeId = nextId++;
-                        newNodes.push({
-                            id: apexNodeId,
-                            type: 'domain',
-                            label: `Apex: ${apexDomain}`,
-                            title: `Apex Domain: ${apexDomain}`,
-                            color: { background: '#60a5fa' },
-                            domain: apexDomain,
-                            size: 20
-                        });
-                        existingNodes.set(`domain:${apexDomain}`, { id: apexNodeId });
-                        newEdges.push({
-                            id: `edge_${domainNodeId}_${apexNodeId}_${Date.now()}`,
-                            from: domainNodeId,
-                            to: apexNodeId,
-                            label: 'Apex of'
-                        });
-                        console.log(`Added Apex Domain node: ${apexDomain}, ID: ${apexNodeId}`);
-                    }
+                    console.log(`Added IP node: ${host}, ID: ${ipNodeId}, Edge to URL: ${urlNodeId}`);
                 }
+            } else if (domainRegex.test(host) && !existingNodes.has(`domain:${host}`)) {
+                const domainNodeId = nextId++;
+                newNodes.push({
+                    id: domainNodeId,
+                    type: 'domain',
+                    label: `Domain: ${host}`,
+                    title: `Domain: ${host}`,
+                    color: { background: '#60a5fa' },
+                    domain: host,
+                    size: 20
+                });
+                existingNodes.set(`domain:${host}`, { id: domainNodeId });
+                newEdges.push({
+                    id: `edge_${urlNodeId}_${domainNodeId}_${Date.now()}`,
+                    from: urlNodeId,
+                    to: domainNodeId,
+                    label: 'Belongs to'
+                });
+                console.log(`Added Domain node: ${host}, ID: ${domainNodeId}, Edge to URL: ${urlNodeId}`);
             }
 
-            // Handle port (only if explicitly specified)
-            if (port && !existingNodes.has(`port:TCP/${port}`)) {
+            // Handle port
+            if (port && parseInt(port) >= 1 && parseInt(port) <= 65535 && !existingNodes.has(`port:TCP/${port}`)) {
                 const portNodeId = nextId++;
                 newNodes.push({
                     id: portNodeId,
@@ -4261,17 +4224,10 @@ async function processIOCs(text) {
                     label: 'Uses port'
                 });
                 console.log(`Added Port node: TCP/${port}, ID: ${portNodeId}, Edge to URL: ${urlNodeId}`);
-            } else if (port) {
-                console.log(`Port TCP/${port} already exists, skipping creation`);
-            } else {
-                console.log(`No explicit port found in ${fullUrl}`);
             }
-        } else {
-            console.log(`URL ${fullUrl} already exists, skipping`);
         }
         processedCount++;
         if (processedCount % batchSize === 0) {
-            console.log('Batch processing:', { newNodes, newEdges });
             nodes.add(newNodes);
             edges.add(newEdges);
             newNodes.length = 0;
@@ -4425,7 +4381,6 @@ async function processIOCs(text) {
     await stabilizeNetwork().catch(err => console.error('Error stabilizing network:', err));
     showToast(`Imported ${urlMatches.size} URLs, ${ipMatches.size} IPs, ${domainMatches.size} domains, ${emailMatches.size} emails, ${hashMatches.size} hashes`, 'success');
 }
-
 
 
 
