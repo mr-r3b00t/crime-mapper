@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Script to install the CORS proxy server from mr-r3b00t/crime-mapper on macOS
+# Ensures Homebrew and npm dependencies are installed
+
 # Exit on any error
 set -e
 
@@ -8,140 +11,107 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m' # No Color
 
-echo "Starting proxy server installation..."
+# Function to print error and exit
+error_exit() {
+    echo -e "${RED}Error: $1${NC}" >&2
+    exit 1
+}
 
-# Check if Homebrew is installed
-if ! command -v brew &> /dev/null; then
-    echo -e "${RED}Homebrew not found. Installing Homebrew...${NC}"
-    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-else
-    echo -e "${GREEN}Homebrew already installed${NC}"
-    # Update Homebrew
-    brew update
+# Function to print success messages
+success() {
+    echo -e "${GREEN}$1${NC}"
+}
+
+# Check if running on macOS
+echo "Checking operating system..."
+if [[ "$(uname -s)" != "Darwin" ]]; then
+    error_exit "This script is designed for macOS only."
+fi
+success "Confirmed running on macOS."
+
+# Check for Homebrew and install if not present
+echo "Checking for Homebrew..."
+if ! command -v brew >/dev/null 2>&1; then
+    echo "Homebrew not found. Installing Homebrew..."
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || error_exit "Failed to install Homebrew."
+    # Add Homebrew to PATH for this session
+    eval "$(/opt/homebrew/bin/brew shellenv)" || error_exit "Failed to set up Homebrew environment."
+fi
+success "Homebrew is installed."
+
+# Update Homebrew
+echo "Updating Homebrew..."
+brew update || error_exit "Failed to update Homebrew."
+success "Homebrew updated."
+
+# Install Node.js and npm via Homebrew
+echo "Checking for Node.js and npm..."
+if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
+    echo "Installing Node.js and npm..."
+    brew install node || error_exit "Failed to install Node.js and npm."
+fi
+success "Node.js and npm are installed."
+node_version=$(node -v)
+npm_version=$(npm -v)
+echo "Node.js version: $node_version"
+echo "npm version: $npm_version"
+
+# Define installation directory
+INSTALL_DIR="$HOME/crime-mapper-cors-proxy"
+echo "Installation directory: $INSTALL_DIR"
+
+# Remove existing directory if it exists (optional, comment out if you want to preserve it)
+if [[ -d "$INSTALL_DIR" ]]; then
+    echo "Existing installation found. Removing it..."
+    rm -rf "$INSTALL_DIR" || error_exit "Failed to remove existing directory."
 fi
 
-# Check if Node.js is installed
-if ! command -v node &> /dev/null; then
-    echo -e "${RED}Node.js not found. Installing Node.js...${NC}"
-    brew install node
-else
-    echo -e "${GREEN}Node.js already installed${NC}"
-    # Update Node.js to latest version
-    brew upgrade node
+# Clone the crime-mapper repository
+echo "Cloning crime-mapper repository..."
+git clone https://github.com/mr-r3b00t/crime-mapper.git "$INSTALL_DIR" || error_exit "Failed to clone repository."
+success "Repository cloned successfully."
+
+# Navigate to the installation directory
+cd "$INSTALL_DIR" || error_exit "Failed to change to installation directory."
+
+# Check if cors_proxy_server.js exists
+if [[ ! -f "cors_proxy_server.js" ]]; then
+    error_exit "cors_proxy_server.js not found in the repository."
 fi
 
-# Create project directory
-PROJECT_DIR="$HOME/proxy-server"
-if [ ! -d "$PROJECT_DIR" ]; then
-    mkdir "$PROJECT_DIR"
-    echo "Created project directory at $PROJECT_DIR"
-else
-    echo "Project directory already exists at $PROJECT_DIR"
-fi
+# Install npm dependencies
+echo "Installing npm dependencies..."
+npm install cors express || error_exit "Failed to install npm dependencies (cors, express)."
+success "npm dependencies installed."
 
-cd "$PROJECT_DIR"
-
-# Initialize npm project if package.json doesn't exist
-if [ ! -f "package.json" ]; then
-    npm init -y
-    echo "Initialized npm project"
-fi
-
-# Install required dependencies
-echo "Installing dependencies..."
-npm install express axios cors
-
-# Create the proxy server file
-cat > proxy.js << 'EOF'
-const express = require('express');
-const axios = require('axios');
-const https = require('https');
-const url = require('url');
-const cors = require('cors');
-const app = express();
-const port = 3000;
-
-const allowList = [
-  'api.shodan.io',
-  'ipinfo.io',
-  'dns.google.com',
-  'api.hudsonrock.com',
-  'cavalier.hudsonrock.com',
-  'internetdb.shodan.io'
-];
-
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || origin === 'null' || origin === 'http://localhost:3000') {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  optionsSuccessStatus: 200
-}));
-
-const checkAllowList = (req, res, next) => {
-  let targetUrl = req.query.url;
-  if (!targetUrl) {
-    console.log('Request rejected: No URL provided');
-    return res.status(400).send('No URL provided');
-  }
-
-  targetUrl = targetUrl.replace(/^\/+/, '');
-
-  let hostname;
-  try {
-    hostname = new url.URL(targetUrl).hostname;
-  } catch (error) {
-    console.log(`Request rejected: Invalid URL - ${targetUrl}`);
-    return res.status(400).send('Invalid URL');
-  }
-
-  const isAllowed = allowList.some(allowed => hostname === allowed);
-  if (!isAllowed) {
-    console.log(`Request rejected: Target domain not in allow list - ${hostname}`);
-    return res.status(403).send('Target domain not in allow list');
-  }
-
-  req.sanitizedUrl = targetUrl;
-  console.log(`Request received: ${targetUrl}`);
-  next();
-};
-
-app.get('/proxy', checkAllowList, async (req, res) => {
-  try {
-    const response = await axios.get(req.sanitizedUrl, {
-      headers: {
-        'User-Agent': 'cors-proxy/1.0'
-      },
-      httpsAgent: new https.Agent({
-        rejectUnauthorized: false
-      })
-    });
-    console.log('Response received:', response.data);
-    res.send(response.data);
-  } catch (error) {
-    console.error(`Error fetching data for ${req.sanitizedUrl}: ${error.message}`);
-    res.status(500).send(`Error fetching data: ${error.message}`);
-  }
-});
-
-app.listen(port, () => {
-  console.log(`Proxy server running on http://localhost:${port}`);
-  console.log('To use the proxy, set your proxy URL to:');
-  console.log(`http://localhost:${port}/proxy?url=<target-url>`);
-  console.log('Example:');
-  console.log(`http://localhost:${port}/proxy?url=https://api.shodan.io/ip/8.8.8.8`);
-  console.log('Allowed domains:', allowList.join(', '));
-});
+# Create a launch script for convenience
+LAUNCH_SCRIPT="$INSTALL_DIR/start_cors_proxy.sh"
+cat << EOF > "$LAUNCH_SCRIPT"
+#!/bin/bash
+cd "$INSTALL_DIR" || exit 1
+node cors_proxy_server.js
 EOF
+chmod +x "$LAUNCH_SCRIPT" || error_exit "Failed to make launch script executable."
+success "Launch script created at $LAUNCH_SCRIPT."
 
-echo -e "${GREEN}Installation complete!${NC}"
-echo "To start the proxy server:"
-echo "1. cd $PROJECT_DIR"
-echo "2. node proxy.js"
-echo ""
-echo "The proxy will be available at http://localhost:3000"
-echo "You can test it with:"
-echo "curl 'http://localhost:3000/proxy?url=https://api.shodan.io/ip/8.8.8.8'"
+# Start the CORS proxy in the background
+echo "Starting CORS proxy server..."
+"$LAUNCH_SCRIPT" & 
+CORS_PID=$!
+sleep 2 # Give it a moment to start
+
+# Check if the server is running
+if ps -p $CORS_PID > /dev/null; then
+    success "CORS proxy server started successfully (PID: $CORS_PID)."
+    echo "You can stop it manually with: kill $CORS_PID"
+else
+    error_exit "CORS proxy server failed to start. Check $INSTALL_DIR for logs or errors."
+fi
+
+# Provide instructions
+echo
+success "Installation complete!"
+echo "To start the CORS proxy manually in the future, run:"
+echo "  $LAUNCH_SCRIPT"
+echo "The server runs on port 8081 by default (check cors_proxy_server.js to confirm)."
+echo "To use with crime-mapper, update the CORS Proxy URL in the Config tab to: http://localhost:8081"
