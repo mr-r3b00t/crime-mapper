@@ -925,6 +925,7 @@ input[type="checkbox"] {
                     <option value="device">Device</option>
                     <option value="malware">Malware</option>
                     <option value="vulnerability">Vulnerability</option>
+                    <option value="subnet">Subnet</option> <!-- New option -->
                 </select>
                 <input type="text" id="addVulnNameInput" placeholder="Vulnerability Name" style="display: none;">
                 <input type="text" id="addVulnCVEInput" placeholder="CVE (optional)" style="display: none;">
@@ -934,6 +935,7 @@ input[type="checkbox"] {
                 <input type="text" id="addIpInput" placeholder="IP Address" style="display: none;">
                 <input type="text" id="addDomainInput" placeholder="Domain" style="display: none;">
                 <input type="text" id="addOrgInput" placeholder="Organization Name" style="display: none;">
+                <input type="text" id="addSubnetInput" placeholder="Subnet (e.g., 192.168.1.0/24)" style="display: none;">
                 <input type="text" id="addPortNumInput" placeholder="Port Number" style="display: none;">
                 <select id="addPortType" style="display: none;">
                     <option value="TCP">TCP</option>
@@ -983,6 +985,11 @@ input[type="checkbox"] {
                     <option value="malware">Malware</option>
                     <option value="vulnerability">Vulnerability</option>
                 </select>
+                <select id="editEntityType" disabled>
+                    <!-- Existing options -->
+                    <option value="subnet">Subnet</option>
+                </select>
+                <input type="text" id="editSubnetInput" placeholder="Subnet (e.g., 192.168.1.0/24)" style="display: none;">
                 <input type="text" id="editVulnNameInput" placeholder="Vulnerability Name" style="display: none;">
                 <input type="text" id="editVulnCVEInput" placeholder="CVE (optional)" style="display: none;">
                 <input type="text" id="editVulnUrlInput" placeholder="URL (optional)" style="display: none;">
@@ -2298,7 +2305,7 @@ const baseInteractionOptions = {
         selectable: true,
         zoomSpeed: 0.5
     },
-    layout: { improvedLayout: true }
+    layout: { improvedLayout: false }
 };
         
         let network = new vis.Network(container, data, options);
@@ -2459,6 +2466,13 @@ function finishStabilization(resolve, skipFit) {
 });
 
 network.on('click', function(params) {
+
+    if (params.nodes.length === 0) {
+        // Empty space clicked, prevent default zooming
+        params.event.preventDefault();
+        console.log('Empty space clicked, no action taken');
+        return;
+    }
     // Only proceed if exactly one node is selected and not dragging
     if (params.nodes.length !== 1 || params.event.type === 'drag') {
         console.log('Click event ignored:', params);
@@ -2733,7 +2747,10 @@ function saveState() {
                     originalLabel: node.originalLabel,
                     notes: node.notes // Include notes for all types
                 };
-
+                if (node.type === 'subnet') {
+                nodeData.subnet = node.subnet;
+                nodeData.isPrivate = node.isPrivate;
+            }
                 // Add type-specific properties
                 switch (node.type) {
                     case 'contact':
@@ -4565,7 +4582,7 @@ function toggleMode() {
         },
         layout: { 
             hierarchical: false,
-            improvedLayout: true 
+            improvedLayout: false
         },
         interaction: { ...baseInteractionOptions }
     });
@@ -4766,6 +4783,7 @@ function setHierarchicalLayout() {
             document.getElementById('addDeviceNameInput').style.display = type === 'device' ? 'block' : 'none';
             document.getElementById('addMalwareNameInput').style.display = type === 'malware' ? 'block' : 'none';
             document.getElementById('addMalwareType').style.display = type === 'malware' ? 'block' : 'none';
+            document.getElementById('addSubnetInput').style.display = type === 'subnet' ? 'block' : 'none';
         });
 
         function createNodeData(type, values) {
@@ -4777,6 +4795,7 @@ function setHierarchicalLayout() {
         heightConstraint: false
     };
     
+    // Define configs for all node types
     const configs = {
         vulnerability: { 
             fields: ['vulnName'], 
@@ -4798,7 +4817,13 @@ function setHierarchicalLayout() {
             color: '#f87171', 
             label: v => `IP: ${v.ip}`, 
             title: v => `IP Address: ${v.ip}${v.notes ? '\nNotes: ' + v.notes : ''}`,
-            validate: v => ipRegex.ipv4.test(v.ip) || ipRegex.ipv6.test(v.ip) 
+            validate: v => {
+                const ipRegex = {
+                    ipv4: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/,
+                    ipv6: /^([0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}$/
+                };
+                return ipRegex.ipv4.test(v.ip) || ipRegex.ipv6.test(v.ip);
+            }
         },
         domain: { 
             fields: ['domain'], 
@@ -4856,7 +4881,6 @@ function setHierarchicalLayout() {
             label: v => `Malware: ${v.malwareName}\nType: ${v.malwareType}`, 
             title: v => `Malware\nName: ${v.malwareName}\nType: ${v.malwareType}${v.notes ? '\nNotes: ' + v.notes : ''}` 
         },
-        // Add notes to other types as needed
         favicon: { 
             fields: ['hash'], 
             optionalFields: ['location', 'notes'], 
@@ -4864,7 +4888,19 @@ function setHierarchicalLayout() {
             label: v => `Favicon: ${v.hash.substring(0, 8)}...`, 
             title: v => `Favicon\nHash: ${v.hash}${v.location ? '\nPath: ' + v.location : ''}${v.notes ? '\nNotes: ' + v.notes : ''}` 
         },
-        // ... add 'notes' to optionalFields for all other types similarly ...
+        subnet: { 
+            fields: ['subnet'], 
+            optionalFields: ['notes'],
+            color: '#9333ea',
+            validate: v => {
+                const cidrRegex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\/(\d{1,2})$/;
+                if (!cidrRegex.test(v.subnet)) return false;
+                const [ip, mask] = v.subnet.split('/');
+                const octets = ip.split('.').map(Number);
+                const maskNum = Number(mask);
+                return octets.every(o => o >= 0 && o <= 255) && maskNum >= 0 && maskNum <= 32;
+            }
+        }
     };
 
     const config = configs[type];
@@ -4880,14 +4916,55 @@ function setHierarchicalLayout() {
     const allValues = { ...values };
     if (config.optionalFields) config.optionalFields.forEach(f => { if (values[f]) allValues[f] = values[f]; });
     
-    Object.assign(nodeData, { 
-        label: config.label(allValues), 
-        title: config.title(allValues), 
-        color: { background: config.color }, 
-        ...allValues 
-    });
-    
+    // Handle subnet type separately to set label and title directly
+    if (type === 'subnet') {
+        const [ip] = values.subnet.split('/');
+        const isPrivate = isPrivateIP(ip);
+        allValues.isPrivate = isPrivate;
+        nodeData.isPrivate = isPrivate;
+        nodeData.label = `Subnet: ${values.subnet} (${isPrivate ? 'Private' : 'Public'})`;
+        nodeData.title = `Subnet: ${values.subnet}\nType: ${isPrivate ? 'Private' : 'Public'}${values.notes ? '\nNotes: ' + values.notes : ''}`;
+        console.log(`Subnet ${values.subnet} classified as ${isPrivate ? 'Private' : 'Public'}`);
+        console.log(`Label set to: ${nodeData.label}`);
+        console.log(`Title set to: ${nodeData.title}`);
+    } else {
+        // For other types, use the config's label and title functions
+        nodeData.label = config.label ? config.label(allValues) : undefined;
+        nodeData.title = config.title ? config.title(allValues) : undefined;
+    }
+
+    nodeData.color = { background: config.color };
+    Object.assign(nodeData, allValues);
+
+    console.log(`Final nodeData: ${JSON.stringify(nodeData)}`);
     return nodeData;
+}
+
+// Define isPrivateIP if not already defined elsewhere
+function isPrivateIP(ip) {
+    console.log(`isPrivateIP called with: ${ip}`);
+    const octets = ip.split('.').map(Number);
+    console.log(`Parsed octets: ${octets}`);
+    
+    if (octets.length !== 4 || octets.some(o => o < 0 || o > 255)) {
+        console.log(`Invalid IP format: ${ip}`);
+        return false;
+    }
+
+    const isPrivate = (
+        (octets[0] === 10) || // 10.0.0.0/8
+        (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) || // 172.16.0.0/12
+        (octets[0] === 192 && octets[1] === 168) // 192.168.0.0/16
+    );
+    
+    console.log(`IP ${ip} is ${isPrivate ? 'private' : 'public'}`);
+    return isPrivate;
+}
+
+// Placeholder for showToast if not defined elsewhere
+function showToast(message, type = 'info') {
+    console.log(`Toast: ${message} (${type})`);
+    // Actual implementation would depend on your UI framework
 }
 
 function addNode() {
@@ -4906,6 +4983,9 @@ function addNode() {
         },
         ip: { 
             ip: document.getElementById('addIpInput').value.trim()
+        },
+        subnet: { 
+            subnet: document.getElementById('addSubnetInput').value.trim()
         },
         domain: { 
             domain: document.getElementById('addDomainInput').value.trim()
@@ -5003,6 +5083,7 @@ function addNode() {
                 malware: { malwareName: document.getElementById('editMalwareNameInput').value, malwareType: document.getElementById('editMalwareType').value },
                 vulnerability: {vulnName: document.getElementById('editVulnNameInput').value.trim(),
             cve: document.getElementById('editVulnCVEInput').value.trim(),
+            subnet: { subnet: document.getElementById('editSubnetInput').value.trim() },
             url: document.getElementById('editVulnUrlInput').value.trim()
             }
             };
@@ -5029,6 +5110,9 @@ function addNode() {
 
             document.getElementById('editEntityType').value = node.type;
             switch (node.type) {
+                case 'subnet':
+            document.getElementById('editSubnetInput').value = node.subnet || '';
+                    break;
                 case 'contact':
                     document.getElementById('editNameInput').value = node.name || '';
                     document.getElementById('editEmailInput').value = node.email || '';
@@ -5090,6 +5174,7 @@ function addNode() {
             document.getElementById('editVulnNameInput').style.display = node.type === 'vulnerability' ? 'block' : 'none';
             document.getElementById('editVulnCVEInput').style.display = node.type === 'vulnerability' ? 'block' : 'none';
             document.getElementById('editVulnUrlInput').style.display = node.type === 'vulnerability' ? 'block' : 'none';
+            document.getElementById('editSubnetInput').style.display = node.type === 'subnet' ? 'block' : 'none';
         }
 
         function clearAddInputs() {
@@ -5110,6 +5195,7 @@ function addNode() {
             document.getElementById('editVulnNameInput').value = '';
             document.getElementById('editVulnCVEInput').value = '';
             document.getElementById('editVulnUrlInput').value = '';
+            document.getElementById('editSubnetInput').value = '';
         }
 
         
@@ -8938,6 +9024,26 @@ async function enrichAllURLhaus() {
 }
 
 
+// Replace the existing isPrivateIP function (for completeness)
+function isPrivateIP(ip) {
+    console.log(`isPrivateIP called with: ${ip}`);
+    const octets = ip.split('.').map(Number);
+    console.log(`Parsed octets: ${octets}`);
+    
+    if (octets.length !== 4 || octets.some(o => o < 0 || o > 255)) {
+        console.log(`Invalid IP format: ${ip}`);
+        return false;
+    }
+
+    const isPrivate = (
+        (octets[0] === 10) || // 10.0.0.0/8
+        (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) || // 172.16.0.0/12
+        (octets[0] === 192 && octets[1] === 168) // 192.168.0.0/16
+    );
+    
+    console.log(`IP ${ip} is ${isPrivate ? 'private' : 'public'}`);
+    return isPrivate;
+}
 
 
 
