@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Crime Mapper - Experimental</title>
+    <title>Baddie Mapper - Experimental</title>
     <style>
 /* CSS Variables */
 :root {
@@ -588,6 +588,11 @@ button {
     overflow-y: auto;
 }
 
+.toastify {
+    top: calc(var(--top-bar-height) + 10px) !important;
+    z-index: 3000 !important;
+}
+
 .dark-mode #summary-modal {
     background-color: #2d3748;
     box-shadow: var(--shadow-dark);
@@ -861,7 +866,7 @@ input[type="checkbox"] {
 </head>
 <body class="dark-mode">
     <div id="top-bar">
-        <span id="version">Crime Mapper Experimental</span>
+        <span id="version">Baddie Mapper Experimental</span>
         <a href="https://github.com/mr-r3b00t/crime-mapper" target="_blank" id="github-link">GitHub Repo</a>
         <a href="https://gchq.github.io/CyberChef" target="_blank" id="cyberchef-link">GCHQ CyberChef</a>
     </div>
@@ -1095,7 +1100,18 @@ input[type="checkbox"] {
                     <input type="checkbox" id="storeSecuritytrailsKey"> Store in local storage
                 </label>
                 <button onclick="saveSecuritytrailsApiKey()">Save SecurityTrails API Key</button>
-            </div>
+                </div>
+                <div class="input-group">
+                    <h3>URLhaus API Key</h3>
+                    <div class="password-container">
+                        <input type="password" id="urlhausApiKey" placeholder="Enter URLhaus API Key">
+                        <button type="button" class="toggle-password" data-target="urlhausApiKey">Show</button>
+                    </div>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="storeUrlhausKey"> Store in local storage
+                    </label>
+                    <button onclick="saveUrlhausApiKey()">Save URLhaus API Key</button>
+                </div>
             <div class="input-group">
                 <h3>CORS Proxy URL</h3>
                 <div class="password-container">
@@ -1130,7 +1146,7 @@ input[type="checkbox"] {
                 <button onclick="enrichAllGreyNoise()">Enrich All IPs with GreyNoise</button>
                 <button onclick="enrichAllURLscan()">Enrich All URLs with URLscan.io</button>
                 <button onclick="enrichAllSecurityTrails()">Enrich All Domains with SecurityTrails Subdomains</button>
-
+                <button onclick="enrichAllURLhaus()">Enrich All URLs with URLhaus</button>
             </div>
         </div>
         <div id="import-iocs" class="tab-content active">
@@ -1252,6 +1268,7 @@ input[type="checkbox"] {
         let isDarkMode = true;
         let ipinfoApiKey;
         let shodanApiKey;
+        let urlhausApiKey = localStorage.getItem('urlhausApiKey') || '';
         let securitytrailsApiKey = localStorage.getItem('securitytrailsApiKey') || ''; //security tails api key variable
         let greynoiseApiKey = localStorage.getItem('greynoiseApiKey') || '';
         let urlscanApiKey = localStorage.getItem('urlscanApiKey') || '';
@@ -2433,8 +2450,8 @@ function finishStabilization(resolve, skipFit) {
 });
 
 network.on('click', function(params) {
- // Only proceed if exactly one node is selected and not dragging
- if (params.nodes.length !== 1 || params.event.type === 'drag') {
+    // Only proceed if exactly one node is selected and not dragging
+    if (params.nodes.length !== 1 || params.event.type === 'drag') {
         console.log('Click event ignored:', params);
         return;
     }
@@ -2461,8 +2478,8 @@ network.on('click', function(params) {
         case 'domain':
             valueToCopy = node.domain;
             break;
-        case 'url': // New case for URL nodes
-            valueToCopy = node.url; // Use the full URL property
+        case 'url':
+            valueToCopy = node.url;
             break;
         case 'contact':
             valueToCopy = node.email || node.name;
@@ -2489,13 +2506,14 @@ network.on('click', function(params) {
             valueToCopy = node.malwareName;
             break;
         case 'vulnerability':
-            valueToCopy = node.cve || node.vulnName; // Prefer CVE if available, else vulnName
+            valueToCopy = node.cve || node.vulnName;
             break;
         case 'favicon':
         case 'http_hash':
         case 'html_hash':
         case 'ssl_hash':
-            valueToCopy = node.hash; // Standardized hash property
+        case 'hash': // New case for file hashes
+            valueToCopy = node.hash; // Use full hash value
             break;
         case 'asn':
             valueToCopy = node.asn;
@@ -2513,7 +2531,7 @@ network.on('click', function(params) {
             valueToCopy = node.product;
             break;
         case 'http_title':
-            valueToCopy = node.title; // Use the title property for http_title
+            valueToCopy = node.title;
             break;
         case 'vpn':
         case 'proxy':
@@ -2522,8 +2540,15 @@ network.on('click', function(params) {
         case 'hosting':
             valueToCopy = node.value;
             break;
+        case 'hash': // Add this case for file hashes
+            if (!node.hash) return;
+            nodeData.hash = node.hash;
+            nodeData.hashType = node.hashType || 'Unknown';
+            nodeData.label = `${node.hashType}: ${node.hash.substring(0, 8)}...`;
+            nodeData.title = `File Hash\nType: ${node.hashType}\nValue: ${node.hash}${node.notes ? '\nNotes: ' + node.notes : ''}`;
+            nodeData.color.background = node.color?.background || '#f97316';
+            break;
         default:
-            // Fallback: Extract value after prefix or use full label
             valueToCopy = node.label.split('\n')[0].split(': ')[1] || node.label.split('\n')[0];
             console.warn(`Unhandled node type "${node.type}", using fallback value:`, valueToCopy);
     }
@@ -2613,7 +2638,7 @@ function removeEdgeDirect(edgeId) {
     hideEdgeContextMenu();
 }
 
-// Update the showContextMenu function to include the new option
+// show context menu on right click
 function showContextMenu(x, y, value, nodeIds, type) {
     const nodesArray = Array.isArray(nodeIds) ? nodeIds : [nodeIds];
     const menu = document.getElementById('contextMenu');
@@ -2642,7 +2667,7 @@ function showContextMenu(x, y, value, nodeIds, type) {
                 <button onclick="throttledSendHttpsRequestMultiple([${nodesArray.map(id => `'${nodes.get(id).ip}'`).join(',')}], 'ip', 'https')">Send HTTPS Request</button>
                 <button onclick="throttledSendHttpsRequestMultiple([${nodesArray.map(id => `'${nodes.get(id).ip}'`).join(',')}], 'ip', 'http')">Send HTTP Request</button>
                 <button onclick="throttledEnrichURLscan('${nodes.get(nodesArray[0]).ip}', ${nodesArray[0]})">Enrich via URLscan.io</button>
-                `;
+            `;
         } else if (type === 'domain') {
             menuHtml += `
                 <button onclick="throttledEnrichGoogleDNSMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via Google DNS</button>
@@ -2652,7 +2677,7 @@ function showContextMenu(x, y, value, nodeIds, type) {
                 <button onclick="throttledSendHttpsRequestMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], 'domain', 'http')">Send HTTP Request</button>
                 <button onclick="throttledEnrichURLscan('https://${nodes.get(nodesArray[0]).domain}', ${nodesArray[0]})">Enrich via URLscan.io</button>
                 <button onclick="throttledEnrichSecurityTrailsDomainMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via SecurityTrails</button>
-                `;
+            `;
         } else if (type === 'html_hash') {
             menuHtml += `
                 <button onclick="throttledSearchShodanHtmlHash('${nodesArray[0]}', '${nodes.get(nodesArray[0]).hash}')">Search Shodan for IPs with this HTML Hash</button>
@@ -2662,6 +2687,11 @@ function showContextMenu(x, y, value, nodeIds, type) {
                 <button onclick="throttledEnrichHudsonRockMultiple([${nodesArray.map(id => `'${nodes.get(id).email}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via Hudson Rock</button>
             `;
         }
+    } else if (type === 'url') {
+            menuHtml += `
+                <button onclick="throttledEnrichURLhausMultiple([${nodesArray.map(id => `'${nodes.get(id).url}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via URLhaus</button>
+            `;
+        
     }
 
     menu.innerHTML = menuHtml;
@@ -2791,6 +2821,10 @@ function saveState() {
                         nodeData.portType = node.portType;
                         nodeData.portNumber = node.portNumber;
                         nodeData.title = node.title;
+                        break;
+                    case 'hash': // Add this case for file hashes
+                        nodeData.hash = node.hash;
+                        nodeData.hashType = node.hashType;
                         break;
                     default:
                         console.warn(`Unhandled node type in saveState: ${node.type}`);
@@ -3078,30 +3112,38 @@ function constructUrl(baseUrl, useApiKey = true) {
         }
 
         function showToast(message, type = 'info') {
-            const toastOptions = {
-                text: message,
-                duration: 6500,
-                position: "center",
-                style: {
-                    background: isDarkMode ? '#2d3748' : '#fff',
-                    color: isDarkMode ? '#e2e8f0' : '#1f2a44',
-                    border: `1px solid ${isDarkMode ? '#4b5563' : '#d1d5db'}`,
-                    boxShadow: isDarkMode ? '0 2px 10px rgba(0, 0, 0, 0.3)' : '0 2px 10px rgba(0, 0, 0, 0.1)',
-                    position: 'fixed',
-                    top: '50px',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    width: 'auto',
-                    maxWidth: '80%',
-                    zIndex: 1000
-                }
-            };
-            switch (type) {
-                case 'success': toastOptions.style.background = isDarkMode ? '#166534' : '#22c55e'; toastOptions.style.color = '#fff'; break;
-                case 'error': toastOptions.style.background = isDarkMode ? '#991b1b' : '#ef4444'; toastOptions.style.color = '#fff'; break;
-            }
-            Toastify(toastOptions).showToast();
+    const topBarHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--top-bar-height')) || 40; // Default to 40px if variable not found
+    const buffer = 10; // Additional pixels to push toast below top bar
+    const toastOptions = {
+        text: message,
+        duration: 6500,
+        position: "center",
+        style: {
+            background: isDarkMode ? '#2d3748' : '#fff',
+            color: isDarkMode ? '#e2e8f0' : '#1f2a44',
+            border: `1px solid ${isDarkMode ? '#4b5563' : '#d1d5db'}`,
+            boxShadow: isDarkMode ? '0 2px 10px rgba(0, 0, 0, 0.3)' : '0 2px 10px rgba(0, 0, 0, 0.1)',
+            position: 'fixed',
+            top: `${topBarHeight + buffer}px`, // Position below top bar with buffer
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: 'auto',
+            maxWidth: '80%',
+            zIndex: 3000 // Increased z-index to ensure it’s above other elements
         }
+    };
+    switch (type) {
+        case 'success': 
+            toastOptions.style.background = isDarkMode ? '#166534' : '#22c55e'; 
+            toastOptions.style.color = '#fff'; 
+            break;
+        case 'error': 
+            toastOptions.style.background = isDarkMode ? '#991b1b' : '#ef4444'; 
+            toastOptions.style.color = '#fff'; 
+            break;
+    }
+    Toastify(toastOptions).showToast();
+}
 
         async function stabilizeNetwork(skipFit = false) {
     return new Promise(resolve => {
@@ -3995,34 +4037,242 @@ async function importIOCsFromFile() {
 }
 
 async function processIOCs(text) {
-    // Disable physics for the duration of the import
     network.setOptions({ physics: { enabled: false } });
-    
-    // Pre-collect all matches using regex on the preprocessed text
-    const ipMatches = new Set(text.match(/(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)|(?:[0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}/g) || []);
-    const domainMatches = new Set(text.match(/(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,}/g) || []);
-    const emailMatches = new Set(text.match(emailRegex) || []);
 
-    const totalItems = ipMatches.size + domainMatches.size + emailMatches.size;
+    // Regex patterns
+    const urlRegex = /(?:https?:\/\/)?(?:\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|[a-zA-Z0-9-]+\.[a-zA-Z]{2,})(?::\d+)?(?:\/[^\s]*)?/gi;
+    const domainRegex = /^(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,}$/;
+    const ipRegex = { 
+        ipv4: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/, 
+        ipv6: /^([0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}$/ 
+    };
+    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+    const hashRegex = {
+        sha256: /^[0-9a-fA-F]{64}$/,
+        md5: /^[0-9a-fA-F]{32}$/,
+        sha1: /^[0-9a-fA-F]{40}$/
+    };
+    const hashPattern = /[0-9a-fA-F]{32,64}/g;
+
+    // Extract matches with error handling
+    console.log('Input text:', text);
+    let urlMatches;
+    try {
+        urlMatches = new Set((text.match(urlRegex) || []).map(url => url.trim()));
+    } catch (e) {
+        console.error('Error initializing urlMatches:', e);
+        urlMatches = new Set();
+    }
+    let ipMatches;
+    try {
+        const ipCandidates = text.match(/(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)|(?:[0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}/g) || [];
+        ipMatches = new Set(ipCandidates.filter(ip => !Array.from(urlMatches).some(url => url.includes(ip))));
+    } catch (e) {
+        console.error('Error initializing ipMatches:', e);
+        ipMatches = new Set();
+    }
+    let domainMatches;
+    try {
+        domainMatches = new Set((text.match(domainRegex) || []).filter(domain => !Array.from(urlMatches).some(url => url.includes(domain))));
+    } catch (e) {
+        console.error('Error initializing domainMatches:', e);
+        domainMatches = new Set();
+    }
+    const emailMatches = new Set((text.match(emailRegex) || []));
+    const hashCandidates = new Set((text.match(hashPattern) || []).filter(hash => 
+        !urlMatches.has(hash) && !ipMatches.has(hash) && !domainMatches.has(hash) && !emailMatches.has(hash)
+    ));
+
+    console.log('URL Matches:', Array.from(urlMatches));
+    console.log('IP Matches:', Array.from(ipMatches));
+    console.log('Domain Matches:', Array.from(domainMatches));
+
+    // Filter hash candidates by specific types
+    const hashMatches = new Set();
+    hashCandidates.forEach(hash => {
+        if (hashRegex.sha256.test(hash)) hashMatches.add({ value: hash, type: 'sha256' });
+        else if (hashRegex.md5.test(hash)) hashMatches.add({ value: hash, type: 'md5' });
+        else if (hashRegex.sha1.test(hash)) hashMatches.add({ value: hash, type: 'sha1' });
+    });
+
+    const totalItems = urlMatches.size + ipMatches.size + domainMatches.size + emailMatches.size + hashMatches.size;
     if (totalItems === 0) {
         showToast('No IOCs found in text', 'info');
         return;
     }
 
-    // Maps to track existing nodes and avoid lookups
+    // Maps for deduplication
     const existingNodes = new Map();
     nodes.forEach(node => {
+        if (node.type === 'url' && node.url) existingNodes.set(`url:${node.url}`, node);
         if (node.type === 'ip' && node.ip) existingNodes.set(`ip:${node.ip}`, node);
         if (node.type === 'domain' && node.domain) existingNodes.set(`domain:${node.domain}`, node);
         if (node.type === 'contact' && node.email) existingNodes.set(`email:${node.email}`, node);
+        if (node.type === 'hash' && node.hash) existingNodes.set(`hash:${node.hash}`, node);
+        if (node.type === 'port' && node.portNumber) existingNodes.set(`port:${node.portType}/${node.portNumber}`, node);
     });
 
     const newNodes = [];
     const newEdges = [];
     let processedCount = 0;
-    const batchSize = 50; // Process in batches of 50
+    const batchSize = 50;
 
-    // Process IPs
+    // Helper function to normalize URL with protocol
+    function normalizeUrl(url) {
+        const trimmedUrl = url.trim();
+        if (trimmedUrl.match(/^https?:\/\//i)) return trimmedUrl;
+        return `http://${trimmedUrl}`;
+    }
+
+    // Helper function to extract components from URL
+    function extractUrlComponents(url) {
+        const normalizedUrl = normalizeUrl(url);
+        try {
+            const urlObj = new URL(normalizedUrl);
+            const hostname = urlObj.hostname;
+            const port = urlObj.port || '';
+            const path = urlObj.pathname + urlObj.search + urlObj.hash;
+            const parts = hostname.split('.');
+            const apexDomain = parts.length > 2 ? parts.slice(-2).join('.') : null;
+            const isIp = ipRegex.ipv4.test(hostname) || ipRegex.ipv6.test(hostname);
+            console.log(`URL Components for ${normalizedUrl}:`, { fullUrl: normalizedUrl, hostname, port, path, isIp, apexDomain });
+            return {
+                fullUrl: normalizedUrl,
+                hostname: hostname,
+                apexDomain: apexDomain,
+                port: port,
+                path: path === '/' ? '' : path,
+                isIp: isIp
+            };
+        } catch (e) {
+            console.warn(`Invalid URL: ${url}`, e);
+            return { fullUrl: normalizedUrl, hostname: null, apexDomain: null, port: null, path: null, isIp: false };
+        }
+    }
+
+    // Process URLs
+    for (const url of urlMatches) {
+        const { fullUrl, hostname, apexDomain, port, path, isIp } = extractUrlComponents(url);
+        if (!existingNodes.has(`url:${fullUrl}`)) {
+            const urlNodeId = nextId++;
+            const label = `URL: ${fullUrl.length > 30 ? fullUrl.substring(0, 27) + '...' : fullUrl}`;
+            newNodes.push({
+                id: urlNodeId,
+                type: 'url',
+                label: label,
+                title: `Full URL: ${fullUrl}`,
+                color: { background: '#3b82f6' },
+                url: fullUrl,
+                size: 15
+            });
+            existingNodes.set(`url:${fullUrl}`, { id: urlNodeId });
+            console.log(`Added URL node: ${fullUrl}, ID: ${urlNodeId}`);
+
+            // Handle hostname (domain or IP)
+            if (hostname) {
+                if (isIp && !existingNodes.has(`ip:${hostname}`)) {
+                    const ipNodeId = nextId++;
+                    newNodes.push({
+                        id: ipNodeId,
+                        type: 'ip',
+                        label: `IP: ${hostname}`,
+                        title: `IP Address: ${hostname}`,
+                        color: { background: '#f87171' },
+                        ip: hostname,
+                        size: 20
+                    });
+                    existingNodes.set(`ip:${hostname}`, { id: ipNodeId });
+                    newEdges.push({
+                        id: `edge_${urlNodeId}_${ipNodeId}_${Date.now()}`,
+                        from: urlNodeId,
+                        to: ipNodeId,
+                        label: 'Resolves to'
+                    });
+                    console.log(`Added IP node: ${hostname}, ID: ${ipNodeId}, Edge to URL: ${urlNodeId}`);
+                } else if (!isIp && domainRegex.test(hostname) && !existingNodes.has(`domain:${hostname}`)) {
+                    const domainNodeId = nextId++;
+                    newNodes.push({
+                        id: domainNodeId,
+                        type: 'domain',
+                        label: `Domain: ${hostname}`,
+                        title: `Domain: ${hostname}`,
+                        color: { background: '#60a5fa' },
+                        domain: hostname,
+                        size: 20
+                    });
+                    existingNodes.set(`domain:${hostname}`, { id: domainNodeId });
+                    newEdges.push({
+                        id: `edge_${urlNodeId}_${domainNodeId}_${Date.now()}`,
+                        from: urlNodeId,
+                        to: domainNodeId,
+                        label: 'Belongs to'
+                    });
+                    console.log(`Added Domain node: ${hostname}, ID: ${domainNodeId}, Edge to URL: ${urlNodeId}`);
+
+                    if (apexDomain && !existingNodes.has(`domain:${apexDomain}`)) {
+                        const apexNodeId = nextId++;
+                        newNodes.push({
+                            id: apexNodeId,
+                            type: 'domain',
+                            label: `Apex: ${apexDomain}`,
+                            title: `Apex Domain: ${apexDomain}`,
+                            color: { background: '#60a5fa' },
+                            domain: apexDomain,
+                            size: 20
+                        });
+                        existingNodes.set(`domain:${apexDomain}`, { id: apexNodeId });
+                        newEdges.push({
+                            id: `edge_${domainNodeId}_${apexNodeId}_${Date.now()}`,
+                            from: domainNodeId,
+                            to: apexNodeId,
+                            label: 'Apex of'
+                        });
+                        console.log(`Added Apex Domain node: ${apexDomain}, ID: ${apexNodeId}`);
+                    }
+                }
+            }
+
+            // Handle port (only if explicitly specified)
+            if (port && !existingNodes.has(`port:TCP/${port}`)) {
+                const portNodeId = nextId++;
+                newNodes.push({
+                    id: portNodeId,
+                    type: 'port',
+                    label: `TCP/${port}`,
+                    title: `Port\nType: TCP\nNumber: ${port}`,
+                    color: { background: '#a78bfa' },
+                    portType: 'TCP',
+                    portNumber: port,
+                    size: 10
+                });
+                existingNodes.set(`port:TCP/${port}`, { id: portNodeId });
+                newEdges.push({
+                    id: `edge_${urlNodeId}_${portNodeId}_${Date.now()}`,
+                    from: urlNodeId,
+                    to: portNodeId,
+                    label: 'Uses port'
+                });
+                console.log(`Added Port node: TCP/${port}, ID: ${portNodeId}, Edge to URL: ${urlNodeId}`);
+            } else if (port) {
+                console.log(`Port TCP/${port} already exists, skipping creation`);
+            } else {
+                console.log(`No explicit port found in ${fullUrl}`);
+            }
+        } else {
+            console.log(`URL ${fullUrl} already exists, skipping`);
+        }
+        processedCount++;
+        if (processedCount % batchSize === 0) {
+            console.log('Batch processing:', { newNodes, newEdges });
+            nodes.add(newNodes);
+            edges.add(newEdges);
+            newNodes.length = 0;
+            newEdges.length = 0;
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
+    }
+
+    // Process standalone IPs
     for (const ip of ipMatches) {
         if ((ipRegex.ipv4.test(ip) || ipRegex.ipv6.test(ip)) && !existingNodes.has(`ip:${ip}`)) {
             const nodeId = nextId++;
@@ -4036,10 +4286,19 @@ async function processIOCs(text) {
                 size: 20
             });
             existingNodes.set(`ip:${ip}`, { id: nodeId });
+            console.log(`Added standalone IP node: ${ip}, ID: ${nodeId}`);
+        }
+        processedCount++;
+        if (processedCount % batchSize === 0) {
+            nodes.add(newNodes);
+            edges.add(newEdges);
+            newNodes.length = 0;
+            newEdges.length = 0;
+            await new Promise(resolve => setTimeout(resolve, 0));
         }
     }
 
-    // Process domains from domain matches
+    // Process standalone Domains
     for (const domain of domainMatches) {
         if (domainRegex.test(domain) && !existingNodes.has(`domain:${domain}`)) {
             const nodeId = nextId++;
@@ -4053,16 +4312,23 @@ async function processIOCs(text) {
                 size: 20
             });
             existingNodes.set(`domain:${domain}`, { id: nodeId });
+            console.log(`Added standalone Domain node: ${domain}, ID: ${nodeId}`);
+        }
+        processedCount++;
+        if (processedCount % batchSize === 0) {
+            nodes.add(newNodes);
+            edges.add(newEdges);
+            newNodes.length = 0;
+            newEdges.length = 0;
+            await new Promise(resolve => setTimeout(resolve, 0));
         }
     }
 
-    // Process emails and link to domains
+    // Process Emails
     for (const email of emailMatches) {
         if (!existingNodes.has(`email:${email}`)) {
             const emailNodeId = nextId++;
             const emailDomain = email.split('@')[1];
-
-            // Add email node
             newNodes.push({
                 id: emailNodeId,
                 type: 'contact',
@@ -4075,9 +4341,8 @@ async function processIOCs(text) {
             });
             existingNodes.set(`email:${email}`, { id: emailNodeId });
 
-            // Find or create domain node
             let domainNode = existingNodes.get(`domain:${emailDomain}`);
-            if (!domainNode) {
+            if (!domainNode && domainRegex.test(emailDomain)) {
                 const domainNodeId = nextId++;
                 newNodes.push({
                     id: domainNodeId,
@@ -4091,43 +4356,69 @@ async function processIOCs(text) {
                 domainNode = { id: domainNodeId };
                 existingNodes.set(`domain:${emailDomain}`, domainNode);
             }
-
-            // Add edge
-            const edgeId = `edge_${emailNodeId}_${domainNode.id}_${Date.now()}`;
-            if (!edges.get({ filter: e => e.from === emailNodeId && e.to === domainNode.id }).length) {
+            if (domainNode) {
                 newEdges.push({
-                    id: edgeId,
+                    id: `edge_${emailNodeId}_${domainNode.id}_${Date.now()}`,
                     from: emailNodeId,
                     to: domainNode.id,
                     label: 'Registered with'
                 });
             }
+            console.log(`Added Email node: ${email}, ID: ${emailNodeId}`);
+        }
+        processedCount++;
+        if (processedCount % batchSize === 0) {
+            nodes.add(newNodes);
+            edges.add(newEdges);
+            newNodes.length = 0;
+            newEdges.length = 0;
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
+    }
 
-            // Batch processing
-            processedCount++;
-            if (processedCount % batchSize === 0) {
-                nodes.add(newNodes);
-                edges.add(newEdges);
-                newNodes.length = 0;
-                newEdges.length = 0;
-                await new Promise(resolve => setTimeout(resolve, 0)); // Allow UI to breathe
-                showToast(`Processed ${processedCount} of ${emailMatches.size} emails`, 'info');
-            }
+    // Process Hashes
+    for (const hashObj of hashMatches) {
+        const hash = hashObj.value;
+        if (!existingNodes.has(`hash:${hash}`)) {
+            const hashNodeId = nextId++;
+            const hashType = hashObj.type.toUpperCase();
+            newNodes.push({
+                id: hashNodeId,
+                type: 'hash',
+                label: `${hashType}: ${hash.substring(0, 8)}...`,
+                title: `File Hash\nType: ${hashType}\nValue: ${hash}`,
+                color: { background: '#f97316' },
+                hash: hash,
+                hashType: hashType,
+                size: 15
+            });
+            existingNodes.set(`hash:${hash}`, { id: hashNodeId });
+            console.log(`Added Hash node: ${hash}, Type: ${hashType}, ID: ${hashNodeId}`);
+        }
+        processedCount++;
+        if (processedCount % batchSize === 0) {
+            nodes.add(newNodes);
+            edges.add(newEdges);
+            newNodes.length = 0;
+            newEdges.length = 0;
+            await new Promise(resolve => setTimeout(resolve, 0));
         }
     }
 
     // Add remaining items
-    if (newNodes.length > 0) nodes.add(newNodes);
-    if (newEdges.length > 0) edges.add(newEdges);
+    if (newNodes.length > 0) {
+        console.log('Final batch processing:', { newNodes, newEdges });
+        nodes.add(newNodes);
+        edges.add(newEdges);
+    }
 
-    // Update UI once at the end
     updateNodeSizes();
     updateSelectOptions();
-
-    // Re-enable physics and stabilize
-    await stabilizeNetwork();
-    showToast(`Imported ${ipMatches.size} IPs, ${domainMatches.size} domains, and ${emailMatches.size} emails`, 'success');
+    await stabilizeNetwork().catch(err => console.error('Error stabilizing network:', err));
+    showToast(`Imported ${urlMatches.size} URLs, ${ipMatches.size} IPs, ${domainMatches.size} domains, ${emailMatches.size} emails, ${hashMatches.size} hashes`, 'success');
 }
+
+
 
 
 
@@ -7078,16 +7369,19 @@ function initializeApiKeys() {
     ipinfoApiKey = localStorage.getItem('ipinfoApiKey') || '';
     shodanApiKey = localStorage.getItem('shodanApiKey') || '';
     greynoiseApiKey = localStorage.getItem('greynoiseApiKey') || '';
+    urlscanApiKey = localStorage.getItem('urlscanApiKey') || '';
+    securitytrailsApiKey = localStorage.getItem('securitytrailsApiKey') || '';
+    urlhausApiKey = localStorage.getItem('urlhausApiKey') || '';
     corsProxyUrl = localStorage.getItem('corsProxyUrl') || 'https://cors-anywhere.herokuapp.com/';
     routeViaProxy = localStorage.getItem('routeViaProxy') === 'true';
     ignoreApiKeysViaProxy = localStorage.getItem('ignoreApiKeysViaProxy') === 'true';
-    urlscanApiKey = localStorage.getItem('urlscanApiKey') || '';
-    securitytrailsApiKey = localStorage.getItem('securitytrailsApiKey') || '';
-    
-    // Set initial values in UI
+
     document.getElementById('ipinfoApiKey').value = ipinfoApiKey;
     document.getElementById('shodanApiKey').value = shodanApiKey;
     document.getElementById('greynoiseApiKey').value = greynoiseApiKey;
+    document.getElementById('urlscanApiKey').value = urlscanApiKey;
+    document.getElementById('securitytrailsApiKey').value = securitytrailsApiKey;
+    document.getElementById('urlhausApiKey').value = urlhausApiKey;
     document.getElementById('corsProxyUrl').value = corsProxyUrl;
     document.getElementById('routeViaProxy').checked = routeViaProxy;
     document.getElementById('ignoreApiKeysViaProxy').checked = ignoreApiKeysViaProxy;
@@ -7095,7 +7389,8 @@ function initializeApiKeys() {
     document.getElementById('storeShodanKey').checked = !!localStorage.getItem('shodanApiKey');
     document.getElementById('storeGreynoiseKey').checked = !!localStorage.getItem('greynoiseApiKey');
     document.getElementById('storeUrlscanKey').checked = !!localStorage.getItem('urlscanApiKey');
-    document.getElementById('securitytrailsApiKey').value = securitytrailsApiKey; // Set SecurityTrails input
+    document.getElementById('storeSecuritytrailsKey').checked = !!localStorage.getItem('securitytrailsApiKey');
+    document.getElementById('storeUrlhausKey').checked = !!localStorage.getItem('urlhausApiKey');
 }
 
 
@@ -7977,33 +8272,34 @@ const throttledEnrichSecurityTrailsDomainMultiple = throttleRequest(async functi
 //Refang IOCs
 
 function refangText(text) {
-    // Ensure the text is a string
     if (typeof text !== 'string') return text;
 
     let refanged = text;
 
-    // Common defanging patterns for URLs and IPs
-    refanged = refanged.replace(/\[\.\]/g, '.');        // [.] → .
-    refanged = refanged.replace(/\[dot\]/gi, '.');     // [dot] or [DOT] → .
-    refanged = refanged.replace(/\[ \. \]/g, '.');     // [ . ] → .
-    refanged = refanged.replace(/\[\:\]/g, ':');       // [:] → :
-    refanged = refanged.replace(/\[colon\]/gi, '://'); // [colon] or [COLON] → :// (corrected)
-    refanged = refanged.replace(/hxxp/gi, 'http');     // hxxp → http
-    refanged = refanged.replace(/\[hxxp\]/gi, 'http'); // [hxxp] → http
-    refanged = refanged.replace(/\[http\]/gi, 'http'); // [http] → http
+    // URL-specific defanging patterns
+    refanged = refanged.replace(/hxxps/gi, 'https');          // hxxps → https
+    refanged = refanged.replace(/hxxp/gi, 'http');           // hxxp → http
+    refanged = refanged.replace(/\[hxxps\]/gi, 'https');     // [hxxps] → https
+    refanged = refanged.replace(/\[hxxp\]/gi, 'http');       // [hxxp] → http
+    refanged = refanged.replace(/\[https\]/gi, 'https');     // [https] → https
+    refanged = refanged.replace(/\[http\]/gi, 'http');       // [http] → http
+    refanged = refanged.replace(/\[colon\]/gi, ':');         // [colon] → :
+    refanged = refanged.replace(/\[\/\]/g, '/');             // [/] → /
+    refanged = refanged.replace(/\[ \/\]/g, '/');            // [ /] → /
+    refanged = refanged.replace(/\[slash\]/gi, '/');         // [slash] → /
+    refanged = refanged.replace(/\[\.\]/g, '.');             // [.] → .
+    refanged = refanged.replace(/\[dot\]/gi, '.');           // [dot] or [DOT] → .
+    refanged = refanged.replace(/\[ \. \]/g, '.');           // [ . ] → .
 
-    // Email address defanging
-    refanged = refanged.replace(/\[at\]/gi, '@');      // [at] or [AT] → @
-    refanged = refanged.replace(/\[ @ \]/g, '@');      // [ @ ] → @
-    refanged = refanged.replace(/ at /gi, '@');        // " at " → @ (common in text)
-    refanged = refanged.replace(/\[dot\]/gi, '.');     // [dot] in emails → .
+    // Email-specific defanging (unchanged)
+    refanged = refanged.replace(/\[at\]/gi, '@');            // [at] or [AT] → @
+    refanged = refanged.replace(/\[ @ \]/g, '@');            // [ @ ] → @
+    refanged = refanged.replace(/ at /gi, '@');              // " at " → @
 
-    // Remove any remaining standalone square brackets that might remain
-    refanged = refanged.replace(/\[\s*\]/g, '');       // Empty brackets [] → ''
-    refanged = refanged.replace(/\[([^\]]+)\]/g, '$1'); // [text] → text (general cleanup)
-
-    // Clean up any extra spaces that might have been introduced
-    refanged = refanged.replace(/\s+/g, ' ').trim();
+    // General cleanup
+    refanged = refanged.replace(/\[\s*\]/g, '');             // Empty brackets [] → ''
+    refanged = refanged.replace(/\[([^\]]+)\]/g, '$1');      // [text] → text (non-special cases)
+    refanged = refanged.replace(/\s+/g, ' ').trim();         // Normalize spaces
 
     return refanged;
 }
@@ -8245,6 +8541,320 @@ function hideNotesModal() {
 
     currentEditingNodeId = null;
 }
+
+
+
+
+
+// delete nodes
+
+function deleteNodes(nodeIds) {
+    console.log('deleteNodes called with:', nodeIds);
+    
+    if (!nodeIds || !Array.isArray(nodeIds) || nodeIds.length === 0) {
+        showToast('No nodes selected to delete', 'error');
+        return;
+    }
+
+    // Filter out invalid or non-existent node IDs
+    const validNodeIds = nodeIds.filter(id => {
+        const node = nodes.get(id);
+        if (!node) {
+            console.warn(`Node with ID ${id} not found`);
+            return false;
+        }
+        return true;
+    });
+
+    if (validNodeIds.length === 0) {
+        showToast('No valid nodes found to delete', 'error');
+        return;
+    }
+
+    // Remove all edges connected to these nodes
+    edges.forEach(edge => {
+        if (validNodeIds.includes(edge.from) || validNodeIds.includes(edge.to)) {
+            edges.remove({ id: edge.id });
+        }
+    });
+
+    // Remove the nodes
+    nodes.remove(validNodeIds);
+
+    // Update UI and network
+    updateNodeSizes();
+    updateSelectOptions();
+    stabilizeNetwork();
+    saveStateAfterOperation();
+
+    showToast(`${validNodeIds.length} node${validNodeIds.length > 1 ? 's' : ''} deleted`, 'success');
+}
+
+// save URLHAUS keys
+
+function saveUrlhausApiKey() {
+    urlhausApiKey = document.getElementById('urlhausApiKey').value.trim();
+    const storeKey = document.getElementById('storeUrlhausKey').checked;
+    if (urlhausApiKey) {
+        if (storeKey) {
+            localStorage.setItem('urlhausApiKey', urlhausApiKey);
+            showToast('URLhaus API key saved successfully!', 'success');
+        } else {
+            localStorage.removeItem('urlhausApiKey');
+            showToast('URLhaus API key set for this session only', 'success');
+        }
+    } else {
+        localStorage.removeItem('urlhausApiKey');
+        showToast('Please enter a valid URLhaus API key.', 'error');
+    }
+}
+
+
+// URL HAUS
+
+const throttledEnrichURLhaus = throttleRequest(async function enrichURLhaus(url, urlNodeId, isBulk = false, signal) {
+    if (!urlhausApiKey && !ignoreApiKeysViaProxy) {
+        showToast('Please set your URLhaus API key in the "Config" tab first.', 'error');
+        return;
+    }
+
+    if (!isBulk) network.setOptions({ physics: { enabled: false } });
+
+    try {
+        const baseUrl = 'https://urlhaus-api.abuse.ch/v1/url/';
+        const urlToQuery = constructUrl(baseUrl);
+        const postData = `url=${encodeURIComponent(url)}`;
+        const headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept': 'application/json'
+        };
+        if (urlhausApiKey && !ignoreApiKeysViaProxy) {
+            headers['Auth-Key'] = urlhausApiKey;
+        }
+
+        const response = await fetch(urlToQuery, {
+            method: 'POST',
+            headers: headers,
+            body: postData,
+            signal
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Failed to fetch URLhaus data: ${response.statusText} - ${errorText}`);
+        }
+
+        const data = await response.json();
+
+        if (data.query_status !== 'ok') {
+            if (data.query_status === 'no_results') {
+                if (!isBulk) showToast(`No URLhaus data found for ${url}`, 'info');
+                return;
+            }
+            throw new Error(`URLhaus query failed: ${data.query_status}`);
+        }
+
+        const newNodes = [];
+        const newEdges = [];
+        const existingNodes = new Map();
+
+        // Cache existing nodes for deduplication
+        nodes.forEach(node => {
+            if (node.type === 'url' && node.url) existingNodes.set(`url:${node.url}`, node.id);
+            if (node.type === 'tag' && node.tag) existingNodes.set(`tag:${node.tag}`, node.id);
+            if (node.type === 'timestamp' && node.timestamp) existingNodes.set(`timestamp:${node.timestamp}`, node.id);
+            if (node.type === 'threat' && node.threat) existingNodes.set(`threat:${node.threat}`, node.id);
+        });
+
+        // URL Status
+        if (data.url_status) {
+            const statusId = existingNodes.get(`tag:${data.url_status}`) || nextId++;
+            if (!existingNodes.has(`tag:${data.url_status}`)) {
+                newNodes.push({
+                    id: statusId,
+                    type: 'tag',
+                    label: `Status: ${data.url_status}`,
+                    title: `URLhaus Status: ${data.url_status}`,
+                    color: { background: '#6d28d9' },
+                    tag: data.url_status
+                });
+                existingNodes.set(`tag:${data.url_status}`, statusId);
+            }
+            newEdges.push({ id: `${urlNodeId}-${statusId}-Status`, from: urlNodeId, to: statusId, label: 'Status' });
+        }
+
+        // Threat Type
+        if (data.threat) {
+            const threatId = existingNodes.get(`threat:${data.threat}`) || nextId++;
+            if (!existingNodes.has(`threat:${data.threat}`)) {
+                newNodes.push({
+                    id: threatId,
+                    type: 'threat',
+                    label: `Threat: ${data.threat}`,
+                    title: `URLhaus Threat: ${data.threat}`,
+                    color: { background: '#ef4444' },
+                    threat: data.threat
+                });
+                existingNodes.set(`threat:${data.threat}`, threatId);
+            }
+            newEdges.push({ id: `${urlNodeId}-${threatId}-Threat`, from: urlNodeId, to: threatId, label: 'Threat' });
+        }
+
+        // Date Added
+        if (data.date_added) {
+            const dateId = existingNodes.get(`timestamp:${data.date_added}`) || nextId++;
+            if (!existingNodes.has(`timestamp:${data.date_added}`)) {
+                newNodes.push({
+                    id: dateId,
+                    type: 'timestamp',
+                    label: `Added: ${data.date_added}`,
+                    title: `Date Added: ${data.date_added}`,
+                    color: { background: '#f97316' },
+                    timestamp: data.date_added
+                });
+                existingNodes.set(`timestamp:${data.date_added}`, dateId);
+            }
+            newEdges.push({ id: `${urlNodeId}-${dateId}-AddedOn`, from: urlNodeId, to: dateId, label: 'Added on' });
+        }
+
+        // Tags
+        if (data.tags && Array.isArray(data.tags)) {
+            data.tags.forEach(tag => {
+                const tagId = existingNodes.get(`tag:${tag}`) || nextId++;
+                if (!existingNodes.has(`tag:${tag}`)) {
+                    newNodes.push({
+                        id: tagId,
+                        type: 'tag',
+                        label: `Tag: ${tag}`,
+                        title: `URLhaus Tag: ${tag}`,
+                        color: { background: '#6d28d9' },
+                        tag: tag
+                    });
+                    existingNodes.set(`tag:${tag}`, tagId);
+                }
+                newEdges.push({ id: `${urlNodeId}-${tagId}-Tagged`, from: urlNodeId, to: tagId, label: 'Tagged' });
+            });
+        }
+
+        // Update node with URLhaus reference
+        nodes.update({
+            id: urlNodeId,
+            title: `${nodes.get(urlNodeId).title || url}\nURLhaus Ref: ${data.urlhaus_reference || 'N/A'}`
+        });
+
+        if (newNodes.length) nodes.add(newNodes);
+        if (newEdges.length) edges.add(newEdges);
+
+        updateNodeSizes();
+        updateSelectOptions();
+        if (!isBulk) {
+            await stabilizeNetwork();
+            showToast(`URL ${url} enriched with URLhaus data`, 'success');
+        }
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            showToast(`Enrichment of URL ${url} cancelled`, 'info');
+            return;
+        }
+        console.error(`Error enriching URL ${url} with URLhaus: ${error.message}`);
+        showToast(`Error enriching URL ${url}: ${error.message}`, 'error');
+        if (!isBulk) await stabilizeNetwork();
+    }
+}, RATE_LIMIT_MS);
+
+const throttledEnrichURLhausMultiple = throttleRequest(async function enrichURLhausMultiple(urls, nodeIds) {
+    if (!Array.isArray(urls) || !Array.isArray(nodeIds) || urls.length !== nodeIds.length) {
+        showToast('Invalid input for multiple URLhaus enrichment', 'error');
+        return;
+    }
+
+    if (!urlhausApiKey && !ignoreApiKeysViaProxy) {
+        showToast('Please set your URLhaus API key in the "Config" tab first.', 'error');
+        return;
+    }
+
+    showProgressBar();
+    network.setOptions({ physics: { enabled: false } });
+    const totalURLs = urls.length;
+    let successfulEnrichments = 0;
+
+    document.getElementById('progress-bar').textContent = `URLhaus Enrichment: 0/${totalURLs} URLs (0%)`;
+
+    for (let i = 0; i < totalURLs; i++) {
+        if (activeTaskController?.signal.aborted) {
+            showToast('URLhaus enrichment stopped', 'info');
+            document.getElementById('progress-bar').textContent = `URLhaus Enrichment: Stopped at ${successfulEnrichments}/${totalURLs} URLs`;
+            break;
+        }
+        await throttledEnrichURLhaus(urls[i], nodeIds[i], true);
+        successfulEnrichments++;
+        const progress = ((successfulEnrichments / totalURLs) * 100).toFixed(1);
+        document.getElementById('progress-bar').textContent = `URLhaus Enrichment: ${successfulEnrichments}/${totalURLs} URLs (${progress}%)`;
+        await new Promise(resolve => setTimeout(resolve, 200)); // Rate limiting
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    completeProgressBar();
+    showToast(`Enriched ${successfulEnrichments}/${totalURLs} URLs with URLhaus`, 'success');
+}, RATE_LIMIT_MS);
+
+async function enrichAllURLhaus() {
+    if (!urlhausApiKey && !ignoreApiKeysViaProxy) {
+        showToast('Please set your URLhaus API key in the "Config" tab first.', 'error');
+        return;
+    }
+
+    showProgressBar();
+    network.setOptions({ physics: { enabled: false } });
+    const urlNodes = nodes.get({ filter: n => n.type === 'url' && n.url });
+    const totalURLs = urlNodes.length;
+    let successfulEnrichments = 0;
+
+    if (totalURLs === 0) {
+        showToast('No URL nodes found to enrich', 'info');
+        completeProgressBar();
+        return;
+    }
+
+    const batchSize = 10;
+    const delayBetweenBatches = 500;
+    const totalBatches = Math.ceil(totalURLs / batchSize);
+    const estimatedTimeMs = totalBatches * delayBetweenBatches;
+    const timeEstimateStr = Math.ceil(estimatedTimeMs / 60000) + 'm';
+
+    document.getElementById('progress-bar').textContent = `URLhaus Enrichment: 0/${totalURLs} URLs (0%) - Est. ${timeEstimateStr}`;
+
+    for (let i = 0; i < totalURLs; i += batchSize) {
+        if (activeTaskController?.signal.aborted) {
+            showToast('URLhaus enrichment stopped', 'info');
+            document.getElementById('progress-bar').textContent = `URLhaus Enrichment: Stopped at ${successfulEnrichments}/${totalURLs} URLs`;
+            break;
+        }
+
+        const batch = urlNodes.slice(i, Math.min(i + batchSize, totalURLs));
+        const promises = batch.map(node => 
+            throttledEnrichURLhaus(node.url, node.id, true)
+                .then(() => successfulEnrichments++)
+                .catch(error => console.error(`Error for ${node.url}: ${error.message}`))
+        );
+
+        await Promise.all(promises);
+
+        const progress = ((successfulEnrichments / totalURLs) * 100).toFixed(1);
+        document.getElementById('progress-bar').textContent = `URLhaus Enrichment: ${successfulEnrichments}/${totalURLs} URLs (${progress}%)`;
+        await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    ensureInteractionSettings();
+    completeProgressBar();
+    showToast(`URLhaus enrichment completed: ${successfulEnrichments}/${totalURLs} URLs enriched`, 'success');
+}
+
 
 
 // Add this at the end of the script section
