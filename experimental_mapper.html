@@ -133,7 +133,7 @@ body.dark-mode {
 }
 
 #controls:not(.collapsed) {
-    width: 300px;
+    width: 350px;
 }
 
 #controls-header {
@@ -416,7 +416,7 @@ button {
     position: fixed;
     top: var(--top-bar-height);
     right: -310px;
-    width: 300px;
+    width: 350px;
     height: calc(100vh - var(--top-bar-height));
     background-color: #fff;
     box-shadow: -2px 0 10px rgba(0, 0, 0, 0.2);
@@ -737,20 +737,21 @@ button {
 
 /* Password Toggle */
 .password-container {
-    position: relative;
+    display: flex;
+    flex-direction: column; /* Stack children vertically */
     width: 100%;
     margin-bottom: 8px;
+    gap: 4px; /* Add space between input and button */
 }
 
+/* Inputs - Remove padding-right */
 .password-container input {
-    padding-right: 60px;
+    padding: 6px 10px; /* Adjusted from padding-right: 60px to standard padding */
 }
 
+/* Password Toggle */
 .toggle-password {
-    position: absolute;
-    right: 5px;
-    top: 50%;
-    transform: translateY(-50%);
+    /* Remove absolute positioning */
     padding: 2px 8px;
     background-color: #6b7280;
     color: white;
@@ -758,6 +759,8 @@ button {
     border-radius: 4px;
     font-size: 10px;
     cursor: pointer;
+    width: auto; /* Let it size naturally */
+    align-self: flex-start; /* Align to the left */
 }
 
 .light-mode .toggle-password {
@@ -771,7 +774,6 @@ button {
 .toggle-password:hover {
     background-color: #4b5563;
 }
-
 /* Stop Task Button */
 #stop-task {
     padding: 6px 12px;
@@ -857,6 +859,12 @@ input[type="checkbox"] {
     #properties-panel.active ~ #myNetwork {
         margin-right: 300px;
     }
+}
+
+#controls.collapsed #manual-save,
+#controls.collapsed #buy-me-a-coffee-container,
+#controls.collapsed #stop-task-container {
+    display: none;
 }
 </style>
     <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/dist/vis-network.min.js"></script>
@@ -1205,7 +1213,7 @@ input[type="checkbox"] {
             </div>
         </div>
          <!-- Buy Me a Coffee Button -->
-         <div style="text-align: center; padding: 10px;">
+         <div id="buy-me-a-coffee-container" style="text-align: center; padding: 10px;">
             <script type="text/javascript" src="https://cdnjs.buymeacoffee.com/1.0.0/button.prod.min.js" 
                 data-name="bmc-button" 
                 data-slug="mrr3b00t" 
@@ -1221,7 +1229,7 @@ input[type="checkbox"] {
 
         <button id="manual-save" onclick="saveStateAfterOperation()">Save Now</button>
 
-        <div style="text-align: center; padding: 10px;">
+        <div id="stop-task-container" style="text-align: center; padding: 10px;">
             <button id="stop-task" onclick="stopActiveTask()">Stop Active Task</button>
         </div>
 
