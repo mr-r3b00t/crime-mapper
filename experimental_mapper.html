@@ -1064,6 +1064,7 @@ input[type="checkbox"] {
                 <button onclick="exportToPDF()">Export to PDF</button>
                 <button onclick="exportConfigBackup()">Backup Config</button> <!-- New Button -->
                 <button onclick="importConfig()">Import Config</button> <!-- New Button -->
+                <button onclick="importNMAP()">Import NMAP</button> <!-- New Button -->
             </div>
         </div>
         <div id="api-keys" class="tab-content">
@@ -1249,7 +1250,7 @@ input[type="checkbox"] {
         <!-- Suggested -->
         <footer id="controls-footer"> 
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.281 experimental</p>
+    <p>© Xservus Limited - v0.282 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
@@ -9468,6 +9469,366 @@ function importConfig() {
             } catch (error) {
                 console.error('Error importing config:', error);
                 showToast(`Failed to import configuration: ${error.message}`, 'error');
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    // Trigger file selection
+    input.click();
+}
+
+// IMport from NMAP XML Function
+
+async function importNMAP() {
+    // Create a temporary file input element
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.xml';
+
+    input.onchange = async function(event) {
+        const file = event.target.files[0];
+        if (!file) {
+            showToast('No file selected', 'error');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            try {
+                let xmlText = e.target.result;
+                console.log('Raw XML Text:', xmlText); // Log raw input for debugging
+
+                // Extract valid XML content between <?xml and </nmaprun>
+                const xmlStart = xmlText.indexOf('<?xml');
+                const xmlEnd = xmlText.lastIndexOf('</nmaprun>') + '</nmaprun>'.length;
+                if (xmlStart === -1 || xmlEnd === -1) {
+                    throw new Error('Could not find valid XML content in file');
+                }
+                xmlText = xmlText.substring(xmlStart, xmlEnd);
+                console.log('Extracted XML Text:', xmlText); // Log extracted XML
+
+                // Clean up comments within the XML (optional, as DOMParser handles them)
+                const cleanedXmlText = xmlText; // Comments like <!-- Nmap ... --> are fine for DOMParser
+                console.log('Cleaned XML Text:', cleanedXmlText);
+
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(cleanedXmlText, 'application/xml');
+
+                // Check for XML parsing errors
+                const parserError = xmlDoc.querySelector('parsererror');
+                if (parserError) {
+                    console.error('Parser Error Details:', parserError.textContent);
+                    throw new Error('Invalid Nmap XML file: ' + parserError.textContent);
+                }
+
+                console.log('Parsed XML Document:', xmlDoc); // Log parsed doc for debugging
+
+                // Maps for deduplication
+                const existingNodes = new Map();
+                nodes.forEach(node => {
+                    if (node.type === 'ip' && node.ip) existingNodes.set(`ip:${node.ip}`, node);
+                    if (node.type === 'domain' && node.domain) existingNodes.set(`domain:${node.domain.toLowerCase()}`, node);
+                    if (node.type === 'port' && node.portNumber) existingNodes.set(`port:${node.portType}/${node.portNumber}`, node);
+                    if (node.type === 'service' && node.serviceName) existingNodes.set(`service:${node.serviceName.toLowerCase()}_${node.portType}/${node.portNumber}`, node);
+                    if (node.type === 'os' && node.os) existingNodes.set(`os:${node.os}`, node);
+                    if (node.type === 'cpe' && node.cpe) existingNodes.set(`cpe:${node.cpe}`, node);
+                    if (node.type === 'hop' && node.ipaddr) existingNodes.set(`hop:${node.ipaddr}`, node);
+                });
+
+                const newNodes = [];
+                const newEdges = [];
+                let processedCount = 0;
+                const batchSize = 50;
+
+                // Process each host
+                const hosts = xmlDoc.getElementsByTagName('host');
+                if (hosts.length === 0) {
+                    throw new Error('No hosts found in Nmap XML');
+                }
+
+                for (const host of hosts) {
+                    // Extract IP address
+                    const ipAddr = host.querySelector('address[addrtype="ipv4"]');
+                    const ip = ipAddr ? ipAddr.getAttribute('addr') : null;
+                    if (!ip) continue;
+
+                    let ipNodeId;
+                    if (!existingNodes.has(`ip:${ip}`)) {
+                        ipNodeId = nextId++;
+                        newNodes.push({
+                            id: ipNodeId,
+                            type: 'ip',
+                            label: `IP: ${ip}`,
+                            title: `IP Address: ${ip}`,
+                            color: { background: '#f87171' },
+                            ip: ip,
+                            size: 20
+                        });
+                        existingNodes.set(`ip:${ip}`, { id: ipNodeId });
+                        console.log(`Added IP node: ${ip}, ID: ${ipNodeId}`);
+                    } else {
+                        ipNodeId = existingNodes.get(`ip:${ip}`).id;
+                    }
+
+                    // Extract hostnames
+                    const hostnames = host.getElementsByTagName('hostname');
+                    for (const hostname of hostnames) {
+                        const domain = hostname.getAttribute('name');
+                        if (domain && !existingNodes.has(`domain:${domain.toLowerCase()}`)) {
+                            const domainNodeId = nextId++;
+                            newNodes.push({
+                                id: domainNodeId,
+                                type: 'domain',
+                                label: `Domain: ${domain}`,
+                                title: `Domain: ${domain}\nType: ${hostname.getAttribute('type')}`,
+                                color: { background: '#60a5fa' },
+                                domain: domain,
+                                size: 20
+                            });
+                            existingNodes.set(`domain:${domain.toLowerCase()}`, { id: domainNodeId });
+                            newEdges.push({
+                                id: `edge_${ipNodeId}_${domainNodeId}_${Date.now()}`,
+                                from: ipNodeId,
+                                to: domainNodeId,
+                                label: 'Resolves to'
+                            });
+                            console.log(`Added Domain node: ${domain}, ID: ${domainNodeId}, Edge to IP: ${ipNodeId}`);
+                        } else if (domain) {
+                            const existingDomainNode = existingNodes.get(`domain:${domain.toLowerCase()}`);
+                            if (!newEdges.some(e => e.from === ipNodeId && e.to === existingDomainNode.id)) {
+                                newEdges.push({
+                                    id: `edge_${ipNodeId}_${existingDomainNode.id}_${Date.now()}`,
+                                    from: ipNodeId,
+                                    to: existingDomainNode.id,
+                                    label: 'Resolves to'
+                                });
+                                console.log(`Linked IP ${ipNodeId} to existing Domain: ${existingDomainNode.id}`);
+                            }
+                        }
+                    }
+
+                    // Extract ports and services
+                    const ports = host.getElementsByTagName('port');
+                    for (const port of ports) {
+                        const protocol = port.getAttribute('protocol');
+                        const portNumber = port.getAttribute('portid');
+                        const state = port.querySelector('state')?.getAttribute('state') || 'unknown';
+                        const service = port.querySelector('service');
+                        const serviceName = service?.getAttribute('name') || 'unknown';
+                        const product = service?.getAttribute('product') || '';
+                        const version = service?.getAttribute('version') || '';
+                        const extrainfo = service?.getAttribute('extrainfo') || '';
+
+                        const portKey = `port:${protocol.toUpperCase()}/${portNumber}`;
+                        let portNodeId;
+                        if (!existingNodes.has(portKey)) {
+                            portNodeId = nextId++;
+                            newNodes.push({
+                                id: portNodeId,
+                                type: 'port',
+                                label: `${protocol.toUpperCase()}/${portNumber} (${state})`,
+                                title: `Port\nType: ${protocol.toUpperCase()}\nNumber: ${portNumber}\nState: ${state}`,
+                                color: { background: state === 'open' ? '#a78bfa' : '#d1d5db' },
+                                portType: protocol.toUpperCase(),
+                                portNumber: portNumber,
+                                size: 10
+                            });
+                            existingNodes.set(portKey, { id: portNodeId });
+                            console.log(`Added Port node: ${protocol}/${portNumber}, State: ${state}, ID: ${portNodeId}`);
+                        } else {
+                            portNodeId = existingNodes.get(portKey).id;
+                        }
+
+                        newEdges.push({
+                            id: `edge_${ipNodeId}_${portNodeId}_${Date.now()}`,
+                            from: ipNodeId,
+                            to: portNodeId,
+                            label: 'Has port'
+                        });
+                        console.log(`Linked IP ${ipNodeId} to Port: ${portNodeId}`);
+
+                        // Service entity linked to port
+                        const serviceKey = `service:${serviceName.toLowerCase()}_${protocol.toUpperCase()}/${portNumber}`;
+                        let serviceNodeId;
+                        if (serviceName !== 'unknown' && !existingNodes.has(serviceKey)) {
+                            serviceNodeId = nextId++;
+                            newNodes.push({
+                                id: serviceNodeId,
+                                type: 'service',
+                                label: `Service: ${serviceName}`,
+                                title: `Service\nName: ${serviceName}${product ? `\nProduct: ${product}` : ''}${version ? `\nVersion: ${version}` : ''}${extrainfo ? `\nExtra Info: ${extrainfo}` : ''}`,
+                                color: { background: '#ec4899' },
+                                serviceName: serviceName,
+                                portType: protocol.toUpperCase(),
+                                portNumber: portNumber,
+                                size: 15
+                            });
+                            existingNodes.set(serviceKey, { id: serviceNodeId });
+                            newEdges.push({
+                                id: `edge_${portNodeId}_${serviceNodeId}_${Date.now()}`,
+                                from: portNodeId,
+                                to: serviceNodeId,
+                                label: 'Runs'
+                            });
+                            console.log(`Added Service node: ${serviceName}, ID: ${serviceNodeId}, Edge to Port: ${portNodeId}`);
+                        } else if (serviceName !== 'unknown') {
+                            serviceNodeId = existingNodes.get(serviceKey).id;
+                            if (!newEdges.some(e => e.from === portNodeId && e.to === serviceNodeId)) {
+                                newEdges.push({
+                                    id: `edge_${portNodeId}_${serviceNodeId}_${Date.now()}`,
+                                    from: portNodeId,
+                                    to: serviceNodeId,
+                                    label: 'Runs'
+                                });
+                                console.log(`Linked Port ${portNodeId} to existing Service: ${serviceNodeId}`);
+                            }
+                        }
+
+                        // CPE entities from service
+                        const cpes = service ? service.getElementsByTagName('cpe') : [];
+                        for (const cpe of cpes) {
+                            const cpeValue = cpe.textContent;
+                            if (cpeValue && !existingNodes.has(`cpe:${cpeValue}`)) {
+                                const cpeNodeId = nextId++;
+                                newNodes.push({
+                                    id: cpeNodeId,
+                                    type: 'cpe',
+                                    label: `CPE: ${cpeValue.split(':').slice(2).join(':')}`,
+                                    title: `CPE: ${cpeValue}`,
+                                    color: { background: '#f59e0b' },
+                                    cpe: cpeValue,
+                                    size: 12
+                                });
+                                existingNodes.set(`cpe:${cpeValue}`, { id: cpeNodeId });
+                                newEdges.push({
+                                    id: `edge_${serviceNodeId || portNodeId}_${cpeNodeId}_${Date.now()}`,
+                                    from: serviceNodeId || portNodeId,
+                                    to: cpeNodeId,
+                                    label: 'Identifies'
+                                });
+                                console.log(`Added CPE node: ${cpeValue}, ID: ${cpeNodeId}, Edge to ${serviceNodeId ? 'Service' : 'Port'}: ${serviceNodeId || portNodeId}`);
+                            }
+                        }
+                    }
+
+                    // Extract OS
+                    const osMatch = host.querySelector('osmatch');
+                    if (osMatch) {
+                        const osName = osMatch.getAttribute('name');
+                        const osKey = `os:${osName}`;
+                        let osNodeId;
+                        if (!existingNodes.has(osKey)) {
+                            osNodeId = nextId++;
+                            newNodes.push({
+                                id: osNodeId,
+                                type: 'os',
+                                label: `OS: ${osName}`,
+                                title: `Operating System: ${osName}\nAccuracy: ${osMatch.getAttribute('accuracy')}%`,
+                                color: { background: '#10b981' },
+                                os: osName,
+                                size: 15
+                            });
+                            existingNodes.set(osKey, { id: osNodeId });
+                            newEdges.push({
+                                id: `edge_${ipNodeId}_${osNodeId}_${Date.now()}`,
+                                from: ipNodeId,
+                                to: osNodeId,
+                                label: 'Runs'
+                            });
+                            console.log(`Added OS node: ${osName}, ID: ${osNodeId}, Edge to IP: ${ipNodeId}`);
+                        } else {
+                            osNodeId = existingNodes.get(osKey).id;
+                            if (!newEdges.some(e => e.from === ipNodeId && e.to === osNodeId)) {
+                                newEdges.push({
+                                    id: `edge_${ipNodeId}_${osNodeId}_${Date.now()}`,
+                                    from: ipNodeId,
+                                    to: osNodeId,
+                                    label: 'Runs'
+                                });
+                                console.log(`Linked IP ${ipNodeId} to existing OS: ${osNodeId}`);
+                            }
+                        }
+
+                        // CPE entities from OS
+                        const osCpes = host.querySelectorAll('osclass > cpe');
+                        for (const cpe of osCpes) {
+                            const cpeValue = cpe.textContent;
+                            if (cpeValue && !existingNodes.has(`cpe:${cpeValue}`)) {
+                                const cpeNodeId = nextId++;
+                                newNodes.push({
+                                    id: cpeNodeId,
+                                    type: 'cpe',
+                                    label: `CPE: ${cpeValue.split(':').slice(2).join(':')}`,
+                                    title: `CPE: ${cpeValue}`,
+                                    color: { background: '#f59e0b' },
+                                    cpe: cpeValue,
+                                    size: 12
+                                });
+                                existingNodes.set(`cpe:${cpeValue}`, { id: cpeNodeId });
+                                newEdges.push({
+                                    id: `edge_${osNodeId}_${cpeNodeId}_${Date.now()}`,
+                                    from: osNodeId,
+                                    to: cpeNodeId,
+                                    label: 'Identifies'
+                                });
+                                console.log(`Added CPE node: ${cpeValue}, ID: ${cpeNodeId}, Edge to OS: ${osNodeId}`);
+                            }
+                        }
+                    }
+
+                    // Extract trace hops
+                    const trace = host.querySelector('trace');
+                    if (trace) {
+                        const hops = trace.getElementsByTagName('hop');
+                        for (const hop of hops) {
+                            const hopIp = hop.getAttribute('ipaddr');
+                            if (hopIp && !existingNodes.has(`hop:${hopIp}`)) {
+                                const hopNodeId = nextId++;
+                                newNodes.push({
+                                    id: hopNodeId,
+                                    type: 'hop',
+                                    label: `Hop: ${hopIp}`,
+                                    title: `Trace Hop\nIP: ${hopIp}\nTTL: ${hop.getAttribute('ttl')}\nRTT: ${hop.getAttribute('rtt') || 'unknown'} ms\nHost: ${hop.getAttribute('host') || 'unknown'}`,
+                                    color: { background: '#14b8a6' },
+                                    ipaddr: hopIp,
+                                    size: 12
+                                });
+                                existingNodes.set(`hop:${hopIp}`, { id: hopNodeId });
+                                newEdges.push({
+                                    id: `edge_${ipNodeId}_${hopNodeId}_${Date.now()}`,
+                                    from: ipNodeId,
+                                    to: hopNodeId,
+                                    label: 'Reachable via'
+                                });
+                                console.log(`Added Hop node: ${hopIp}, ID: ${hopNodeId}, Edge to IP: ${ipNodeId}`);
+                            }
+                        }
+                    }
+
+                    processedCount++;
+                    if (processedCount % batchSize === 0) {
+                        nodes.add(newNodes);
+                        edges.add(newEdges);
+                        newNodes.length = 0;
+                        newEdges.length = 0;
+                        await new Promise(resolve => setTimeout(resolve, 0));
+                    }
+                }
+
+                // Add remaining items
+                if (newNodes.length > 0) {
+                    nodes.add(newNodes);
+                    edges.add(newEdges);
+                }
+
+                updateNodeSizes();
+                updateSelectOptions();
+                await stabilizeNetwork().catch(err => console.error('Error stabilizing network:', err));
+                showToast(`Imported ${hosts.length} hosts from Nmap XML`, 'success');
+            } catch (error) {
+                console.error('Error importing Nmap XML:', error);
+                showToast(`Failed to import Nmap XML: ${error.message}`, 'error');
             }
         };
         reader.readAsText(file);
