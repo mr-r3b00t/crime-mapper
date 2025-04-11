@@ -1056,7 +1056,7 @@ input[type="checkbox"] {
                 <h3>Export/Import</h3>
                 <button onclick="exportGraph()">Export to JSON</button>
                 <button onclick="exportVisibleGraph()">Export Visible to JSON</button>
-                <input type="file" id="importFile" accept=".json">
+                <!-- Removed: <input type="file" id="importFile" accept=".json"> -->
                 <button onclick="importGraph()">Import from JSON</button>
                 <button onclick="clearGraph()">Clear Graph</button>
                 <button id="summary-button" onclick="showGraphSummary()">Graph Summary</button>
@@ -1249,7 +1249,7 @@ input[type="checkbox"] {
         <!-- Suggested -->
         <footer id="controls-footer"> 
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.280 experimental</p>
+    <p>© Xservus Limited - v0.281 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
@@ -5378,275 +5378,531 @@ function updateNodeSizes(affectedNodeIds = null) {
             URL.revokeObjectURL(url);
         }
 
-        function importGraph() {
-    const fileInput = document.getElementById('importFile');
-    const file = fileInput.files[0];
-    if (!file) {
-        showToast('Please select a JSON file', 'error');
+// Process IOCs
+
+async function processIOCs(text) {
+    network.setOptions({ physics: { enabled: false } });
+
+    // Regex patterns
+    const urlRegex = /^(https?:\/\/)([^\s/:]+)(?::(\d{1,5}))?(\/.*)?$/i; // Matches http(s)://<host>[:port][/path]
+    const domainRegex = /^([a-zA-Z0-9-_]+\.)+[a-zA-Z]{2,}$/; // Matches domain with TLD
+    const ipRegex = { 
+        // RFC 791-compliant IPv4: 4 octets (0-255), no leading zeros unless 0
+        ipv4: /^(?!0\d)(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?!0\d)(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?!0\d)(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?!0\d)(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/,
+        ipv6: /^([0-9a-fA-F]{0,4}:){0,7}[0-9a-fA-F]{0,4}(:[0-9a-fA-F]{0,4}){0,7}$/ 
+    };
+    const subnetRegex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\/(\d{1,2})$/; // Matches CIDR (e.g., 192.168.1.0/24)
+    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+    const hashRegex = {
+        sha256: /^[0-9a-fA-F]{64}$/,
+        md5: /^[0-9a-fA-F]{32}$/,
+        sha1: /^[0-9a-fA-F]{40}$/
+    };
+    const hashPattern = /[0-9a-fA-F]{32,64}/g;
+    const timestampRegex = /^\d{2}:\d{2}:\d{2}$/; // Matches HH:MM:SS format (e.g., 16:52:54)
+
+    // Split text into tokens
+    const tokens = text.split(/[\s,\n]+/).filter(token => token.trim().length > 0);
+    console.log('Tokens:', tokens);
+
+    // Extract matches
+    const urlMatches = new Set();
+    const ipMatches = new Set();
+    const subnetMatches = new Set();
+    const domainMatches = new Set();
+    const emailMatches = new Set(tokens.map(token => token.match(emailRegex)?.[0]).filter(Boolean));
+    const hashCandidates = new Set(tokens.map(token => token.match(hashPattern)?.[0]).filter(Boolean));
+
+    // Process each token
+    for (const token of tokens) {
+        // Skip timestamps
+        if (timestampRegex.test(token)) {
+            console.log(`Ignoring timestamp: ${token}`);
+            continue;
+        }
+
+        const urlMatch = token.match(urlRegex);
+        if (urlMatch) {
+            const [, protocol, host, port, path] = urlMatch;
+            urlMatches.add(token);
+            console.log(`URL Match: ${token}, Protocol: ${protocol}, Host: ${host}, Port: ${port || 'none'}, Path: ${path || 'none'}`);
+
+            // Determine if host is IP, subnet, or domain
+            if (subnetRegex.test(host)) {
+                subnetMatches.add(host);
+            } else if (ipRegex.ipv4.test(host) || ipRegex.ipv6.test(host)) {
+                ipMatches.add(host);
+            } else if (domainRegex.test(host)) {
+                domainMatches.add(host);
+            }
+            continue;
+        }
+
+        // Check for standalone subnets
+        if (subnetRegex.test(token)) {
+            subnetMatches.add(token);
+            continue;
+        }
+
+        // Check for standalone IPs - strict RFC validation
+        if (ipRegex.ipv4.test(token) || ipRegex.ipv6.test(token)) {
+            ipMatches.add(token);
+            continue;
+        }
+
+        // Check for standalone domains
+        if (domainRegex.test(token) && !urlMatches.has(token)) {
+            domainMatches.add(token);
+            continue;
+        }
+    }
+
+    // Filter hash candidates
+    const hashMatches = new Set();
+    hashCandidates.forEach(hash => {
+        if (hashRegex.sha256.test(hash)) hashMatches.add({ value: hash, type: 'sha256' });
+        else if (hashRegex.md5.test(hash)) hashMatches.add({ value: hash, type: 'md5' });
+        else if (hashRegex.sha1.test(hash)) hashMatches.add({ value: hash, type: 'sha1' });
+    });
+
+    const totalItems = urlMatches.size + ipMatches.size + subnetMatches.size + domainMatches.size + emailMatches.size + hashMatches.size;
+    if (totalItems === 0) {
+        showToast('No IOCs found in text', 'info');
         return;
     }
 
-    const reader = new FileReader();
-    reader.onload = function(event) {
-        try {
-            const importedData = JSON.parse(event.target.result);
-            if (!importedData.nodes || !importedData.edges) {
-                throw new Error('Invalid JSON format: missing nodes or edges');
-            }
+    console.log('URL Matches:', Array.from(urlMatches));
+    console.log('IP Matches:', Array.from(ipMatches));
+    console.log('Subnet Matches:', Array.from(subnetMatches));
+    console.log('Domain Matches:', Array.from(domainMatches));
+    console.log('Email Matches:', Array.from(emailMatches));
+    console.log('Hash Matches:', Array.from(hashMatches));
 
-            nodes.clear();
-            edges.clear();
+    // Maps for deduplication
+    const existingNodes = new Map();
+    nodes.forEach(node => {
+        if (node.type === 'url' && node.url) existingNodes.set(`url:${node.url}`, node);
+        if (node.type === 'ip' && node.ip) existingNodes.set(`ip:${node.ip}`, node);
+        if (node.type === 'subnet' && node.subnet) existingNodes.set(`subnet:${node.subnet}`, node);
+        if (node.type === 'domain' && node.domain) existingNodes.set(`domain:${node.domain}`, node);
+        if (node.type === 'contact' && node.email) existingNodes.set(`email:${node.email}`, node);
+        if (node.type === 'hash' && node.hash) existingNodes.set(`hash:${node.hash}`, node);
+        if (node.type === 'port' && node.portNumber) existingNodes.set(`port:${node.portType}/${node.portNumber}`, node);
+    });
 
-            importedData.nodes.forEach(node => {
-                const nodeData = {
-                    id: node.id,
-                    size: node.size || 10,
-                    type: node.type,
-                    label: node.label,
-                    title: node.title,
-                    color: node.color || { background: '#ffffff' }, // Default color if missing
-                    originalLabel: node.originalLabel,
-                    x: node.x,
-                    y: node.y
-                };
+    const newNodes = [];
+    const newEdges = [];
+    let processedCount = 0;
+    const batchSize = 50;
 
-                // Populate type-specific properties and set defaults
-                switch (node.type) {
-                    case 'contact':
-                        if (!node.name) return;
-                        nodeData.name = node.name;
-                        nodeData.email = node.email;
-                        nodeData.label = `Contact: ${node.email ? `${node.name}\n${node.email}` : node.name}`;
-                        nodeData.title = node.email ? `Contact\nName: ${node.name}\nEmail: ${node.email}` : `Contact\nName: ${node.name}`;
-                        nodeData.color.background = node.color?.background || '#4ade80';
-                        break;
-                    case 'ip':
-                        if (!node.ip) return;
-                        nodeData.ip = node.ip;
-                        nodeData.label = `IP: ${node.ip}`;
-                        nodeData.title = `IP Address: ${node.ip}`;
-                        nodeData.color.background = node.color?.background || '#f87171';
-                        break;
-                    case 'domain':
-                        if (!node.domain) return;
-                        nodeData.domain = node.domain;
-                        nodeData.label = `Domain: ${node.domain}`;
-                        nodeData.title = `Domain: ${node.domain}`;
-                        nodeData.color.background = node.color?.background || '#60a5fa';
-                        break;
-                    case 'organization':
-                        if (!node.organization) return;
-                        nodeData.organization = node.organization;
-                        nodeData.label = `Organization: ${node.organization}`;
-                        nodeData.title = `Organization: ${node.organization}`;
-                        nodeData.color.background = node.color?.background || '#facc15';
-                        break;
-                    case 'port':
-                        if (!node.portNumber || !node.portType) return;
-                        nodeData.portType = node.portType;
-                        nodeData.portNumber = node.portNumber;
-                        nodeData.label = `Port: ${node.portType}/${node.portNumber}`;
-                        nodeData.title = `Port\nType: ${node.portType}\nNumber: ${node.portNumber}`;
-                        nodeData.color.background = node.color?.background || '#a78bfa';
-                        break;
-                    case 'wallet':
-                        if (!node.address) return;
-                        nodeData.address = node.address;
-                        nodeData.label = `Wallet: ${node.address}`;
-                        nodeData.title = `Wallet\nAddress: ${node.address}`;
-                        nodeData.color.background = node.color?.background || '#fb923c';
-                        break;
-                    case 'bank':
-                        if (!node.accountNumber || !node.sortCode) return;
-                        nodeData.accountNumber = node.accountNumber;
-                        nodeData.sortCode = node.sortCode;
-                        nodeData.label = `Bank: ${node.accountNumber}\nSort Code: ${node.sortCode}`;
-                        nodeData.title = `Bank Account\nAccount Number: ${node.accountNumber}\nSort Code: ${node.sortCode}`;
-                        nodeData.color.background = node.color?.background || '#10b981';
-                        break;
-                    case 'technology':
-                        if (!node.techName || !node.techVersion) return;
-                        nodeData.techName = node.techName;
-                        nodeData.techVersion = node.techVersion;
-                        nodeData.label = `Technology: ${node.techName}\nVersion: ${node.techVersion}`;
-                        nodeData.title = `Technology\nName: ${node.techName}\nVersion: ${node.techVersion}`;
-                        nodeData.color.background = node.color?.background || '#ec4899';
-                        break;
-                    case 'device':
-                        if (!node.deviceCategory || !node.deviceName) return;
-                        nodeData.deviceCategory = node.deviceCategory;
-                        nodeData.deviceName = node.deviceName;
-                        nodeData.label = `Device: ${node.deviceName}\nCategory: ${node.deviceCategory}`;
-                        nodeData.title = `Device\nName: ${node.deviceName}\nCategory: ${node.deviceCategory}`;
-                        nodeData.color.background = node.color?.background || '#14b8a6';
-                        break;
-                    case 'malware':
-                        if (!node.malwareName || !node.malwareType) return;
-                        nodeData.malwareName = node.malwareName;
-                        nodeData.malwareType = node.malwareType;
-                        nodeData.label = `Malware: ${node.malwareName}\nType: ${node.malwareType}`;
-                        nodeData.title = `Malware\nName: ${node.malwareName}\nType: ${node.malwareType}`;
-                        nodeData.color.background = node.color?.background || '#ef4444';
-                        break;
-                    case 'vulnerability':
-                        if (!node.vulnName) return;
-                        nodeData.vulnName = node.vulnName;
-                        nodeData.cve = node.cve;
-                        nodeData.url = node.url;
-                        nodeData.label = `Vulnerability: ${node.vulnName}${node.cve ? '\nCVE: ' + node.cve : ''}${node.url ? '\nURL: ' + node.url : ''}`;
-                        nodeData.title = `Vulnerability\nName: ${node.vulnName}${node.cve ? '\nCVE: ' + node.cve : ''}${node.url ? '\nURL: ' + node.url : ''}`;
-                        nodeData.color.background = node.color?.background || '#dc2626';
-                        break;
-                    case 'favicon':
-                        if (!node.hash) return;
-                        nodeData.hash = node.hash;
-                        nodeData.location = node.location;
-                        nodeData.label = `Favicon: ${node.hash.substring(0, 8)}...`;
-                        nodeData.title = `Favicon\nHash: ${node.hash}${node.location ? '\nPath: ' + node.location : ''}`;
-                        nodeData.color.background = node.color?.background || '#22d3ee';
-                        break;
-                    case 'http_hash':
-                        if (!node.hash) return;
-                        nodeData.hash = node.hash;
-                        nodeData.label = `HTTP Hash: ${node.hash.substring(0, 8)}...`;
-                        nodeData.title = `HTTP Headers Hash\nSHA256: ${node.hash}`;
-                        nodeData.color.background = node.color?.background || '#f97316';
-                        break;
-                    case 'html_hash':
-                        if (!node.hash) return;
-                        nodeData.hash = node.hash;
-                        nodeData.label = `HTML Hash: ${node.hash.substring(0, 8)}...`;
-                        nodeData.title = `HTML Hash\nSHA256: ${node.hash}`;
-                        nodeData.color.background = node.color?.background || '#f59e0b';
-                        break;
-                    case 'ssl_hash':
-                        if (!node.hash) return;
-                        nodeData.hash = node.hash;
-                        nodeData.label = `SSL Hash: ${node.hash.substring(0, 8)}...`;
-                        nodeData.title = `SSL Certificate Hash\nSHA256: ${node.hash}`;
-                        nodeData.color.background = node.color?.background || '#8b5cf6';
-                        break;
-                    case 'asn':
-                        if (!node.asn) return;
-                        nodeData.asn = node.asn;
-                        nodeData.label = `ASN: ${node.asn}`;
-                        nodeData.title = `ASN: ${node.asn}`;
-                        nodeData.color.background = node.color?.background || '#a3e635';
-                        break;
-                    case 'city':
-                        if (!node.city) return;
-                        nodeData.city = node.city;
-                        nodeData.label = `City: ${node.city}`;
-                        nodeData.title = `City: ${node.city}`;
-                        nodeData.color.background = node.color?.background || '#f97316';
-                        break;
-                    case 'country':
-                        if (!node.country) return;
-                        nodeData.country = node.country;
-                        nodeData.label = `Country: ${node.country}`;
-                        nodeData.title = `Country: ${node.country}`;
-                        nodeData.color.background = node.color?.background || '#34d399';
-                        break;
-                    case 'os':
-                        if (!node.os) return;
-                        nodeData.os = node.os;
-                        nodeData.label = `OS: ${node.os}`;
-                        nodeData.title = `Operating System: ${node.os}`;
-                        nodeData.color.background = node.color?.background || '#10b981';
-                        break;
-                    case 'product':
-                        if (!node.product) return;
-                        nodeData.product = node.product;
-                        nodeData.label = `Product: ${node.product}`;
-                        nodeData.title = `Product: ${node.product}`;
-                        nodeData.color.background = node.color?.background || '#ec4899';
-                        break;
-                    case 'http_title':
-                        if (!node.title) return;
-                        nodeData.title = node.title; // Already set as base property
-                        nodeData.label = `Title: ${node.title}`;
-                        nodeData.color.background = node.color?.background || '#3b82f6';
-                        break;
-                    case 'vpn':
-                    case 'proxy':
-                    case 'tor':
-                    case 'relay':
-                    case 'hosting':
-                        if (!node.value) return;
-                        nodeData.value = node.value;
-                        nodeData.label = `${node.type.charAt(0).toUpperCase() + node.type.slice(1)}: ${node.value}`;
-                        nodeData.title = `${node.type.charAt(0).toUpperCase() + node.type.slice(1)} for IP: ${node.value}`;
-                        nodeData.color.background = node.color?.background || {
-                            vpn: '#9333ea',
-                            proxy: '#f43f5e',
-                            tor: '#64748b',
-                            relay: '#eab308',
-                            hosting: '#14b8a6'
-                        }[node.type];
-                        break;
-                    default:
-                        console.warn(`Unhandled node type in importGraph: ${node.type}`);
-                        return; // Skip unknown types
-                }
+    // Helper function to extract apex domain
+    function getApexDomain(fullDomain) {
+        const parts = fullDomain.split('.');
+        if (parts.length >= 2) {
+            return parts.slice(-2).join('.'); // Last two parts (e.g., "gov.uk")
+        }
+        return fullDomain; // Fallback if no TLD (unlikely)
+    }
 
-                // Check for duplicates based on key properties
-                if (!nodes.get({ filter: n => 
-                    n.type === nodeData.type && (
-                        (nodeData.ip && n.ip === nodeData.ip) ||
-                        (nodeData.domain && n.domain === nodeData.domain) ||
-                        (nodeData.organization && n.organization === nodeData.organization) ||
-                        (nodeData.portNumber && nodeData.portType && n.portNumber === nodeData.portNumber && n.portType === nodeData.portType) ||
-                        (nodeData.address && n.address === nodeData.address) ||
-                        (nodeData.accountNumber && nodeData.sortCode && n.accountNumber === nodeData.accountNumber && n.sortCode === nodeData.sortCode) ||
-                        (nodeData.techName && nodeData.techVersion && n.techName === nodeData.techName && n.techVersion === nodeData.techVersion) ||
-                        (nodeData.deviceCategory && nodeData.deviceName && n.deviceCategory === nodeData.deviceCategory && n.deviceName === nodeData.deviceName) ||
-                        (nodeData.malwareName && nodeData.malwareType && n.malwareName === nodeData.malwareName && n.malwareType === nodeData.malwareType) ||
-                        (nodeData.vulnName && n.vulnName === nodeData.vulnName && (!nodeData.cve || n.cve === nodeData.cve) && (!nodeData.url || n.url === nodeData.url)) ||
-                        (nodeData.hash && n.hash === nodeData.hash) || // For hash-based nodes
-                        (nodeData.asn && n.asn === nodeData.asn) ||
-                        (nodeData.city && n.city === nodeData.city) ||
-                        (nodeData.country && n.country === nodeData.country) ||
-                        (nodeData.os && n.os === nodeData.os) ||
-                        (nodeData.product && n.product === nodeData.product) ||
-                        (nodeData.value && n.value === nodeData.value)
-                    )
-                }).length) {
-                    nodes.add(nodeData);
-                }
+    // Process URLs
+    for (const url of urlMatches) {
+        const urlMatch = url.match(urlRegex);
+        if (!urlMatch) continue;
+        const [, protocol, host, port, path] = urlMatch;
+
+        if (!existingNodes.has(`url:${url}`)) {
+            const urlNodeId = nextId++;
+            const label = `URL: ${url.length > 30 ? url.substring(0, 27) + '...' : url}`;
+            newNodes.push({
+                id: urlNodeId,
+                type: 'url',
+                label: label,
+                title: `Full URL: ${url}`,
+                color: { background: '#3b82f6' },
+                url: url,
+                size: 15
             });
+            existingNodes.set(`url:${url}`, { id: urlNodeId });
+            console.log(`Added URL node: ${url}, ID: ${urlNodeId}`);
 
-            // Import edges
-            importedData.edges.forEach(edge => {
-                if (edge.from && edge.to && nodes.get(edge.from) && nodes.get(edge.to)) { // Ensure nodes exist
-                    if (!edges.get({ filter: e => e.from === edge.from && e.to === edge.to && e.label === (edge.label || undefined) }).length) {
-                        edges.add({
-                            id: edge.id || `edge_${edge.from}_${edge.to}_${Date.now()}`,
-                            from: edge.from,
-                            to: edge.to,
-                            label: edge.label || undefined,
-                            originalLabel: edge.originalLabel
+            // Handle host (IP, subnet, or domain)
+            if (subnetRegex.test(host)) {
+                if (!existingNodes.has(`subnet:${host}`)) {
+                    const subnetNodeData = createNodeData('subnet', { subnet: host });
+                    if (subnetNodeData) {
+                        subnetNodeData.id = nextId++;
+                        newNodes.push(subnetNodeData);
+                        existingNodes.set(`subnet:${host}`, { id: subnetNodeData.id });
+                        newEdges.push({
+                            id: `edge_${urlNodeId}_${subnetNodeData.id}_${Date.now()}`,
+                            from: urlNodeId,
+                            to: subnetNodeData.id,
+                            label: 'Resolves to'
                         });
+                        console.log(`Added Subnet node: ${host}, ID: ${subnetNodeData.id}, Edge to URL: ${urlNodeId}`);
                     }
                 } else {
-                    console.warn('Skipping edge due to missing nodes:', edge);
+                    const existingSubnetNode = existingNodes.get(`subnet:${host}`);
+                    newEdges.push({
+                        id: `edge_${urlNodeId}_${existingSubnetNode.id}_${Date.now()}`,
+                        from: urlNodeId,
+                        to: existingSubnetNode.id,
+                        label: 'Resolves to'
+                    });
+                    console.log(`Linked URL ${urlNodeId} to existing Subnet: ${existingSubnetNode.id}`);
                 }
-            });
+            } else if (ipRegex.ipv4.test(host) || ipRegex.ipv6.test(host)) {
+                if (!existingNodes.has(`ip:${host}`)) {
+                    const ipNodeId = nextId++;
+                    newNodes.push({
+                        id: ipNodeId,
+                        type: 'ip',
+                        label: `IP: ${host}`,
+                        title: `IP Address: ${host}`,
+                        color: { background: '#f87171' },
+                        ip: host,
+                        size: 20
+                    });
+                    existingNodes.set(`ip:${host}`, { id: ipNodeId });
+                    newEdges.push({
+                        id: `edge_${urlNodeId}_${ipNodeId}_${Date.now()}`,
+                        from: urlNodeId,
+                        to: ipNodeId,
+                        label: 'Resolves to'
+                    });
+                    console.log(`Added IP node: ${host}, ID: ${ipNodeId}, Edge to URL: ${urlNodeId}`);
+                } else {
+                    const existingIpNode = existingNodes.get(`ip:${host}`);
+                    newEdges.push({
+                        id: `edge_${urlNodeId}_${existingIpNode.id}_${Date.now()}`,
+                        from: urlNodeId,
+                        to: existingIpNode.id,
+                        label: 'Resolves to'
+                    });
+                    console.log(`Linked URL ${urlNodeId} to existing IP: ${existingIpNode.id}`);
+                }
+            } else if (domainRegex.test(host)) {
+                if (!existingNodes.has(`domain:${host}`)) {
+                    const domainNodeId = nextId++;
+                    newNodes.push({
+                        id: domainNodeId,
+                        type: 'domain',
+                        label: `Domain: ${host}`,
+                        title: `Domain: ${host}`,
+                        color: { background: '#60a5fa' },
+                        domain: host,
+                        size: 20
+                    });
+                    existingNodes.set(`domain:${host}`, { id: domainNodeId });
+                    newEdges.push({
+                        id: `edge_${urlNodeId}_${domainNodeId}_${Date.now()}`,
+                        from: urlNodeId,
+                        to: domainNodeId,
+                        label: 'Belongs to'
+                    });
+                    console.log(`Added Domain node: ${host}, ID: ${domainNodeId}, Edge to URL: ${urlNodeId}`);
 
-            // Update UI and state
-            updateNodeSizes();
-            updateSelectOptions();
-            nextId = Math.max(...importedData.nodes.map(n => n.id)) + 1 || 1;
-            fileInput.value = '';
-            stabilizeNetwork();
-            saveStateAfterOperation();
-            showToast('Graph imported successfully', 'success');
-        } catch (e) {
-            console.error('Error importing JSON:', e);
-            showToast('Error importing JSON: ' + e.message, 'error');
+                    // Create apex domain
+                    const apexDomain = getApexDomain(host);
+                    if (apexDomain !== host && !existingNodes.has(`domain:${apexDomain}`)) {
+                        const apexNodeId = nextId++;
+                        newNodes.push({
+                            id: apexNodeId,
+                            type: 'domain',
+                            label: `Apex: ${apexDomain}`,
+                            title: `Apex Domain: ${apexDomain}`,
+                            color: { background: '#60a5fa' },
+                            domain: apexDomain,
+                            size: 20
+                        });
+                        existingNodes.set(`domain:${apexDomain}`, { id: apexNodeId });
+                        newEdges.push({
+                            id: `edge_${domainNodeId}_${apexNodeId}_${Date.now()}`,
+                            from: domainNodeId,
+                            to: apexNodeId,
+                            label: 'Apex of'
+                        });
+                        console.log(`Added Apex Domain node: ${apexDomain}, ID: ${apexNodeId}, Edge to Domain: ${domainNodeId}`);
+                    } else if (apexDomain !== host) {
+                        const existingApexNode = existingNodes.get(`domain:${apexDomain}`);
+                        newEdges.push({
+                            id: `edge_${domainNodeId}_${existingApexNode.id}_${Date.now()}`,
+                            from: domainNodeId,
+                            to: existingApexNode.id,
+                            label: 'Apex of'
+                        });
+                        console.log(`Linked Domain ${domainNodeId} to existing Apex: ${existingApexNode.id}`);
+                    }
+                } else {
+                    const existingDomainNode = existingNodes.get(`domain:${host}`);
+                    newEdges.push({
+                        id: `edge_${urlNodeId}_${existingDomainNode.id}_${Date.now()}`,
+                        from: urlNodeId,
+                        to: existingDomainNode.id,
+                        label: 'Belongs to'
+                    });
+                    console.log(`Linked URL ${urlNodeId} to existing Domain: ${existingDomainNode.id}`);
+                }
+            }
+
+            // Handle port
+            if (port && parseInt(port) >= 1 && parseInt(port) <= 65535) {
+                const portKey = `port:TCP/${port}`;
+                if (!existingNodes.has(portKey)) {
+                    const portNodeId = nextId++;
+                    newNodes.push({
+                        id: portNodeId,
+                        type: 'port',
+                        label: `TCP/${port}`,
+                        title: `Port\nType: TCP\nNumber: ${port}`,
+                        color: { background: '#a78bfa' },
+                        portType: 'TCP',
+                        portNumber: port,
+                        size: 10
+                    });
+                    existingNodes.set(portKey, { id: portNodeId });
+                    newEdges.push({
+                        id: `edge_${urlNodeId}_${portNodeId}_${Date.now()}`,
+                        from: urlNodeId,
+                        to: portNodeId,
+                        label: 'Uses port'
+                    });
+                    console.log(`Added Port node: TCP/${port}, ID: ${portNodeId}, Edge to URL: ${urlNodeId}`);
+                } else {
+                    const existingPortNode = existingNodes.get(portKey);
+                    newEdges.push({
+                        id: `edge_${urlNodeId}_${existingPortNode.id}_${Date.now()}`,
+                        from: urlNodeId,
+                        to: existingPortNode.id,
+                        label: 'Uses port'
+                    });
+                    console.log(`Linked URL ${urlNodeId} to existing Port: ${existingPortNode.id}`);
+                }
+            }
         }
-    };
-    reader.readAsText(file);
+        processedCount++;
+        if (processedCount % batchSize === 0) {
+            nodes.add(newNodes);
+            edges.add(newEdges);
+            newNodes.length = 0;
+            newEdges.length = 0;
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
+    }
+
+    // Process standalone Subnets
+    for (const subnet of subnetMatches) {
+        if (subnetRegex.test(subnet) && !existingNodes.has(`subnet:${subnet}`)) {
+            const subnetNodeData = createNodeData('subnet', { subnet: subnet });
+            if (subnetNodeData) {
+                subnetNodeData.id = nextId++;
+                newNodes.push(subnetNodeData);
+                existingNodes.set(`subnet:${subnet}`, { id: subnetNodeData.id });
+                console.log(`Added standalone Subnet node: ${subnet}, ID: ${subnetNodeData.id}, Private: ${subnetNodeData.isPrivate}`);
+            }
+        }
+        processedCount++;
+        if (processedCount % batchSize === 0) {
+            nodes.add(newNodes);
+            edges.add(newEdges);
+            newNodes.length = 0;
+            newEdges.length = 0;
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
+    }
+
+    // Process standalone IPs
+    for (const ip of ipMatches) {
+        if ((ipRegex.ipv4.test(ip) || ipRegex.ipv6.test(ip)) && !existingNodes.has(`ip:${ip}`)) {
+            const nodeId = nextId++;
+            newNodes.push({
+                id: nodeId,
+                type: 'ip',
+                label: `IP: ${ip}`,
+                title: `IP Address: ${ip}`,
+                color: { background: '#f87171' },
+                ip: ip,
+                size: 20
+            });
+            existingNodes.set(`ip:${ip}`, { id: nodeId });
+            console.log(`Added standalone IP node: ${ip}, ID: ${nodeId}`);
+        }
+        processedCount++;
+        if (processedCount % batchSize === 0) {
+            nodes.add(newNodes);
+            edges.add(newEdges);
+            newNodes.length = 0;
+            newEdges.length = 0;
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
+    }
+
+    // Process standalone Domains
+    for (const domain of domainMatches) {
+        if (domainRegex.test(domain) && !existingNodes.has(`domain:${domain}`)) {
+            const nodeId = nextId++;
+            newNodes.push({
+                id: nodeId,
+                type: 'domain',
+                label: `Domain: ${domain}`,
+                title: `Domain: ${domain}`,
+                color: { background: '#60a5fa' },
+                domain: domain,
+                size: 20
+            });
+            existingNodes.set(`domain:${domain}`, { id: nodeId });
+            console.log(`Added standalone Domain node: ${domain}, ID: ${nodeId}`);
+
+            // Create apex domain for standalone domains
+            const apexDomain = getApexDomain(domain);
+            if (apexDomain !== domain && !existingNodes.has(`domain:${apexDomain}`)) {
+                const apexNodeId = nextId++;
+                newNodes.push({
+                    id: apexNodeId,
+                    type: 'domain',
+                    label: `Apex: ${apexDomain}`,
+                    title: `Apex Domain: ${apexDomain}`,
+                    color: { background: '#60a5fa' },
+                    domain: apexDomain,
+                    size: 20
+                });
+                existingNodes.set(`domain:${apexDomain}`, { id: apexNodeId });
+                newEdges.push({
+                    id: `edge_${nodeId}_${apexNodeId}_${Date.now()}`,
+                    from: nodeId,
+                    to: apexNodeId,
+                    label: 'Apex of'
+                });
+                console.log(`Added Apex Domain node: ${apexDomain}, ID: ${apexNodeId}, Edge to Domain: ${nodeId}`);
+            }
+        }
+        processedCount++;
+        if (processedCount % batchSize === 0) {
+            nodes.add(newNodes);
+            edges.add(newEdges);
+            newNodes.length = 0;
+            newEdges.length = 0;
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
+    }
+
+    // Process Emails
+    for (const email of emailMatches) {
+        if (!existingNodes.has(`email:${email}`)) {
+            const emailNodeId = nextId++;
+            const emailDomain = email.split('@')[1];
+            newNodes.push({
+                id: emailNodeId,
+                type: 'contact',
+                label: `Contact: ${email}`,
+                title: `Contact\nEmail: ${email}`,
+                color: { background: '#4ade80' },
+                email: email,
+                name: email.split('@')[0],
+                size: 10
+            });
+            existingNodes.set(`email:${email}`, { id: emailNodeId });
+
+            let domainNode = existingNodes.get(`domain:${emailDomain}`);
+            if (!domainNode && domainRegex.test(emailDomain)) {
+                const domainNodeId = nextId++;
+                newNodes.push({
+                    id: domainNodeId,
+                    type: 'domain',
+                    label: `Domain: ${emailDomain}`,
+                    title: `Domain: ${emailDomain}`,
+                    color: { background: '#60a5fa' },
+                    domain: emailDomain,
+                    size: 20
+                });
+                domainNode = { id: domainNodeId };
+                existingNodes.set(`domain:${emailDomain}`, domainNode);
+
+                // Create apex domain for email domain
+                const apexDomain = getApexDomain(emailDomain);
+                if (apexDomain !== emailDomain && !existingNodes.has(`domain:${apexDomain}`)) {
+                    const apexNodeId = nextId++;
+                    newNodes.push({
+                        id: apexNodeId,
+                        type: 'domain',
+                        label: `Apex: ${apexDomain}`,
+                        title: `Apex Domain: ${apexDomain}`,
+                        color: { background: '#60a5fa' },
+                        domain: apexDomain,
+                        size: 20
+                    });
+                    existingNodes.set(`domain:${apexDomain}`, { id: apexNodeId });
+                    newEdges.push({
+                        id: `edge_${domainNodeId}_${apexNodeId}_${Date.now()}`,
+                        from: domainNodeId,
+                        to: apexNodeId,
+                        label: 'Apex of'
+                    });
+                    console.log(`Added Apex Domain node: ${apexDomain}, ID: ${apexNodeId}, Edge to Domain: ${domainNodeId}`);
+                }
+            }
+            if (domainNode) {
+                newEdges.push({
+                    id: `edge_${emailNodeId}_${domainNode.id}_${Date.now()}`,
+                    from: emailNodeId,
+                    to: domainNode.id,
+                    label: 'Registered with'
+                });
+            }
+            console.log(`Added Email node: ${email}, ID: ${emailNodeId}`);
+        }
+        processedCount++;
+        if (processedCount % batchSize === 0) {
+            nodes.add(newNodes);
+            edges.add(newEdges);
+            newNodes.length = 0;
+            newEdges.length = 0;
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
+    }
+
+    // Process Hashes
+    for (const hashObj of hashMatches) {
+        const hash = hashObj.value;
+        if (!existingNodes.has(`hash:${hash}`)) {
+            const hashNodeId = nextId++;
+            const hashType = hashObj.type.toUpperCase();
+            newNodes.push({
+                id: hashNodeId,
+                type: 'hash',
+                label: `${hashType}: ${hash.substring(0, 8)}...`,
+                title: `File Hash\nType: ${hashType}\nValue: ${hash}`,
+                color: { background: '#f97316' },
+                hash: hash,
+                hashType: hashType,
+                size: 15
+            });
+            existingNodes.set(`hash:${hash}`, { id: hashNodeId });
+            console.log(`Added Hash node: ${hash}, Type: ${hashType}, ID: ${hashNodeId}`);
+        }
+        processedCount++;
+        if (processedCount % batchSize === 0) {
+            nodes.add(newNodes);
+            edges.add(newEdges);
+            newNodes.length = 0;
+            newEdges.length = 0;
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
+    }
+
+    // Add remaining items
+    if (newNodes.length > 0) {
+        console.log('Final batch processing:', { newNodes, newEdges });
+        nodes.add(newNodes);
+        edges.add(newEdges);
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork().catch(err => console.error('Error stabilizing network:', err));
+    showToast(`Imported ${urlMatches.size} URLs, ${ipMatches.size} IPs, ${subnetMatches.size} subnets, ${domainMatches.size} domains, ${emailMatches.size} emails, ${hashMatches.size} hashes`, 'success');
 }
+        
 
 
 document.addEventListener('keypress', event => {
