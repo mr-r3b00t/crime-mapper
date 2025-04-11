@@ -5,6 +5,101 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Baddie Mapper - Experimental</title>
     <style>
+
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 2000;
+    overflow: auto;
+}
+
+.modal-content {
+    position: relative;
+    margin: 50px auto;
+    padding: 20px;
+    width: 80%;
+    max-width: 800px;
+    max-height: 60vh; /* Shorter height: 60% of viewport */
+    overflow-y: auto; /* Vertical scroll for content */
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    background: var(--modal-bg, #fff);
+    color: var(--modal-color, #1f2a44);
+    border: 1px solid var(--modal-border, #d1d5db);
+    display: flex;
+    flex-direction: column; /* Stack content vertically */
+}
+
+.dark .modal-content {
+    background: #1f2a44;
+    color: #e2e8f0;
+    border-color: #4b5563;
+}
+
+.close-modal {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 24px;
+    cursor: pointer;
+    color: inherit;
+}
+
+.close-modal:hover {
+    color: #ef4444;
+}
+
+#riskTableContainer {
+    overflow-x: auto; /* Horizontal scroll for wide tables */
+    flex-grow: 1; /* Allow table to take available space */
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+}
+
+th, td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--table-border, #d1d5db);
+    word-wrap: break-word;
+    max-width: 250px;
+}
+
+.dark th, .dark td {
+    border-bottom-color: #4b5563;
+}
+
+th {
+    background: var(--th-bg, #f1f5f9);
+}
+
+.dark th {
+    background: #2d3748;
+}
+
+.print-button {
+    padding: 10px 20px;
+    background: #22c55e;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 10px; /* Space above button */
+    align-self: center; /* Center button horizontally */
+}
+
+.print-button:hover {
+    background: #16a34a;
+}
+
 /* CSS Variables */
 :root {
     --transition: 0.3s;
@@ -875,6 +970,7 @@ input[type="checkbox"] {
     <script src="https://cdnjs.cloudflare.com/ajax/libs/toastify-js/1.12.0/toastify.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastify-js/1.12.0/toastify.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body class="dark-mode">
     <div id="top-bar">
@@ -1181,12 +1277,18 @@ input[type="checkbox"] {
             </div>
         </div>
         <div id="search" class="tab-content">
-            
             <div class="input-group" style="margin: 10px 0;">
                 <input type="text" id="search-input" placeholder="Search graph..." style="width: 100%; margin-bottom: 5px;">
                 <button onclick="searchGraph()" style="background-color: #10b981;">Search</button>
             </div>
-        
+            <button onclick="riskAnalysis()">Risk Analysis</button> <!-- New Button -->
+        </div>
+        <div id="riskModal" class="modal">
+            <div class="modal-content">
+                <span class="close-modal">&times;</span>
+                <h2>Risk Analysis</h2>
+                <div id="riskTableContainer"></div>
+            </div>
         </div>
         <div id="layouts" class="tab-content">
             <div class="input-group">
@@ -1250,7 +1352,7 @@ input[type="checkbox"] {
         <!-- Suggested -->
         <footer id="controls-footer"> 
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.282 experimental</p>
+    <p>© Xservus Limited - v0.283 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
@@ -2147,31 +2249,6 @@ function handleWheel(event) {
     });
 }
 
-        function showToast(message, type = 'info') {
-            const toastOptions = {
-                text: message,
-                duration: 6500,
-                position: "center",
-                style: {
-                    background: isDarkMode ? '#2d3748' : '#fff',
-                    color: isDarkMode ? '#e2e8f0' : '#1f2a44',
-                    border: `1px solid ${isDarkMode ? '#4b5563' : '#d1d5db'}`,
-                    boxShadow: isDarkMode ? '0 2px 10px rgba(0, 0, 0, 0.3)' : '0 2px 10px rgba(0, 0, 0, 0.1)',
-                    position: 'fixed',
-                    top: '50px',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    width: 'auto',
-                    maxWidth: '80%',
-                    zIndex: 1000
-                }
-            };
-            switch (type) {
-                case 'success': toastOptions.style.background = isDarkMode ? '#166534' : '#22c55e'; toastOptions.style.color = '#fff'; break;
-                case 'error': toastOptions.style.background = isDarkMode ? '#991b1b' : '#ef4444'; toastOptions.style.color = '#fff'; break;
-            }
-            Toastify(toastOptions).showToast();
-        }
 
         function throttleRequest(fn, rateLimit = RATE_LIMIT_MS) {
     return async function(...args) {
@@ -3141,8 +3218,9 @@ function constructUrl(baseUrl, useApiKey = true) {
         }
 
         function showToast(message, type = 'info') {
-    const topBarHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--top-bar-height')) || 40; // Default to 40px if variable not found
-    const buffer = 10; // Additional pixels to push toast below top bar
+    console.log('Showing toast:', message, type);
+    const topBarHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--top-bar-height')) || 40;
+    const buffer = 20;
     const toastOptions = {
         text: message,
         duration: 6500,
@@ -3153,28 +3231,27 @@ function constructUrl(baseUrl, useApiKey = true) {
             border: `1px solid ${isDarkMode ? '#4b5563' : '#d1d5db'}`,
             boxShadow: isDarkMode ? '0 2px 10px rgba(0, 0, 0, 0.3)' : '0 2px 10px rgba(0, 0, 0, 0.1)',
             position: 'fixed',
-            top: `${topBarHeight + buffer}px`, // Position below top bar with buffer
+            top: `${topBarHeight + buffer}px`,
             left: '50%',
             transform: 'translateX(-50%)',
             width: 'auto',
             maxWidth: '80%',
-            zIndex: 3000 // Increased z-index to ensure it’s above other elements
+            zIndex: 3000
         }
     };
     switch (type) {
-        case 'success': 
-            toastOptions.style.background = isDarkMode ? '#166534' : '#22c55e'; 
-            toastOptions.style.color = '#fff'; 
-            break;
-        case 'error': 
-            toastOptions.style.background = isDarkMode ? '#991b1b' : '#ef4444'; 
-            toastOptions.style.color = '#fff'; 
-            break;
+        case 'success': toastOptions.style.background = isDarkMode ? '#166534' : '#22c55e'; toastOptions.style.color = '#fff'; break;
+        case 'error': toastOptions.style.background = isDarkMode ? '#991b1b' : '#ef4444'; toastOptions.style.color = '#fff'; break;
     }
-    Toastify(toastOptions).showToast();
+    const toast = Toastify(toastOptions);
+    console.log('Toast instance created:', toast);
+    setTimeout(() => {
+        toast.showToast();
+        console.log('Toast should now be visible');
+    }, 100); // Small delay to ensure rendering
 }
 
-        async function stabilizeNetwork(skipFit = false) {
+async function stabilizeNetwork(skipFit = false) {
     return new Promise(resolve => {
         network.setOptions({
             physics: {
@@ -9508,12 +9585,8 @@ async function importNMAP() {
                 xmlText = xmlText.substring(xmlStart, xmlEnd);
                 console.log('Extracted XML Text:', xmlText); // Log extracted XML
 
-                // Clean up comments within the XML (optional, as DOMParser handles them)
-                const cleanedXmlText = xmlText; // Comments like <!-- Nmap ... --> are fine for DOMParser
-                console.log('Cleaned XML Text:', cleanedXmlText);
-
                 const parser = new DOMParser();
-                const xmlDoc = parser.parseFromString(cleanedXmlText, 'application/xml');
+                const xmlDoc = parser.parseFromString(xmlText, 'application/xml');
 
                 // Check for XML parsing errors
                 const parserError = xmlDoc.querySelector('parsererror');
@@ -9534,6 +9607,7 @@ async function importNMAP() {
                     if (node.type === 'os' && node.os) existingNodes.set(`os:${node.os}`, node);
                     if (node.type === 'cpe' && node.cpe) existingNodes.set(`cpe:${node.cpe}`, node);
                     if (node.type === 'hop' && node.ipaddr) existingNodes.set(`hop:${node.ipaddr}`, node);
+                    if (node.type === 'mac' && node.mac) existingNodes.set(`mac:${node.mac.toLowerCase()}`, node);
                 });
 
                 const newNodes = [];
@@ -9569,6 +9643,37 @@ async function importNMAP() {
                         console.log(`Added IP node: ${ip}, ID: ${ipNodeId}`);
                     } else {
                         ipNodeId = existingNodes.get(`ip:${ip}`).id;
+                    }
+
+                    // Extract MAC address
+                    const macAddr = host.querySelector('address[addrtype="mac"]');
+                    const mac = macAddr ? macAddr.getAttribute('addr') : null;
+                    if (mac) {
+                        const macKey = `mac:${mac.toLowerCase()}`;
+                        let macNodeId;
+                        if (!existingNodes.has(macKey)) {
+                            macNodeId = nextId++;
+                            newNodes.push({
+                                id: macNodeId,
+                                type: 'mac',
+                                label: `MAC: ${mac}`,
+                                title: `MAC Address: ${mac}`,
+                                color: { background: '#8b5cf6' },
+                                mac: mac,
+                                size: 15
+                            });
+                            existingNodes.set(macKey, { id: macNodeId });
+                            console.log(`Added MAC node: ${mac}, ID: ${macNodeId}`);
+                        } else {
+                            macNodeId = existingNodes.get(macKey).id;
+                        }
+                        newEdges.push({
+                            id: `edge_${ipNodeId}_${macNodeId}_${Date.now()}`,
+                            from: ipNodeId,
+                            to: macNodeId,
+                            label: 'Has MAC'
+                        });
+                        console.log(`Linked IP ${ipNodeId} to MAC: ${macNodeId}`);
                     }
 
                     // Extract hostnames
@@ -9608,7 +9713,7 @@ async function importNMAP() {
                         }
                     }
 
-                    // Extract ports and services
+                    // Extract ports, services, and certificate domains
                     const ports = host.getElementsByTagName('port');
                     for (const port of ports) {
                         const protocol = port.getAttribute('protocol');
@@ -9708,6 +9813,48 @@ async function importNMAP() {
                                     label: 'Identifies'
                                 });
                                 console.log(`Added CPE node: ${cpeValue}, ID: ${cpeNodeId}, Edge to ${serviceNodeId ? 'Service' : 'Port'}: ${serviceNodeId || portNodeId}`);
+                            }
+                        }
+
+                        // Extract certificate domains (SANs) from ssl-cert script
+                        const sslCertScript = port.querySelector('script[id="ssl-cert"]');
+                        if (sslCertScript) {
+                            const output = sslCertScript.getAttribute('output') || '';
+                            // Match SANs like "DNS:example.com" or "DNS:*.example.com"
+                            const sanMatches = output.match(/DNS:[^\s,]+/g) || [];
+                            for (const san of sanMatches) {
+                                const domain = san.replace('DNS:', '').trim();
+                                if (domain && !existingNodes.has(`domain:${domain.toLowerCase()}`)) {
+                                    const domainNodeId = nextId++;
+                                    newNodes.push({
+                                        id: domainNodeId,
+                                        type: 'domain',
+                                        label: `Domain: ${domain}`,
+                                        title: `Domain: ${domain}\nSource: SSL Certificate SAN`,
+                                        color: { background: '#60a5fa' },
+                                        domain: domain,
+                                        size: 20
+                                    });
+                                    existingNodes.set(`domain:${domain.toLowerCase()}`, { id: domainNodeId });
+                                    newEdges.push({
+                                        id: `edge_${ipNodeId}_${domainNodeId}_${Date.now()}`,
+                                        from: ipNodeId,
+                                        to: domainNodeId,
+                                        label: 'Certificate Domain'
+                                    });
+                                    console.log(`Added SAN Domain node: ${domain}, ID: ${domainNodeId}, Edge to IP: ${ipNodeId}`);
+                                } else if (domain) {
+                                    const existingDomainNode = existingNodes.get(`domain:${domain.toLowerCase()}`);
+                                    if (!newEdges.some(e => e.from === ipNodeId && e.to === existingDomainNode.id && e.label === 'Certificate Domain')) {
+                                        newEdges.push({
+                                            id: `edge_${ipNodeId}_${existingDomainNode.id}_${Date.now()}`,
+                                            from: ipNodeId,
+                                            to: existingDomainNode.id,
+                                            label: 'Certificate Domain'
+                                        });
+                                        console.log(`Linked IP ${ipNodeId} to existing SAN Domain: ${existingDomainNode.id}`);
+                                    }
+                                }
                             }
                         }
                     }
@@ -9836,6 +9983,181 @@ async function importNMAP() {
 
     // Trigger file selection
     input.click();
+}
+
+// Risk analysis
+
+function riskAnalysis() {
+    const riskyPorts = {
+        'TCP/3389': 'RDP (Remote Desktop Protocol)',
+        'TCP/5985': 'WinRM (Windows Remote Management)',
+        'TCP/5986': 'WinRM (Windows Remote Management HTTPS)',
+        'TCP/1433': 'MSSQL (Microsoft SQL Server)',
+        'TCP/21': 'FTP (File Transfer Protocol)',
+        'TCP/389': 'LDAP (Lightweight Directory Access Protocol)',
+        'TCP/445': 'SMB (Server Message Block)',
+        'TCP/443': 'HTTPS (Hypertext Transfer Protocol Secure)',
+        'TCP/80': 'HTTP (Hypertext Transfer Protocol)',
+        'TCP/53': 'DNS (Domain Name System)'
+    };
+
+    const risks = [];
+    const ipNodes = new Map();
+
+    // Collect IP nodes
+    nodes.forEach(node => {
+        if ((node.type || '').toLowerCase() === 'ip' && node.ip) {
+            ipNodes.set(node.ip, { id: node.id, domains: new Set(), riskyPorts: new Set() });
+        }
+    });
+
+    // Link domains to IPs
+    edges.forEach(edge => {
+        const label = (edge.label || '').toLowerCase();
+        if (label === 'resolves to' || label === 'certificate domain') {
+            const fromNode = nodes.get(edge.from);
+            const toNode = nodes.get(edge.to);
+            if (fromNode?.type.toLowerCase() === 'ip' && toNode?.type.toLowerCase() === 'domain' && fromNode.ip && toNode.domain) {
+                ipNodes.get(fromNode.ip).domains.add(toNode.domain);
+            }
+        }
+    });
+
+    // Identify risky ports
+    nodes.forEach(node => {
+        if ((node.type || '').toLowerCase() === 'port') {
+            const portType = (node.portType || '').toUpperCase();
+            const portNumber = String(node.portNumber || '');
+            const portKey = `${portType}/${portNumber}`;
+            let state = (node.state || '').toLowerCase();
+            if (!state && node.label) {
+                const stateMatch = node.label.match(/\((open|closed|filtered)\)/i);
+                if (stateMatch) state = stateMatch[1].toLowerCase();
+            }
+
+            if (riskyPorts[portKey] && state === 'open') {
+                edges.forEach(edge => {
+                    const edgeLabel = (edge.label || '').toLowerCase();
+                    if (edge.to === node.id && edgeLabel === 'has port') {
+                        const ipNode = nodes.get(edge.from);
+                        if (ipNode?.type.toLowerCase() === 'ip' && ipNode.ip) {
+                            ipNodes.get(ipNode.ip).riskyPorts.add(portKey);
+                        }
+                    }
+                });
+            }
+        }
+    });
+
+    // Build risks
+    ipNodes.forEach((data, ip) => {
+        if (data.riskyPorts.size > 0) {
+            risks.push({
+                ip: ip,
+                domains: Array.from(data.domains),
+                riskyPorts: Array.from(data.riskyPorts).map(port => ({
+                    port: port,
+                    name: riskyPorts[port]
+                }))
+            });
+        }
+    });
+
+    // Display results
+    const modal = document.getElementById('riskModal');
+    if (risks.length === 0) {
+        modal.style.display = 'none';
+        showToast('No risky elements found in the graph', 'info');
+        return;
+    }
+
+    const tableContainer = document.getElementById('riskTableContainer');
+    let tableHtml = `
+        <table>
+            <thead>
+                <tr>
+                    <th>IP Address</th>
+                    <th>Domain Names</th>
+                    <th>Risky Ports</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    risks.forEach(risk => {
+        tableHtml += `
+            <tr>
+                <td>${risk.ip}</td>
+                <td>${risk.domains.length > 0 ? risk.domains.join(', ') : 'None'}</td>
+                <td>${risk.riskyPorts.map(p => `${p.name} (${p.port})`).join(', ')}</td>
+            </tr>
+        `;
+    });
+
+    tableHtml += `
+            </tbody>
+        </table>
+        <button class="print-button" onclick="printRiskTableToPDF()">Print to PDF</button>
+    `;
+
+    tableContainer.innerHTML = tableHtml;
+    modal.style.display = 'block';
+
+    // Modal close functionality
+    const closeModal = modal.querySelector('.close-modal');
+    closeModal.onclick = () => modal.style.display = 'none';
+    modal.onclick = (e) => {
+        if (e.target === modal) modal.style.display = 'none';
+    };
+}
+
+
+// Add event listener to close modal when clicking outside
+window.onclick = function(event) {
+    const modal = document.getElementById('riskModal');
+    if (event.target === modal) {
+        modal.style.display = 'none';
+    }
+};
+
+
+
+// Save Risk Assessment to PDF
+function printRiskTableToPDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const table = document.querySelector('#riskTableContainer table');
+
+    if (!table) {
+        showToast('No risk table found to print', 'error');
+        return;
+    }
+
+    // Add title
+    doc.setFontSize(16);
+    doc.text('Risk Analysis Report', 10, 10);
+
+    // Convert table to PDF with light mode styling
+    doc.autoTable({
+        html: table,
+        startY: 20,
+        styles: {
+            fillColor: [255, 255, 255], // White background for all cells
+            textColor: [31, 42, 68],    // Dark text (#1f2a44)
+            lineColor: [209, 213, 219], // Light gray border (#d1d5db)
+            lineWidth: 0.1
+        },
+        headStyles: {
+            fillColor: [241, 245, 249], // Light gray header (#f1f5f9)
+            textColor: [31, 42, 68]     // Dark text for header
+        },
+        alternateRowStyles: {
+            fillColor: [255, 255, 255]  // No striping, all rows white
+        }
+    });
+
+    // Save the PDF
+    doc.save('risk_analysis.pdf');
 }
 
 // Add this at the end of the script section
