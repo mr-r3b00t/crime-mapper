@@ -2132,6 +2132,13 @@ window.onload = function() {
         nextId = 1;
     }
 
+    const propertiesPanel = document.getElementById('properties-panel');
+    if (propertiesPanel) {
+        propertiesPanel.style.display = 'none';
+        propertiesPanel.classList.remove('active');
+        document.getElementById('myNetwork').style.marginRight = '0'; // Reset margin
+    }
+
     document.getElementById('ipinfoApiKey').value = ipinfoApiKey;
     document.getElementById('shodanApiKey').value = shodanApiKey;
     document.getElementById('corsProxyUrl').value = corsProxyUrl;
