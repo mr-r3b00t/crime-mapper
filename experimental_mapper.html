@@ -1136,7 +1136,7 @@ input[type="checkbox"] {
             <div class="input-group">
                 <h3>CORS Proxy URL</h3>
                 <div class="password-container">
-                    <input type="password" id="corsProxyUrl" placeholder="Enter CORS Proxy URL" value="https://cors-anywhere.herokuapp.com/">
+                    <input type="password" id="corsProxyUrl" placeholder="Enter CORS Proxy URL" value="http://localhost:3000/proxy?url=">
                     <button type="button" class="toggle-password" data-target="corsProxyUrl">Show</button>
                 </div>
                 <label class="checkbox-label">
@@ -3106,7 +3106,7 @@ function cancelLinkCreation() {
             showToast('CORS Proxy settings set for this session only', 'success');
         }
     } else {
-        corsProxyUrl = 'https://cors-anywhere.herokuapp.com/';
+        corsProxyUrl = 'http://localhost:3000/proxy?url=';
         routeViaProxy = false;
         ignoreApiKeysViaProxy = false;
         localStorage.removeItem('corsProxyUrl');
@@ -7858,7 +7858,7 @@ function initializeApiKeys() {
     urlscanApiKey = localStorage.getItem('urlscanApiKey') || '';
     securitytrailsApiKey = localStorage.getItem('securitytrailsApiKey') || '';
     urlhausApiKey = localStorage.getItem('urlhausApiKey') || '';
-    corsProxyUrl = localStorage.getItem('corsProxyUrl') || 'https://cors-anywhere.herokuapp.com/';
+    corsProxyUrl = localStorage.getItem('corsProxyUrl') || 'http://localhost:3000/proxy?url=';
     routeViaProxy = localStorage.getItem('routeViaProxy') === 'true';
     ignoreApiKeysViaProxy = localStorage.getItem('ignoreApiKeysViaProxy') === 'true';
 
@@ -9429,7 +9429,7 @@ function importConfig() {
                 urlscanApiKey = configData.urlscanApiKey || '';
                 securitytrailsApiKey = configData.securitytrailsApiKey || '';
                 urlhausApiKey = configData.urlhausApiKey || '';
-                corsProxyUrl = configData.corsProxyUrl || 'https://cors-anywhere.herokuapp.com/';
+                corsProxyUrl = configData.corsProxyUrl || 'http://localhost:3000/proxy?url=';
                 routeViaProxy = !!configData.routeViaProxy;
                 ignoreApiKeysViaProxy = !!configData.ignoreApiKeysViaProxy;
 
