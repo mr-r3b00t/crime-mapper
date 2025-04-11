@@ -811,7 +811,7 @@ button {
 
 /* Network Visualization */
 #myNetwork .vis-network canvas {
-    overflow: hidden;
+    overflow: visible; /* Change from hidden to visible */
 }
 
 .vis-network .vis-label {
@@ -1353,7 +1353,7 @@ input[type="checkbox"] {
         <!-- Suggested -->
         <footer id="controls-footer"> 
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.283 experimental</p>
+    <p>© Xservus Limited - v0.284 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
@@ -1479,7 +1479,7 @@ function updateTheme() {
     // Apply the options to the network and force a redraw
     network.setOptions(options);
     updateLabelVisibility();
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
     network.setData({ nodes: nodes, edges: edges });  // Force data refresh
     network.redraw();
 }
@@ -1962,7 +1962,7 @@ document.getElementById('search-input').addEventListener('keypress', function(ev
     updateNodeSizes();
     updateSelectOptions();
     await stabilizeNetwork();
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
     completeProgressBar();
     showToast(`IPinfo enrichment completed: ${successfulEnrichments}/${totalIPs} IPs enriched`, 'success');
     
@@ -2065,7 +2065,7 @@ async function enrichAllGoogleDNS() {
     updateNodeSizes();
     updateSelectOptions();
     await stabilizeNetwork();
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
 
     if (!(activeTaskController && activeTaskController.signal.aborted)) {
         completeProgressBar();
@@ -2131,7 +2131,7 @@ window.onload = function() {
         edges = new vis.DataSet([]);
         nextId = 1;
     }
-    document.getElementById('properties-panel').style.display = 'none'; // Ensure hidden on load
+
     document.getElementById('ipinfoApiKey').value = ipinfoApiKey;
     document.getElementById('shodanApiKey').value = shodanApiKey;
     document.getElementById('corsProxyUrl').value = corsProxyUrl;
@@ -2157,6 +2157,9 @@ window.onload = function() {
     document.getElementById('menu-toggle').textContent = '<';  // Set to "<" since menu starts expanded
     ensureInteractionSettings();
     
+    container.removeEventListener('mousedown', handleMouseDown);
+    container.removeEventListener('mousemove', handleMouseMove);
+    container.removeEventListener('mouseup', handleMouseUp);
     container.addEventListener('wheel', handleWheel, { passive: false });
 
     if (window.innerWidth <= 768) {
@@ -2178,6 +2181,7 @@ window.onload = function() {
         }
     }, 60 * 1000);
 };
+
 
 function loadState() {
     const savedState = localStorage.getItem('networkGraphState');
@@ -2210,19 +2214,16 @@ function loadState() {
         pauseButton.textContent = isPhysicsPaused ? 'Resume Physics' : 'Pause Physics';
         pauseButton.classList.toggle('paused', isPhysicsPaused);
         
-        // Explicitly set all interaction options including dragView
-        network.setOptions({
-            physics: { enabled: !isPhysicsPaused },
-            interaction: {
-                ...baseInteractionOptions,
-                dragView: true,  // Ensure dragView is enabled
-                zoomView: true,
-                dragNodes: true,
-                zoomSpeed: 0.5,
-                multiselect: true,
-                hover: true
-            }
-        });
+         // Ensure interaction settings with dragView
+    network.setOptions({
+        interaction: {
+            ...baseInteractionOptions,
+            dragView: true,  // Explicitly enable dragging
+            zoomView: true,
+            zoomSpeed: 0.5
+        }
+    });
+
         
         // Re-apply wheel event listener (from previous zoom fix)
         container.removeEventListener('wheel', handleWheel);
@@ -2252,7 +2253,7 @@ function handleWheel(event) {
 
 
         function throttleRequest(fn, rateLimit = RATE_LIMIT_MS) {
-    return async function(...args) {
+            return async function(...args) {
         if (activeTaskController) {
             throw new Error('Another task is already running');
         }
@@ -2386,9 +2387,11 @@ const baseInteractionOptions = {
         selectable: true,
         zoomSpeed: 0.5
     },
-    layout: { improvedLayout: false }
+    layout: { improvedLayout: true }
 };
-        
+
+
+
         let network = new vis.Network(container, data, options);
 
 network.on('selectNode', function(params) {
@@ -2400,8 +2403,6 @@ network.on('deselectNode', function(params) {
     selectedNodes = new Set(params.nodes); // Sync with vis.js selection
     console.log('Nodes deselected, remaining:', [...selectedNodes]);
 });
-
-
 
 function ensureInteractionSettings() {
     network.setOptions({
@@ -2500,11 +2501,9 @@ function finishStabilization(resolve, skipFit) {
     if (!skipFit) network.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } });
     resolve();
 }
+   
 
-
-       
-
-        network.on('init', function() {
+network.on('init', function() {
             container.addEventListener('wheel', function(event) {
                 event.preventDefault();
                 const scale = event.deltaY > 0 ? 0.9 : 1.1;
@@ -2514,10 +2513,12 @@ function finishStabilization(resolve, skipFit) {
                     animation: { duration: 100 }
                 });
             }, { passive: false });
-        });
+}
 
-        network.on('oncontext', function(params) {
-    params.event.preventDefault();
+);
+
+network.on('oncontext', function(params) {
+    //params.event.preventDefault();
     const nodeId = this.getNodeAt(params.pointer.DOM);
     const edgeId = this.getEdgeAt(params.pointer.DOM);
 
@@ -2550,7 +2551,7 @@ network.on('click', function(params) {
 
     if (params.nodes.length === 0) {
         // Empty space clicked, prevent default zooming
-        params.event.preventDefault();
+        //params.event.preventDefault();
         console.log('Empty space clicked, no action taken');
         return;
     }
@@ -3068,7 +3069,7 @@ const throttledSearchShodanHtmlHash = throttleRequest(async function searchShoda
         updateNodeSizes();
         updateSelectOptions();
         await stabilizeNetwork();
-        ensureInteractionSettings();
+        //ensureInteractionSettings();
 
         completeProgressBar();
         showToast(`Found and added ${successfulAdditions} IPs with HTML Hash ${htmlHash.substring(0, 8)}...`, 'success');
@@ -3208,17 +3209,7 @@ function constructUrl(baseUrl, useApiKey = true) {
     return useApiKey ? baseUrl : baseUrl.split('?')[0]; // Remove query params if ignoring API keys
 }
 
-        function throttleRequest(fn) {
-            return async function(...args) {
-                const now = Date.now();
-                const timeSinceLast = now - lastRequestTime;
-                if (timeSinceLast < RATE_LIMIT_MS) await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_MS - timeSinceLast));
-                lastRequestTime = now;
-                return fn(...args);
-            };
-        }
-
-        function showToast(message, type = 'info') {
+ function showToast(message, type = 'info') {
     console.log('Showing toast:', message, type);
     const topBarHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--top-bar-height')) || 40;
     const buffer = 20;
@@ -3274,7 +3265,7 @@ async function stabilizeNetwork(skipFit = false) {
             interaction: { 
                 ...baseInteractionOptions,
                 zoomView: true,  // Ensure zooming is enabled
-                dragView: true,
+                //dragView: true,
                 zoomSpeed: 0.5
             }
         });
@@ -3289,7 +3280,7 @@ async function stabilizeNetwork(skipFit = false) {
                 interaction: { 
                     ...baseInteractionOptions,
                     zoomView: true,
-                    dragView: true,
+                    //dragView: true,
                     zoomSpeed: 0.5
                 }
             });
@@ -3322,101 +3313,7 @@ async function stabilizeNetwork(skipFit = false) {
     });
 }
 
-        function throttleRequest(fn) {
-            return async function(...args) {
-                const now = Date.now();
-                const timeSinceLast = now - lastRequestTime;
-                if (timeSinceLast < RATE_LIMIT_MS) await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_MS - timeSinceLast));
-                lastRequestTime = now;
-                return fn(...args);
-            };
-        }
 
-        function showToast(message, type = 'info') {
-            const toastOptions = {
-                text: message,
-                duration: 6500,
-                position: "center",
-                style: {
-                    background: isDarkMode ? '#2d3748' : '#fff',
-                    color: isDarkMode ? '#e2e8f0' : '#1f2a44',
-                    border: `1px solid ${isDarkMode ? '#4b5563' : '#d1d5db'}`,
-                    boxShadow: isDarkMode ? '0 2px 10px rgba(0, 0, 0, 0.3)' : '0 2px 10px rgba(0, 0, 0, 0.1)',
-                    position: 'fixed',
-                    top: '50px',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    width: 'auto',
-                    maxWidth: '80%',
-                    zIndex: 1000
-                }
-            };
-            switch (type) {
-                case 'success': toastOptions.style.background = isDarkMode ? '#166534' : '#22c55e'; toastOptions.style.color = '#fff'; break;
-                case 'error': toastOptions.style.background = isDarkMode ? '#991b1b' : '#ef4444'; toastOptions.style.color = '#fff'; break;
-            }
-            Toastify(toastOptions).showToast();
-        }
-
-        async function stabilizeNetwork(skipFit = false) {
-    return new Promise(resolve => {
-        network.setOptions({
-            physics: {
-                enabled: true,
-                stabilization: {
-                    enabled: true,
-                    iterations: 200,
-                    updateInterval: 50
-                },
-                barnesHut: {
-                    gravitationalConstant: -8000,
-                    centralGravity: 0.3,
-                    springLength: 150,
-                    avoidOverlap: 1.0,
-                    damping: 0.9
-                }
-            },
-            interaction: { ...baseInteractionOptions, zoomView: true } // Preserve zoom
-        });
-
-        network.stabilize(200);
-        network.once('stabilizationIterationsDone', () => {
-            network.setOptions({
-                physics: {
-                    enabled: !isPhysicsPaused,
-                    stabilization: { enabled: false }
-                },
-                interaction: { ...baseInteractionOptions, zoomView: true } // Re-ensure zoom
-            });
-
-            if (!skipFit) {
-                network.fit({
-                    animation: {
-                        duration: 500,
-                        easingFunction: 'easeInOutQuad'
-                    }
-                });
-            }
-
-            setTimeout(() => {
-                const boundingBox = network.getBoundingBox();
-                if (boundingBox && nodes.length > 0) {
-                    const margin = 50;
-                    nodes.forEach(node => {
-                        const { x, y } = network.getPositions([node.id])[node.id] || { x: 0, y: 0 };
-                        nodes.update({
-                            id: node.id,
-                            x: Math.max(boundingBox.left + margin, Math.min(boundingBox.right - margin, x)),
-                            y: Math.max(boundingBox.top + margin, Math.min(boundingBox.bottom - margin, y))
-                        });
-                    });
-                }
-                ensureInteractionSettings(); // Final check
-                resolve();
-            }, skipFit ? 0 : 550);
-        });
-    });
-}
 
 const throttledEnrichInternetDB = throttleRequest(async function enrichInternetDB(ip, ipNodeId, isBulk = false) {
     network.setOptions({ physics: { enabled: false } });
@@ -3562,7 +3459,7 @@ const throttledEnrichInternetDB = throttleRequest(async function enrichInternetD
         updateNodeSizes();
         updateSelectOptions();
         await stabilizeNetwork();
-        ensureInteractionSettings();
+        //ensureInteractionSettings();
         if (!isBulk) showToast(`IP ${ip} enrichment completed using InternetDB`, 'success');
     } catch (error) {
         console.error(`Error enriching IP ${ip} with InternetDB: ${error.message}`);
@@ -3693,7 +3590,7 @@ async function enrichAllShodan() {
         updateTheme();
         
         await stabilizeNetwork();
-        ensureInteractionSettings();
+        //ensureInteractionSettings();
 
         if (!(activeTaskController && activeTaskController.signal.aborted)) {
             completeProgressBar();
@@ -3942,7 +3839,7 @@ async function enrichAllInternetDB() {
     updateNodeSizes();
     updateSelectOptions();
     await stabilizeNetwork();
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
     completeProgressBar();
     showToast(`InternetDB enrichment completed: ${successfulEnrichments}/${totalIPs} IPs enriched`, 'success');
     
@@ -4178,7 +4075,7 @@ function toggleMode() {
         // Trigger stabilization when resuming physics
         stabilizeNetwork();
     }
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
     }
 
         function resetLayout() {
@@ -4228,7 +4125,7 @@ function toggleMode() {
         const pauseButton = document.getElementById('pause-toggle');
         pauseButton.textContent = 'Resume Physics';
         pauseButton.classList.add('paused');
-        ensureInteractionSettings();
+        //ensureInteractionSettings();
     });
 }
 
@@ -4586,11 +4483,6 @@ function isPrivateIP(ip) {
     return isPrivate;
 }
 
-// Placeholder for showToast if not defined elsewhere
-function showToast(message, type = 'info') {
-    console.log(`Toast: ${message} (${type})`);
-    // Actual implementation would depend on your UI framework
-}
 
 function addNode() {
     const type = document.getElementById('addEntityType').value;
@@ -5960,7 +5852,7 @@ const stateLoaded = loadState();
     if (!stateLoaded) {
         console.log('No saved state found or loading failed, applying defaults');
         updateTheme();
-        ensureInteractionSettings();
+        //ensureInteractionSettings();
     } else {
         // Force UI and network update after successful load
         updateSelectOptions();
@@ -6396,7 +6288,7 @@ const throttledEnrichShodanMultiple = throttleRequest(async function enrichShoda
     updateNodeSizes();
     updateSelectOptions();
     await stabilizeNetwork();
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
 
     if (!(activeTaskController && activeTaskController.signal.aborted)) {
         completeProgressBar();
@@ -6503,7 +6395,7 @@ const throttledEnrichInternetDBMultiple = throttleRequest(async function enrichI
     updateNodeSizes();
     updateSelectOptions();
     await stabilizeNetwork();
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
 
     if (!(activeTaskController && activeTaskController.signal.aborted)) {
         completeProgressBar();
@@ -6651,7 +6543,7 @@ const throttledSendHttpsRequestMultiple = throttleRequest(async function sendHtt
     }
 
     await stabilizeNetwork();
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
 
     if (!(activeTaskController && activeTaskController.signal.aborted)) {
         completeProgressBar();
@@ -6889,7 +6781,7 @@ const throttledEnrichHudsonRockMultiple = throttleRequest(async function enrichH
     updateNodeSizes();
     updateSelectOptions();
     await stabilizeNetwork();
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
 
     if (!(activeTaskController && activeTaskController.signal.aborted)) {
         completeProgressBar();
@@ -7083,7 +6975,7 @@ const throttledEnrichHudsonRockDomainMultiple = throttleRequest(async function e
     updateNodeSizes();
     updateSelectOptions();xf
     await stabilizeNetwork();
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
 
     if (!(activeTaskController && activeTaskController.signal.aborted)) {
         completeProgressBar();
@@ -7289,7 +7181,7 @@ async function enrichAllHudsonRockEmails() {
     updateNodeSizes();
     updateSelectOptions();
     await stabilizeNetwork();
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
 
     if (!(activeTaskController && activeTaskController.signal.aborted)) {
         completeProgressBar();
@@ -7397,7 +7289,7 @@ async function enrichAllHudsonRockDomains() {
     updateNodeSizes();
     updateSelectOptions();
     await stabilizeNetwork();
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
 
     if (!(activeTaskController && activeTaskController.signal.aborted)) {
         completeProgressBar();
@@ -7827,7 +7719,7 @@ const throttledEnrichGreyNoiseMultiple = throttleRequest(async function enrichGr
     updateNodeSizes();
     updateSelectOptions();
     await stabilizeNetwork();
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
 
     if (!(activeTaskController && activeTaskController.signal.aborted)) {
         completeProgressBar();
@@ -7911,23 +7803,6 @@ function saveUrlscanApiKey() {
         localStorage.removeItem('urlscanApiKey');
         showToast('Please enter a valid URLscan.io API key.', 'error');
     }
-}
-
-
-
-// Helper function to avoid duplicate nodes
-function addOrGetNode(type, value, newNodes, properties) {
-    const existing = nodes.get({ filter: n => n.type === type && n[type] === value })[0];
-    if (existing) return existing.id;
-    
-    const nodeId = nextId++;
-    newNodes.push({
-        id: nodeId,
-        type: type,
-        [type]: value,
-        ...properties
-    });
-    return nodeId;
 }
 
 // Single URL enrichment
@@ -8165,7 +8040,7 @@ async function enrichAllURLscan() {
     updateNodeSizes();
     updateSelectOptions();
     await stabilizeNetwork();
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
     completeProgressBar();
     showToast(`URLscan.io enrichment completed: ${successfulEnrichments}/${totalURLs} URLs enriched${!urlscanApiKey ? ' (API key may improve results)' : ''}`, 'success');
 }
@@ -8432,7 +8307,7 @@ async function enrichAllSecurityTrails() {
     updateNodeSizes();
     updateSelectOptions();
     await stabilizeNetwork();
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
     completeProgressBar();
     showToast(`SecurityTrails enrichment completed: ${successfulEnrichments}/${totalDomains} domains enriched`, 'success');
 }
@@ -9060,7 +8935,7 @@ async function enrichAllURLhaus() {
     updateNodeSizes();
     updateSelectOptions();
     await stabilizeNetwork();
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
     completeProgressBar();
     showToast(`URLhaus enrichment completed: ${successfulEnrichments}/${totalURLs} URLs enriched`, 'success');
 }
