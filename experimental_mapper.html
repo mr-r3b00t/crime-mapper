@@ -1062,6 +1062,8 @@ input[type="checkbox"] {
                 <button id="summary-button" onclick="showGraphSummary()">Graph Summary</button>
                 <button onclick="exportToPNG()">Export to PNG</button>
                 <button onclick="exportToPDF()">Export to PDF</button>
+                <button onclick="exportConfigBackup()">Backup Config</button> <!-- New Button -->
+                <button onclick="importConfig()">Import Config</button> <!-- New Button -->
             </div>
         </div>
         <div id="api-keys" class="tab-content">
@@ -1247,7 +1249,7 @@ input[type="checkbox"] {
         <!-- Suggested -->
         <footer id="controls-footer"> 
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.279 experimental</p>
+    <p>© Xservus Limited - v0.280 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
@@ -9106,8 +9108,118 @@ function isPrivateIP(ip) {
 }
 
 
+function exportConfigBackup() {
+    // Collect API keys and proxy config from localStorage
+    const configData = {
+        ipinfoApiKey: localStorage.getItem('ipinfoApiKey') || '',
+        shodanApiKey: localStorage.getItem('shodanApiKey') || '',
+        greynoiseApiKey: localStorage.getItem('greynoiseApiKey') || '',
+        urlscanApiKey: localStorage.getItem('urlscanApiKey') || '',
+        securitytrailsApiKey: localStorage.getItem('securitytrailsApiKey') || '',
+        urlhausApiKey: localStorage.getItem('urlhausApiKey') || '',
+        corsProxyUrl: localStorage.getItem('corsProxyUrl') || '',
+        routeViaProxy: localStorage.getItem('routeViaProxy') === 'true',
+        ignoreApiKeysViaProxy: localStorage.getItem('ignoreApiKeysViaProxy') === 'true'
+    };
 
+    // Convert to JSON
+    const json = JSON.stringify(configData, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'configuration_backup.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 
+    showToast('Configuration backup exported successfully', 'success');
+}
+
+function importConfig() {
+    // Create a temporary file input element
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+
+    input.onchange = function(event) {
+        const file = event.target.files[0];
+        if (!file) {
+            showToast('No file selected', 'error');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const configData = JSON.parse(e.target.result);
+
+                // Validate the imported data
+                const expectedKeys = [
+                    'ipinfoApiKey', 'shodanApiKey', 'greynoiseApiKey', 'urlscanApiKey', 
+                    'securitytrailsApiKey', 'urlhausApiKey', 'corsProxyUrl', 
+                    'routeViaProxy', 'ignoreApiKeysViaProxy'
+                ];
+                const hasValidKeys = expectedKeys.every(key => key in configData);
+                if (!hasValidKeys) {
+                    throw new Error('Invalid configuration file: missing required keys');
+                }
+
+                // Update localStorage and global variables
+                ipinfoApiKey = configData.ipinfoApiKey || '';
+                shodanApiKey = configData.shodanApiKey || '';
+                greynoiseApiKey = configData.greynoiseApiKey || '';
+                urlscanApiKey = configData.urlscanApiKey || '';
+                securitytrailsApiKey = configData.securitytrailsApiKey || '';
+                urlhausApiKey = configData.urlhausApiKey || '';
+                corsProxyUrl = configData.corsProxyUrl || 'https://cors-anywhere.herokuapp.com/';
+                routeViaProxy = !!configData.routeViaProxy;
+                ignoreApiKeysViaProxy = !!configData.ignoreApiKeysViaProxy;
+
+                // Persist to localStorage
+                localStorage.setItem('ipinfoApiKey', ipinfoApiKey);
+                localStorage.setItem('shodanApiKey', shodanApiKey);
+                localStorage.setItem('greynoiseApiKey', greynoiseApiKey);
+                localStorage.setItem('urlscanApiKey', urlscanApiKey);
+                localStorage.setItem('securitytrailsApiKey', securitytrailsApiKey);
+                localStorage.setItem('urlhausApiKey', urlhausApiKey);
+                localStorage.setItem('corsProxyUrl', corsProxyUrl);
+                localStorage.setItem('routeViaProxy', routeViaProxy.toString());
+                localStorage.setItem('ignoreApiKeysViaProxy', ignoreApiKeysViaProxy.toString());
+
+                // Update UI elements
+                document.getElementById('ipinfoApiKey').value = ipinfoApiKey;
+                document.getElementById('shodanApiKey').value = shodanApiKey;
+                document.getElementById('greynoiseApiKey').value = greynoiseApiKey;
+                document.getElementById('urlscanApiKey').value = urlscanApiKey;
+                document.getElementById('securitytrailsApiKey').value = securitytrailsApiKey;
+                document.getElementById('urlhausApiKey').value = urlhausApiKey;
+                document.getElementById('corsProxyUrl').value = corsProxyUrl;
+                document.getElementById('routeViaProxy').checked = routeViaProxy;
+                document.getElementById('ignoreApiKeysViaProxy').checked = ignoreApiKeysViaProxy;
+
+                // Update checkbox states based on whether keys are stored
+                document.getElementById('storeIpinfoKey').checked = !!ipinfoApiKey;
+                document.getElementById('storeShodanKey').checked = !!shodanApiKey;
+                document.getElementById('storeGreynoiseKey').checked = !!greynoiseApiKey;
+                document.getElementById('storeUrlscanKey').checked = !!urlscanApiKey;
+                document.getElementById('storeSecuritytrailsKey').checked = !!securitytrailsApiKey;
+                document.getElementById('storeUrlhausKey').checked = !!urlhausApiKey;
+                document.getElementById('storeCorsProxy').checked = !!corsProxyUrl;
+
+                showToast('Configuration imported successfully', 'success');
+            } catch (error) {
+                console.error('Error importing config:', error);
+                showToast(`Failed to import configuration: ${error.message}`, 'error');
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    // Trigger file selection
+    input.click();
+}
 
 // Add this at the end of the script section
 window.addEventListener('beforeunload', function() {
