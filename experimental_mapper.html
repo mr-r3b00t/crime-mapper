@@ -966,11 +966,12 @@ input[type="checkbox"] {
     display: none;
 }
 </style>
-    <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/dist/vis-network.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastify-js/1.12.0/toastify.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastify-js/1.12.0/toastify.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/dist/vis-network.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastify-js/1.12.0/toastify.min.js"></script>  
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body class="dark-mode">
     <div id="top-bar">
@@ -4959,8 +4960,8 @@ function setHierarchicalLayout() {
             title: v => `IP Address: ${v.ip}${v.notes ? '\nNotes: ' + v.notes : ''}`,
             validate: v => {
                 const ipRegex = {
-                    ipv4: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/,
-                    ipv6: /^([0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}$/
+                    ipv4: /^(?!0\d)(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?!0\d)(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?!0\d)(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?!0\d)(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/,
+                    ipv6: /^((([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4})|(([0-9a-fA-F]{1,4}:){1,7}:)|(::([0-9a-fA-F]{1,4}:){0,5}[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|::)$/i
                 };
                 return ipRegex.ipv4.test(v.ip) || ipRegex.ipv6.test(v.ip);
             }
@@ -5467,7 +5468,7 @@ async function processIOCs(text) {
     const ipRegex = { 
         // RFC 791-compliant IPv4: 4 octets (0-255), no leading zeros unless 0
         ipv4: /^(?!0\d)(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?!0\d)(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?!0\d)(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?!0\d)(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/,
-        ipv6: /^([0-9a-fA-F]{0,4}:){0,7}[0-9a-fA-F]{0,4}(:[0-9a-fA-F]{0,4}){0,7}$/ 
+        ipv6: /^((([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4})|(([0-9a-fA-F]{1,4}:){1,7}:)|(::([0-9a-fA-F]{1,4}:){0,5}[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|::)$/i
     };
     const subnetRegex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\/(\d{1,2})$/; // Matches CIDR (e.g., 192.168.1.0/24)
     const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
@@ -7958,6 +7959,167 @@ function initializeApiKeys() {
 }
 
 
+//save ipinfo key
+
+function saveIpinfoApiKey() {
+    ipinfoApiKey = document.getElementById('ipinfoApiKey').value.trim();
+    const storeKey = document.getElementById('storeIpinfoKey').checked;
+    if (ipinfoApiKey) {
+        if (storeKey) {
+            localStorage.setItem('ipinfoApiKey', ipinfoApiKey);
+        } else {
+            localStorage.removeItem('ipinfoApiKey');
+        }
+        alert('IPinfo API key saved successfully!');
+    } else {
+        localStorage.removeItem('ipinfoApiKey');
+        alert('Please enter a valid IPinfo API key.');
+    }
+}
+
+//save shodan key
+
+function saveShodanApiKey() {
+    shodanApiKey = document.getElementById('shodanApiKey').value.trim();
+    const storeKey = document.getElementById('storeShodanKey').checked;
+    if (shodanApiKey) {
+        if (storeKey) {
+            localStorage.setItem('shodanApiKey', shodanApiKey);
+        } else {
+            localStorage.removeItem('shodanApiKey');
+        }
+        alert('Shodan API key saved successfully!');
+    } else {
+        localStorage.removeItem('shodanApiKey');
+        alert('Please enter a valid Shodan API key.');
+    }
+}
+
+// function impport graph
+
+function importGraph() {
+            const fileInput = document.getElementById('importFile');
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('Please select a JSON file to import');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const importedData = JSON.parse(event.target.result);
+                    
+                    nodes.clear();
+                    edges.clear();
+
+                    importedData.nodes.forEach(node => {
+                        let nodeData = {
+                            id: node.id,
+                            size: 20,
+                            type: node.type
+                        };
+
+                        if (node.type === 'contact') {
+                            nodeData.label = `${node.name}\n${node.email}`;
+                            nodeData.title = `Contact\nName: ${node.name}\nEmail: ${node.email}`;
+                            nodeData.color = { background: '#4ade80' };
+                            nodeData.name = node.name;
+                            nodeData.email = node.email;
+                        } else if (node.type === 'ip') {
+                            nodeData.label = node.ip;
+                            nodeData.title = `IP Address: ${node.ip}`;
+                            nodeData.color = { background: '#f87171' };
+                            nodeData.ip = node.ip;
+                        } else if (node.type === 'domain') {
+                            nodeData.label = node.domain;
+                            nodeData.title = `Domain: ${node.domain}`;
+                            nodeData.color = { background: '#60a5fa' };
+                            nodeData.domain = node.domain;
+                        } else if (node.type === 'organization') {
+                            nodeData.label = node.organization;
+                            nodeData.title = `Organization: ${node.organization}`;
+                            nodeData.color = { background: '#facc15' };
+                            nodeData.organization = node.organization;
+                        } else if (node.type === 'port') {
+                            nodeData.label = `${node.portType}/${node.portNumber}`;
+                            nodeData.title = `Port\nType: ${node.portType}\nNumber: ${node.portNumber}`;
+                            nodeData.color = { background: '#a78bfa' };
+                            nodeData.portType = node.portType;
+                            nodeData.portNumber = node.portNumber;
+                        } else if (node.type === 'wallet') {
+                            nodeData.label = node.address;
+                            nodeData.title = `Wallet\nAddress: ${node.address}`;
+                            nodeData.color = { background: '#fb923c' };
+                            nodeData.address = node.address;
+                        } else if (node.type === 'bank') {
+                            nodeData.label = `${node.accountNumber}\n${node.sortCode}`;
+                            nodeData.title = `Bank Account\nAccount Number: ${node.accountNumber}\nSort Code: ${node.sortCode}`;
+                            nodeData.color = { background: '#10b981' };
+                            nodeData.accountNumber = node.accountNumber;
+                            nodeData.sortCode = node.sortCode;
+                        } else if (node.type === 'technology') {
+                            nodeData.label = `${node.techName}\n${node.techVersion}`;
+                            nodeData.title = `Technology\nName: ${node.techName}\nVersion: ${node.techVersion}`;
+                            nodeData.color = { background: '#ec4899' };
+                            nodeData.techName = node.techName;
+                            nodeData.techVersion = node.techVersion;
+                        } else if (node.type === 'device') {
+                            nodeData.label = node.deviceCategory;
+                            nodeData.title = `Device\nCategory: ${node.deviceCategory}`;
+                            nodeData.color = { background: '#14b8a6' };
+                            nodeData.deviceCategory = node.deviceCategory;
+                        }
+
+                        let isDuplicate = false;
+                        if (node.type === 'contact') {
+                            isDuplicate = nodes.get({ filter: n => n.type === 'contact' && n.name === nodeData.name && n.email === nodeData.email }).length > 0;
+                        } else if (node.type === 'ip') {
+                            isDuplicate = nodes.get({ filter: n => n.type === 'ip' && n.ip === nodeData.ip }).length > 0;
+                        } else if (node.type === 'domain') {
+                            isDuplicate = nodes.get({ filter: n => n.type === 'domain' && n.domain === nodeData.domain }).length > 0;
+                        } else if (node.type === 'organization') {
+                            isDuplicate = nodes.get({ filter: n => n.type === 'organization' && n.organization === nodeData.organization }).length > 0;
+                        } else if (node.type === 'port') {
+                            isDuplicate = nodes.get({ filter: n => n.type === 'port' && n.portNumber === nodeData.portNumber && n.portType === nodeData.portType }).length > 0;
+                        } else if (node.type === 'wallet') {
+                            isDuplicate = nodes.get({ filter: n => n.type === 'wallet' && n.address === nodeData.address }).length > 0;
+                        } else if (node.type === 'bank') {
+                            isDuplicate = nodes.get({ filter: n => n.type === 'bank' && n.accountNumber === nodeData.accountNumber && n.sortCode === nodeData.sortCode }).length > 0;
+                        } else if (node.type === 'technology') {
+                            isDuplicate = nodes.get({ filter: n => n.type === 'technology' && n.techName === nodeData.techName && n.techVersion === nodeData.techVersion }).length > 0;
+                        } else if (node.type === 'device') {
+                            isDuplicate = nodes.get({ filter: n => n.type === 'device' && n.deviceCategory === nodeData.deviceCategory }).length > 0;
+                        }
+
+                        if (!isDuplicate) {
+                            nodes.add(nodeData);
+                        }
+                    });
+
+                    importedData.edges.forEach(edge => {
+                        edges.add({ 
+                            id: edge.id || `edge_${edge.from}_${edge.to}_${Date.now()}`,
+                            from: edge.from, 
+                            to: edge.to,
+                            label: edge.label || undefined
+                        });
+                    });
+
+                    updateNodeSizes();
+                    updateSelectOptions();
+                    updateEdgeSelectOptions();
+                    network.setData({ nodes: nodes, edges: edges });
+                    nextId = Math.max(...importedData.nodes.map(n => n.id)) + 1;
+
+                    fileInput.value = '';
+                } catch (e) {
+                    alert('Error importing JSON: ' + e.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+
 // Save GreyNoise API Key
 function saveGreynoiseApiKey() {
     greynoiseApiKey = document.getElementById('greynoiseApiKey').value.trim();
@@ -10098,6 +10260,7 @@ function riskAnalysis() {
             </tbody>
         </table>
         <button class="print-button" onclick="printRiskTableToPDF()">Print to PDF</button>
+        <button class="export-button" onclick="exportToExcel()">Export to Excel</button>
     `;
 
     tableContainer.innerHTML = tableHtml;
@@ -10158,6 +10321,51 @@ function printRiskTableToPDF() {
 
     // Save the PDF
     doc.save('risk_analysis.pdf');
+}
+
+function exportToExcel() {
+    // Check if XLSX is available
+    if (typeof XLSX === 'undefined') {
+        showToast('Excel export library not loaded', 'error');
+        return;
+    }
+
+    const table = document.querySelector('#riskTableContainer table');
+    if (!table) {
+        showToast('No risk table found to export', 'error');
+        return;
+    }
+
+    // Prepare data for Excel
+    const data = [];
+    const headers = ['IP Address', 'Domain Names', 'Risky Ports'];
+    data.push(headers);
+
+    const rows = table.querySelectorAll('tbody tr');
+    rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        const rowData = [
+            cells[0].textContent, // IP Address
+            cells[1].textContent, // Domain Names
+            cells[2].textContent  // Risky Ports
+        ];
+        data.push(rowData);
+    });
+
+    // Create workbook and worksheet
+    const ws = XLSX.utils.aoa_to_sheet(data); // Array of arrays to sheet
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Risk Analysis');
+
+    // Style headers (optional, basic bolding)
+    ws['!cols'] = [{ wch: 15 }, { wch: 30 }, { wch: 50 }]; // Set column widths
+    for (let i = 0; i < headers.length; i++) {
+        const cellRef = XLSX.utils.encode_cell({ r: 0, c: i });
+        ws[cellRef].s = { font: { bold: true } };
+    }
+
+    // Export to file
+    XLSX.writeFile(wb, 'risk_analysis.xlsx');
 }
 
 // Add this at the end of the script section
