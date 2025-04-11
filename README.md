@@ -5,6 +5,8 @@ Created by **@UK_Daniel_Card**
 
 The experimental version is the live, bleeeding edge version (Live Demo is largely where I'm storing a relatively stable version... but this is all DEV!)
 
+IF YOU WANT TO REALLY TEST THIS, PLEASE RUN IT LOCALLY WITH A LOCAL CORS PROXY (There is one provided in this repo, an online CORS proxy is planned for the future!)
+
 🔗 [Experimental Version](https://mr-r3b00t.github.io/crime-mapper/experimental_mapper.html)
 
 🔗 [Live Demo](https://mr-r3b00t.github.io/crime-mapper/crimemapper.html)  
