@@ -1974,113 +1974,8 @@ document.getElementById('search-input').addEventListener('keypress', function(ev
     }
 }
 
-async function enrichAllGoogleDNS() {
-    showProgressBar();
-    network.setOptions({ physics: { enabled: false } });
-    const domainNodes = nodes.get({ filter: n => n.type === 'domain' && n.domain });
-    const totalDomains = domainNodes.length;
-    let successfulEnrichments = 0;
 
-    if (totalDomains === 0) {
-        showToast('No domains found to enrich', 'info');
-        completeProgressBar();
-        return;
-    }
-
-    console.log(`Found ${totalDomains} domain nodes to enrich with Google DNS`);
-    showToast(`Starting Google DNS enrichment for ${totalDomains} domains`, 'info');
-
-    const batchSize = 50; // Consistent with other bulk enrichment functions
-    const delayBetweenBatches = 200; // Consistent with other bulk functions
-    const totalBatches = Math.ceil(totalDomains / batchSize);
-    const assumedRequestTimeMs = 100; // Estimated time per request
-    const timePerBatchMs = assumedRequestTimeMs * batchSize;
-    const totalBatchDelays = (totalBatches - 1) * delayBetweenBatches;
-    const estimatedTimeMs = (timePerBatchMs * totalBatches) + totalBatchDelays + 1000;
-
-    const estimatedSeconds = Math.ceil(estimatedTimeMs / 1000);
-    const estimatedMinutes = Math.floor(estimatedSeconds / 60);
-    const remainingSeconds = estimatedSeconds % 60;
-    const timeEstimateStr = estimatedMinutes > 0 
-        ? `${estimatedMinutes}m ${remainingSeconds}s` 
-        : `${estimatedSeconds}s`;
-
-    showToast(`Estimated time for Google DNS enrichment: ~${timeEstimateStr}`, 'info');
-    document.getElementById('progress-bar').textContent = `Google DNS Enrichment: 0/${totalDomains} Domains (0%) - Est. ${timeEstimateStr}`;
-
-    async function processBatch(batch) {
-        const promises = batch.map(node => {
-            if (activeTaskController && activeTaskController.signal.aborted) {
-                return Promise.resolve(null);
-            }
-            return throttledEnrichGoogleDNS(node.domain, node.id, true) // isBulk = true
-                .then(() => successfulEnrichments++)
-                .catch(error => {
-                    console.error(`Failed to enrich domain ${node.domain}: ${error.message}`);
-                    showToast(`Failed to enrich domain ${node.domain}: ${error.message}`, 'error');
-                    return null;
-                });
-        });
-        await Promise.all(promises);
-    }
-
-    let lastProgressUpdate = 0;
-    const progressUpdateInterval = 1000;
-    const startTime = Date.now();
-
-    for (let i = 0; i < totalDomains; i += batchSize) {
-        if (activeTaskController && activeTaskController.signal.aborted) {
-            showToast('Google DNS enrichment stopped', 'info');
-            document.getElementById('progress-bar').textContent = `Google DNS Enrichment: Stopped at ${successfulEnrichments}/${totalDomains} Domains`;
-            break;
-        }
-
-        const batch = domainNodes.slice(i, Math.min(i + batchSize, totalDomains));
-        console.log(`Processing batch ${Math.floor(i / batchSize) + 1} of ${totalBatches}, Domains ${i} to ${Math.min(i + batchSize - 1, totalDomains - 1)}`);
-
-        await processBatch(batch);
-
-        const currentTime = Date.now();
-        if (currentTime - lastProgressUpdate >= progressUpdateInterval || i + batchSize >= totalDomains) {
-            const processedDomains = Math.min(i + batchSize, totalDomains);
-            const progress = ((processedDomains / totalDomains) * 100).toFixed(1);
-            const remainingDomains = totalDomains - processedDomains;
-            const remainingTimeMs = Math.max(0, remainingDomains * assumedRequestTimeMs);
-            const remainingSeconds = Math.ceil(remainingTimeMs / 1000);
-            const remainingMinutes = Math.floor(remainingSeconds / 60);
-            const remainingSecondsPart = remainingSeconds % 60;
-            const remainingTimeStr = remainingMinutes > 0 
-                ? `${remainingMinutes}m ${remainingSecondsPart}s` 
-                : `${remainingSeconds}s`;
-
-            document.getElementById('progress-bar').textContent = 
-                `Google DNS Enrichment: ${successfulEnrichments}/${totalDomains} Domains (${progress}%) - Est. ${remainingTimeStr} remaining`;
-            lastProgressUpdate = currentTime;
-            updateSelectOptions();
-        }
-
-        await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
-    }
-
-    updateNodeSizes();
-    updateSelectOptions();
-    await stabilizeNetwork();
-    //ensureInteractionSettings();
-
-    if (!(activeTaskController && activeTaskController.signal.aborted)) {
-        completeProgressBar();
-        showToast(`Google DNS enrichment completed: ${successfulEnrichments}/${totalDomains} domains enriched`, 'success');
-    } else {
-        showToast(`Google DNS enrichment stopped: ${successfulEnrichments}/${totalDomains} domains processed`, 'info');
-    }
-
-    if (window.innerWidth <= 768) {
-        const controls = document.getElementById('controls');
-        controls.classList.add('collapsed');
-        document.getElementById('myNetwork').style.display = 'block';
-        network.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
-    }
-}
+//Export to PDF
 
 
 function exportToPDF() {
@@ -2258,41 +2153,16 @@ function handleWheel(event) {
     });
 }
 
-
-        function throttleRequest(fn, rateLimit = RATE_LIMIT_MS) {
+function throttleRequest(fn) {
             return async function(...args) {
-        if (activeTaskController) {
-            throw new Error('Another task is already running');
+                const now = Date.now();
+                const timeSinceLast = now - lastRequestTime;
+                if (timeSinceLast < RATE_LIMIT_MS) await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_MS - timeSinceLast));
+                lastRequestTime = now;
+                return fn(...args);
+            };
         }
-        
-        activeTaskController = new AbortController();
-        const stopButton = document.getElementById('stop-task');
-        stopButton.disabled = false;
-        
-        const now = Date.now();
-        const timeSinceLast = now - lastRequestTime;
-        const delay = rateLimit; // Use the provided rate limit (1000ms for Shodan)
-        if (timeSinceLast < delay) await new Promise(resolve => setTimeout(resolve, delay - timeSinceLast));
-        lastRequestTime = now;
-        
-        try {
-            const result = await fn(...args, activeTaskController.signal);
-            activeTaskController = null;
-            stopButton.disabled = true;
-            return result;
-        } catch (error) {
-            if (error.name === 'AbortError') {
-                console.log('Task aborted');
-            } else {
-                throw error;
-            }
-        } finally {
-            if (activeTaskController === null) {
-                stopButton.disabled = true;
-            }
-        }
-    };
-}
+
 
 const baseInteractionOptions = {
     dragNodes: true,
@@ -2396,8 +2266,6 @@ const baseInteractionOptions = {
     },
     layout: { improvedLayout: true }
 };
-
-
 
         let network = new vis.Network(container, data, options);
 
@@ -2525,7 +2393,7 @@ network.on('init', function() {
 );
 
 network.on('oncontext', function(params) {
-    //params.event.preventDefault();
+    params.event.preventDefault();
     const nodeId = this.getNodeAt(params.pointer.DOM);
     const edgeId = this.getEdgeAt(params.pointer.DOM);
 
@@ -2558,7 +2426,7 @@ network.on('click', function(params) {
 
     if (params.nodes.length === 0) {
         // Empty space clicked, prevent default zooming
-        //params.event.preventDefault();
+        params.event.preventDefault();
         console.log('Empty space clicked, no action taken');
         return;
     }
@@ -3211,7 +3079,7 @@ function constructUrl(baseUrl, useApiKey = true) {
         // Ensure corsProxyUrl doesn't end with a slash and baseUrl doesn't start with one
         const cleanProxyUrl = corsProxyUrl.replace(/\/+$/, ''); // Remove trailing slashes
         const cleanBaseUrl = baseUrl.replace(/^\/+/, '');      // Remove leading slashes
-        return `${cleanProxyUrl}/${cleanBaseUrl}`;
+        return `${cleanProxyUrl}${cleanBaseUrl}`;
     }
     return useApiKey ? baseUrl : baseUrl.split('?')[0]; // Remove query params if ignoring API keys
 }
@@ -6118,79 +5986,7 @@ function toggleMenu() {
     });
 }
 
-const throttledEnrichGoogleDNS = throttleRequest(async function enrichGoogleDNS(domain, domainNodeId, isBulk = false, signal) {
-    network.setOptions({ physics: { enabled: false } });
-    try {
-        const url = constructUrl(`https://dns.google.com/resolve?name=${domain}&type=A`);
-        const response = await fetch(url, { signal });
-        if (!response.ok) throw new Error('Failed to fetch Google DNS data');
-        const data = await response.json();
 
-        if (data.Answer) {
-            data.Answer.forEach(answer => {
-                if (answer.type === 1) { // Type A record (IPv4)
-                    const ip = answer.data;
-                    const existingIP = nodes.get({ filter: n => n.type === 'ip' && n.ip === ip })[0];
-                    const ipId = existingIP ? existingIP.id : nextId++;
-                    if (!existingIP) {
-                        nodes.add({
-                            id: ipId,
-                            type: 'ip',
-                            label: `IP: ${ip}`,
-                            title: `IP Address: ${ip}`,
-                            color: { background: '#f87171' },
-                            ip: ip,
-                            size: 20
-                        });
-                    }
-                    const edgeId = `${domainNodeId}-${ipId}-ResolvesTo`;
-                    if (!edges.get(edgeId)) {
-                        edges.add({
-                            id: edgeId,
-                            from: domainNodeId,
-                            to: ipId,
-                            label: 'Resolves to'
-                        });
-                    }
-                }
-            });
-        }
-
-        updateNodeSizes();
-        updateSelectOptions();
-        await stabilizeNetwork();
-        if (!isBulk) showToast(`Domain ${domain} enrichment completed using Google DNS`, 'success');
-    } catch (error) {
-        if (error.name === 'AbortError') {
-            showToast(`Enrichment of domain ${domain} was cancelled`, 'info');
-            return;
-        }
-        console.error(`Error enriching domain ${domain} with Google DNS: ${error.message}`);
-        showToast(`Error enriching domain ${domain}: ${error.message}`, 'error');
-        await stabilizeNetwork();
-    }
-}, RATE_LIMIT_MS); // Use the default rate limit (500ms)
-
-
-const throttledEnrichGoogleDNSMultiple = throttleRequest(async function enrichGoogleDNSMultiple(domains, nodeIds) {
-    if (!Array.isArray(domains) || !Array.isArray(nodeIds) || domains.length !== nodeIds.length) {
-        showToast('Invalid input for multiple domain enrichment', 'error');
-        return;
-    }
-
-    for (let i = 0; i < domains.length; i++) {
-        if (activeTaskController && activeTaskController.signal.aborted) {
-            showToast('Google DNS enrichment stopped', 'info');
-            break;
-        }
-        await throttledEnrichGoogleDNS(domains[i], nodeIds[i], true); // isBulk = true
-    }
-
-    updateNodeSizes();
-    updateSelectOptions();
-    await stabilizeNetwork();
-    showToast(`Enriched ${domains.length} domains with Google DNS`, 'success');
-}, RATE_LIMIT_MS);
 
 const throttledEnrichIPMultiple = throttleRequest(async function enrichIPMultiple(ips, nodeIds) {
     if (!Array.isArray(ips) || !Array.isArray(nodeIds) || ips.length !== nodeIds.length) {
@@ -9733,6 +9529,73 @@ function exportToExcel() {
     // Export to file
     XLSX.writeFile(wb, 'risk_analysis.xlsx');
 }
+
+
+
+//GOOGLE DNS
+
+const throttledEnrichGoogleDNS = throttleRequest(async function enrichGoogleDNS(domain, domainNodeId, isBulk = false) {
+            network.setOptions({ physics: { enabled: false } });
+            try {
+                const response = await fetch(`https://dns.google/resolve?name=${domain}`);
+                if (!response.ok) throw new Error('Failed to fetch DNS data');
+                const data = await response.json();
+                if (data.Answer) {
+                    data.Answer.forEach(answer => {
+                        if (answer.type === 1) { // Type 1 is A record (IPv4)
+                            const ip = answer.data;
+                            const existingIP = nodes.get({ filter: n => n.type === 'ip' && n.ip === ip })[0];
+                            const ipId = existingIP ? existingIP.id : nextId++;
+                            if (!existingIP) nodes.add({ id: ipId, type: 'ip', label: ip, title: `IP Address: ${ip}`, color: { background: '#f87171' }, ip: ip, size: 20 });
+                            const edgeId = `${domainNodeId}-${ipId}-ResolvesTo`;
+                            if (!edges.get(edgeId)) edges.add({ id: edgeId, from: domainNodeId, to: ipId, label: 'Resolves to' });
+                        }
+                    });
+                }
+                updateNodeSizes();
+                updateSelectOptions();
+                await stabilizeNetwork();
+                if (!isBulk) showToast(`Domain ${domain} enrichment completed using Google DNS`, 'success');
+            } catch (error) {
+                console.error(`Error enriching domain ${domain} with Google DNS: ${error.message}`);
+                showToast(`Error enriching domain ${domain} with Google DNS: ${error.message}`, 'error');
+                await stabilizeNetwork();
+            }
+        });
+
+// Multiple Google DNS Node Enrichment
+
+const throttledEnrichGoogleDNSMultiple = throttleRequest(async function enrichGoogleDNSMultiple(domains, nodeIds) {
+    if (!Array.isArray(domains) || !Array.isArray(nodeIds) || domains.length !== nodeIds.length) {
+        showToast('Invalid input for multiple domain enrichment', 'error');
+        return;
+    }
+
+    for (let i = 0; i < domains.length; i++) {
+        if (activeTaskController && activeTaskController.signal.aborted) {
+            showToast('Google DNS enrichment stopped', 'info');
+            break;
+        }
+        await throttledEnrichGoogleDNS(domains[i], nodeIds[i], true); // isBulk = true
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    showToast(`Enriched ${domains.length} domains with Google DNS`, 'success');
+}, RATE_LIMIT_MS);
+
+
+
+// Google Bulk Enrichment
+
+async function enrichAllGoogleDNS() {
+            network.setOptions({ physics: { enabled: false } });
+            const domainNodes = nodes.get({ filter: n => n.type === 'domain' });
+            for (const node of domainNodes) await throttledEnrichGoogleDNS(node.domain, node.id, true);
+            await stabilizeNetwork();
+            showToast('Bulk Google DNS enrichment completed', 'success');
+        }
 
 // Add this at the end of the script section
 window.addEventListener('beforeunload', function() {
