@@ -1260,6 +1260,8 @@ input[type="checkbox"] {
                 <button onclick="enrichAllShodan()">Enrich All IPs with Shodan</button>
                 <button onclick="enrichAllInternetDB()">Enrich All IPs with InternetDB</button>
                 <button onclick="enrichAllGoogleDNS()">Enrich All Domains with Google DNS</button>
+                <button onclick="enrichAllGoogleDNSMX()">Enrich All Domains with Google DNS (MX)</button>
+                <button onclick="enrichAllGoogleDNSTXT()">Enrich All Domains with Google DNS (TXT)</button>
                 <button onclick="enrichAllHudsonRockEmails()">Enrich All Emails with Hudson Rock</button>
                 <button onclick="enrichAllHudsonRockDomains()">Enrich All Domains with Hudson Rock</button>
                 <button onclick="enrichAllGreyNoise()">Enrich All IPs with GreyNoise</button>
@@ -1717,7 +1719,9 @@ function getNodeColorByType(type) {
         'relay': '#eab308',
         'hosting': '#14b8a6',
         'tag': '#6d28d9',
-        'cpe': '#0d9488'
+        'cpe': '#0d9488',
+        'mx': '#34d399', // Green for MX
+        'txt': '#f59e0b'  // Orange for TXT
     };
     return { background: colorMap[type] || '#ffffff' };
 }
@@ -2649,6 +2653,8 @@ function showContextMenu(x, y, value, nodeIds, type) {
         } else if (type === 'domain') {
             menuHtml += `
                 <button onclick="throttledEnrichGoogleDNSMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via Google DNS</button>
+                <button onclick="throttledEnrichGoogleDNSMXMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via Google DNS (MX)</button>
+                <button onclick="throttledEnrichGoogleDNSTXTMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via Google DNS (TXT)</button>
                 <button onclick="throttledEnrichShodanMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via Shodan</button>
                 <button onclick="throttledEnrichHudsonRockDomainMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via Hudson Rock</button>
                 <button onclick="throttledSendHttpsRequestMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], 'domain', 'https')">Send HTTPS Request</button>
@@ -4295,6 +4301,20 @@ function setHierarchicalLayout() {
                 const maskNum = Number(mask);
                 return octets.every(o => o >= 0 && o <= 255) && maskNum >= 0 && maskNum <= 32;
             }
+        },
+        mx: {
+            fields: ['hostname'],
+            optionalFields: ['notes'],
+            color: '#34d399', // Green for MX records
+            label: v => `MX: ${v.hostname.length > 30 ? v.hostname.substring(0, 27) + '...' : v.hostname}`,
+            title: v => `Mail Exchanger\nHostname: ${v.hostname}${v.notes ? '\nNotes: ' + v.notes : ''}`
+        },
+        txt: {
+            fields: ['text'],
+            optionalFields: ['notes'],
+            color: '#f59e0b', // Orange for TXT records
+            label: v => `TXT: ${v.text.length > 30 ? v.text.substring(0, 27) + '...' : v.text}`,
+            title: v => `TXT Record\nValue: ${v.text}${v.notes ? '\nNotes: ' + v.notes : ''}`
         }
     };
 
@@ -9594,6 +9614,360 @@ async function enrichAllGoogleDNS() {
             await stabilizeNetwork();
             showToast('Bulk Google DNS enrichment completed', 'success');
         }
+
+
+// GOOGLE MX and TXT Enrichment
+
+// Single MX Record Enrichment
+const throttledEnrichGoogleDNSMX = throttleRequest(async function enrichGoogleDNSMX(domain, domainNodeId, isBulk = false, signal) {
+    if (!isBulk) network.setOptions({ physics: { enabled: false } });
+    try {
+        // Validate domain input
+        if (!domain || typeof domain !== 'string' || !domain.trim()) {
+            throw new Error('Invalid or missing domain');
+        }
+
+        // Construct API URL
+        const baseUrl = `https://dns.google/resolve?name=${encodeURIComponent(domain.trim())}&type=MX`;
+        const url = constructUrl(baseUrl);
+        console.log(`Fetching MX records for ${domain}: ${url}`);
+
+        // Fetch data
+        const response = await fetch(url, { signal });
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => 'No response body');
+            throw new Error(`Failed to fetch MX DNS data: ${response.status} ${response.statusText} - ${errorText}`);
+        }
+
+        const data = await response.json();
+
+        // Check DNS response status
+        if (data.Status !== 0) {
+            const statusMessages = {
+                1: 'NXDOMAIN (domain does not exist)',
+                2: 'SERVFAIL (server failure)',
+                3: 'NOTIMP (not implemented)',
+                4: 'REFUSED (query refused)'
+            };
+            throw new Error(`Google DNS error: Status ${data.Status} ${statusMessages[data.Status] || data.Comment || 'Unknown error'}`);
+        }
+
+        // Process MX records
+        let mxRecordsFound = false;
+        if (data.Answer && Array.isArray(data.Answer)) {
+            const existingMXNodes = new Map(
+                nodes.get({ filter: n => n.type === 'mx' && n.hostname })
+                    .map(n => [n.hostname.toLowerCase(), n.id])
+            );
+
+            for (const answer of data.Answer) {
+                if (answer.type === 15) { // Type 15 is MX record
+                    mxRecordsFound = true;
+                    // MX data format: "priority hostname" (e.g., "10 smtp.google.com")
+                    const [priority, hostname] = answer.data.trim().split(' ');
+                    if (hostname && hostname !== '.' && hostname.trim()) {
+                        const normalizedHostname = hostname.toLowerCase().replace(/\.$/, ''); // Remove trailing dot
+                        let mxId = existingMXNodes.get(normalizedHostname);
+                        if (!mxId) {
+                            mxId = nextId++;
+                            nodes.add({
+                                id: mxId,
+                                type: 'mx',
+                                label: `MX: ${normalizedHostname.length > 30 ? normalizedHostname.substring(0, 27) + '...' : normalizedHostname}`,
+                                title: `Mail Exchanger\nHostname: ${normalizedHostname}\nPriority: ${priority || 'Unknown'}`,
+                                color: { background: '#34d399' }, // Green for MX
+                                hostname: normalizedHostname,
+                                size: 15
+                            });
+                            existingMXNodes.set(normalizedHostname, mxId);
+                        }
+                        // Create edge if it doesn’t exist
+                        const edgeId = `${domainNodeId}-${mxId}-MXFor`;
+                        if (!edges.get(edgeId)) {
+                            edges.add({
+                                id: edgeId,
+                                from: domainNodeId,
+                                to: mxId,
+                                label: 'MX for',
+                                color: { color: '#34d399' }
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        // Provide feedback
+        if (!mxRecordsFound && !isBulk) {
+            if (data.Answer) {
+                showToast(`No MX records found for ${domain}; received unexpected record types`, 'warning');
+            } else {
+                showToast(`No MX records found for ${domain}`, 'info');
+            }
+        }
+
+        // Update graph
+        updateNodeSizes();
+        updateSelectOptions();
+
+        if (!isBulk) {
+            await stabilizeNetwork();
+            showToast(`Domain ${domain} MX enrichment completed using Google DNS`, 'success');
+        }
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            showToast(`MX enrichment of domain ${domain} cancelled`, 'info');
+            return;
+        }
+        console.error(`Error enriching domain ${domain} MX with Google DNS: ${error.message}`);
+        showToast(`Error enriching domain ${domain} MX: ${error.message}`, 'error');
+        if (!isBulk) await stabilizeNetwork();
+    }
+}, RATE_LIMIT_MS);
+
+// Multiple MX Record Enrichment
+const throttledEnrichGoogleDNSMXMultiple = throttleRequest(async function enrichGoogleDNSMXMultiple(domains, nodeIds) {
+    if (!Array.isArray(domains) || !Array.isArray(nodeIds) || domains.length !== nodeIds.length) {
+        showToast('Invalid input for multiple MX enrichment', 'error');
+        return;
+    }
+
+    showProgressBar();
+    network.setOptions({ physics: { enabled: false } });
+    const totalDomains = domains.length;
+    let successfulEnrichments = 0;
+
+    for (let i = 0; i < totalDomains; i++) {
+        if (activeTaskController && activeTaskController.signal.aborted) {
+            showToast('Google DNS MX enrichment stopped', 'info');
+            document.getElementById('progress-bar').textContent = `Google DNS MX Enrichment: Stopped at ${successfulEnrichments}/${totalDomains} Domains`;
+            break;
+        }
+        await throttledEnrichGoogleDNSMX(domains[i], nodeIds[i], true);
+        successfulEnrichments++;
+        const progress = ((successfulEnrichments / totalDomains) * 100).toFixed(1);
+        document.getElementById('progress-bar').textContent = `Google DNS MX Enrichment: ${successfulEnrichments}/${totalDomains} Domains (${progress}%)`;
+        await new Promise(resolve => setTimeout(resolve, 200)); // Small delay
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    completeProgressBar();
+    showToast(`Enriched ${successfulEnrichments}/${totalDomains} domains with Google DNS MX records`, 'success');
+}, RATE_LIMIT_MS);
+
+// Bulk MX Enrichment
+async function enrichAllGoogleDNSMX() {
+    showProgressBar();
+    network.setOptions({ physics: { enabled: false } });
+    const domainNodes = nodes.get({ filter: n => n.type === 'domain' && n.domain });
+    const totalDomains = domainNodes.length;
+    let successfulEnrichments = 0;
+
+    if (totalDomains === 0) {
+        showToast('No domain nodes found to enrich', 'info');
+        completeProgressBar();
+        return;
+    }
+
+    const batchSize = 50;
+    const delayBetweenBatches = 200;
+    const totalBatches = Math.ceil(totalDomains / batchSize);
+    const estimatedTimeMs = (totalDomains * RATE_LIMIT_MS) + (totalBatches - 1) * delayBetweenBatches;
+    const estimatedSeconds = Math.ceil(estimatedTimeMs / 1000);
+    const timeEstimateStr = estimatedSeconds > 60 
+        ? `${Math.floor(estimatedSeconds / 60)}m ${estimatedSeconds % 60}s` 
+        : `${estimatedSeconds}s`;
+
+    document.getElementById('progress-bar').textContent = `Google DNS MX Enrichment: 0/${totalDomains} Domains (0%) - Est. ${timeEstimateStr}`;
+
+    for (let i = 0; i < totalDomains; i += batchSize) {
+        if (activeTaskController && activeTaskController.signal.aborted) {
+            showToast('Google DNS MX enrichment stopped', 'info');
+            break;
+        }
+
+        const batch = domainNodes.slice(i, Math.min(i + batchSize, totalDomains));
+        const batchPromises = batch.map(node => 
+            throttledEnrichGoogleDNSMX(node.domain, node.id, true)
+                .then(() => successfulEnrichments++)
+                .catch(error => console.error(`Failed to enrich ${node.domain}: ${error.message}`))
+        );
+
+        await Promise.all(batchPromises);
+
+        const progress = ((successfulEnrichments / totalDomains) * 100).toFixed(1);
+        document.getElementById('progress-bar').textContent = 
+            `Google DNS MX Enrichment: ${successfulEnrichments}/${totalDomains} Domains (${progress}%)`;
+        
+        await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    completeProgressBar();
+    showToast(`Google DNS MX enrichment completed: ${successfulEnrichments}/${totalDomains} domains enriched`, 'success');
+}
+
+// Single TXT Record Enrichment
+
+const throttledEnrichGoogleDNSTXT = throttleRequest(async function enrichGoogleDNSTXT(domain, domainNodeId, isBulk = false, signal) {
+    if (!isBulk) network.setOptions({ physics: { enabled: false } });
+    try {
+        const baseUrl = `https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=TXT`;
+        const url = constructUrl(baseUrl);
+        console.log(`Fetching TXT records for ${domain}: ${url}`);
+        const response = await fetch(url, { signal });
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Failed to fetch TXT DNS data: ${response.status} ${response.statusText} - ${errorText}`);
+        }
+        const data = await response.json();
+        
+        if (data.Status !== 0) {
+            throw new Error(`Google DNS error: Status ${data.Status}${data.Comment ? ` (${data.Comment})` : ''}`);
+        }
+        
+        if (data.Answer) {
+            let foundTXT = false;
+            const existingTXTNodes = new Map(nodes.get({ filter: n => n.type === 'txt' && n.text }).map(n => [n.text, n.id]));
+            data.Answer.forEach(answer => {
+                if (answer.type === 16) { // Type 16 is TXT record
+                    foundTXT = true;
+                    const text = answer.data.replace(/^"|"$/g, '').trim();
+                    if (text) {
+                        let txtId = existingTXTNodes.get(text);
+                        if (!txtId) {
+                            txtId = nextId++;
+                            nodes.add({
+                                id: txtId,
+                                type: 'txt',
+                                label: `TXT: ${text.length > 30 ? text.substring(0, 27) + '...' : text}`,
+                                title: `TXT Record\nValue: ${text}`,
+                                color: { background: '#f59e0b' },
+                                text: text,
+                                size: 15
+                            });
+                            existingTXTNodes.set(text, txtId);
+                        }
+                        const edgeId = `${domainNodeId}-${txtId}-TXTFor`;
+                        if (!edges.get(edgeId)) {
+                            edges.add({ id: edgeId, from: domainNodeId, to: txtId, label: 'TXT for' });
+                        }
+                    }
+                }
+            });
+            if (!foundTXT && !isBulk) {
+                showToast(`No TXT records found for ${domain}; received unexpected record types`, 'warning');
+            }
+        } else {
+            if (!isBulk) showToast(`No TXT records found for ${domain}`, 'info');
+        }
+        
+        updateNodeSizes();
+        updateSelectOptions();
+        if (!isBulk) {
+            await stabilizeNetwork();
+            showToast(`Domain ${domain} TXT enrichment completed using Google DNS`, 'success');
+        }
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            showToast(`TXT enrichment of domain ${domain} cancelled`, 'info');
+            return;
+        }
+        console.error(`Error enriching domain ${domain} TXT with Google DNS: ${error.message}`);
+        showToast(`Error enriching domain ${domain} TXT: ${error.message}`, 'error');
+        if (!isBulk) await stabilizeNetwork();
+    }
+}, RATE_LIMIT_MS);
+
+// Multiple TXT Record Enrichment
+const throttledEnrichGoogleDNSTXTMultiple = throttleRequest(async function enrichGoogleDNSTXTMultiple(domains, nodeIds) {
+    if (!Array.isArray(domains) || !Array.isArray(nodeIds) || domains.length !== nodeIds.length) {
+        showToast('Invalid input for multiple TXT enrichment', 'error');
+        return;
+    }
+
+    showProgressBar();
+    network.setOptions({ physics: { enabled: false } });
+    const totalDomains = domains.length;
+    let successfulEnrichments = 0;
+
+    for (let i = 0; i < totalDomains; i++) {
+        if (activeTaskController && activeTaskController.signal.aborted) {
+            showToast('Google DNS TXT enrichment stopped', 'info');
+            document.getElementById('progress-bar').textContent = `Google DNS TXT Enrichment: Stopped at ${successfulEnrichments}/${totalDomains} Domains`;
+            break;
+        }
+        await throttledEnrichGoogleDNSTXT(domains[i], nodeIds[i], true);
+        successfulEnrichments++;
+        const progress = ((successfulEnrichments / totalDomains) * 100).toFixed(1);
+        document.getElementById('progress-bar').textContent = `Google DNS TXT Enrichment: ${successfulEnrichments}/${totalDomains} Domains (${progress}%)`;
+        await new Promise(resolve => setTimeout(resolve, 200)); // Small delay
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    completeProgressBar();
+    showToast(`Enriched ${successfulEnrichments}/${totalDomains} domains with Google DNS TXT records`, 'success');
+}, RATE_LIMIT_MS);
+
+// Bulk TXT Enrichment
+async function enrichAllGoogleDNSTXT() {
+    showProgressBar();
+    network.setOptions({ physics: { enabled: false } });
+    const domainNodes = nodes.get({ filter: n => n.type === 'domain' && n.domain });
+    const totalDomains = domainNodes.length;
+    let successfulEnrichments = 0;
+
+    if (totalDomains === 0) {
+        showToast('No domain nodes found to enrich', 'info');
+        completeProgressBar();
+        return;
+    }
+
+    const batchSize = 50;
+    const delayBetweenBatches = 200;
+    const totalBatches = Math.ceil(totalDomains / batchSize);
+    const estimatedTimeMs = (totalDomains * RATE_LIMIT_MS) + (totalBatches - 1) * delayBetweenBatches;
+    const estimatedSeconds = Math.ceil(estimatedTimeMs / 1000);
+    const timeEstimateStr = estimatedSeconds > 60 
+        ? `${Math.floor(estimatedSeconds / 60)}m ${estimatedSeconds % 60}s` 
+        : `${estimatedSeconds}s`;
+
+    document.getElementById('progress-bar').textContent = `Google DNS TXT Enrichment: 0/${totalDomains} Domains (0%) - Est. ${timeEstimateStr}`;
+
+    for (let i = 0; i < totalDomains; i += batchSize) {
+        if (activeTaskController && activeTaskController.signal.aborted) {
+            showToast('Google DNS TXT enrichment stopped', 'info');
+            break;
+        }
+
+        const batch = domainNodes.slice(i, Math.min(i + batchSize, totalDomains));
+        const batchPromises = batch.map(node => 
+            throttledEnrichGoogleDNSTXT(node.domain, node.id, true)
+                .then(() => successfulEnrichments++)
+                .catch(error => console.error(`Failed to enrich ${node.domain}: ${error.message}`))
+        );
+
+        await Promise.all(batchPromises);
+
+        const progress = ((successfulEnrichments / totalDomains) * 100).toFixed(1);
+        document.getElementById('progress-bar').textContent = 
+            `Google DNS TXT Enrichment: ${successfulEnrichments}/${totalDomains} Domains (${progress}%)`;
+        
+        await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    completeProgressBar();
+    showToast(`Google DNS TXT enrichment completed: ${successfulEnrichments}/${totalDomains} domains enriched`, 'success');
+}
 
 // Add this at the end of the script section
 window.addEventListener('beforeunload', function() {
