@@ -1558,7 +1558,7 @@ function searchGraph() {
             easingFunction: 'easeInOutQuad'
         }
     });
-
+    ensureInteractionSettings(); // Ensure panning is enabled after focus
     showToast(`Found ${matchingNodes.length} matching nodes`, 'success');
 }
 
@@ -3181,7 +3181,9 @@ async function stabilizeNetwork(skipFit = false) {
                     });
                 }
                 resolve();
+                
             }, skipFit ? 0 : 550);
+            ensureInteractionSettings(); // Ensure panning is enabled
         });
     });
 }
