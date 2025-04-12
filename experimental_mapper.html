@@ -6,6 +6,12 @@
     <title>Baddie Mapper - Experimental</title>
     <style>
 
+/* Target mx-node class for vis.js nodes */
+.vis-network .vis-node.mx-node {
+    background-color: #60a5fa; /* Blue */
+    border-color: #1e88e5; /* Slightly darker blue border for contrast */
+}
+
 .modal {
     display: none;
     position: fixed;
@@ -1354,7 +1360,7 @@ input[type="checkbox"] {
         <!-- Suggested -->
         <footer id="controls-footer"> 
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.285 experimental</p>
+    <p>© Xservus Limited - v0.288 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
@@ -2524,6 +2530,9 @@ network.on('click', function(params) {
             nodeData.title = `File Hash\nType: ${node.hashType}\nValue: ${node.hash}${node.notes ? '\nNotes: ' + node.notes : ''}`;
             nodeData.color.background = node.color?.background || '#f97316';
             break;
+        case 'txt': // New case for TXT records
+            valueToCopy = node.text;
+            break;
         default:
             valueToCopy = node.label.split('\n')[0].split(': ')[1] || node.label.split('\n')[0];
             console.warn(`Unhandled node type "${node.type}", using fallback value:`, valueToCopy);
@@ -2806,6 +2815,9 @@ function saveState() {
                     case 'hash': // Add this case for file hashes
                         nodeData.hash = node.hash;
                         nodeData.hashType = node.hashType;
+                        break;
+                    case 'txt':
+                        nodeData.text = node.text;
                         break;
                     default:
                         console.warn(`Unhandled node type in saveState: ${node.type}`);
@@ -4851,6 +4863,12 @@ async function processIOCs(text) {
     let processedCount = 0;
     const batchSize = 50;
 
+    // Set to track edges by from-to-label
+    const edgeSet = new Set();
+    edges.forEach(edge => {
+        edgeSet.add(`${edge.from}_${edge.to}_${edge.label}`);
+    });
+
     // Helper function to extract apex domain
     function getApexDomain(fullDomain) {
         const parts = fullDomain.toLowerCase().split('.');
@@ -4877,11 +4895,13 @@ async function processIOCs(text) {
             levels.push(current);
             const parts = current.split('.');
             current = parts.slice(1).join('.');
+            // Stop at apex domain to prevent splitting multi-part TLDs
+            if (current === getApexDomain(domain)) {
+                levels.push(current);
+                break;
+            }
         }
-        if (current) {
-            levels.push(current); // Include the apex
-        }
-        return levels.reverse(); // Apex first
+        return levels; // Highest level (subdomain) first
     }
 
     // Process URLs
@@ -4914,22 +4934,30 @@ async function processIOCs(text) {
                         subnetNodeData.id = nextId++;
                         newNodes.push(subnetNodeData);
                         existingNodes.set(`subnet:${normalizedHost}`, { id: subnetNodeData.id });
-                        newEdges.push({
-                            id: `edge_${urlNodeId}_${subnetNodeData.id}_${Date.now()}`,
-                            from: urlNodeId,
-                            to: subnetNodeData.id,
-                            label: 'Resolves to'
-                        });
-                        console.log(`Added Subnet node: ${normalizedHost}, ID: ${subnetNodeData.id}`);
+                        const edgeKey = `${urlNodeId}_${subnetNodeData.id}_Resolves to`;
+                        if (!edgeSet.has(edgeKey)) {
+                            newEdges.push({
+                                id: `edge_${urlNodeId}_${subnetNodeData.id}_${Date.now()}`,
+                                from: urlNodeId,
+                                to: subnetNodeData.id,
+                                label: 'Resolves to'
+                            });
+                            edgeSet.add(edgeKey);
+                            console.log(`Added Subnet node: ${normalizedHost}, ID: ${subnetNodeData.id}`);
+                        }
                     }
                 } else {
                     const existingSubnetNode = existingNodes.get(`subnet:${normalizedHost}`);
-                    newEdges.push({
-                        id: `edge_${urlNodeId}_${existingSubnetNode.id}_${Date.now()}`,
-                        from: urlNodeId,
-                        to: existingSubnetNode.id,
-                        label: 'Resolves to'
-                    });
+                    const edgeKey = `${urlNodeId}_${existingSubnetNode.id}_Resolves to`;
+                    if (!edgeSet.has(edgeKey)) {
+                        newEdges.push({
+                            id: `edge_${urlNodeId}_${existingSubnetNode.id}_${Date.now()}`,
+                            from: urlNodeId,
+                            to: existingSubnetNode.id,
+                            label: 'Resolves to'
+                        });
+                        edgeSet.add(edgeKey);
+                    }
                 }
             } else if (ipRegex.ipv4.test(normalizedHost) || ipRegex.ipv6.test(normalizedHost)) {
                 if (!existingNodes.has(`ip:${normalizedHost}`)) {
@@ -4944,21 +4972,29 @@ async function processIOCs(text) {
                         size: 20
                     });
                     existingNodes.set(`ip:${normalizedHost}`, { id: ipNodeId });
-                    newEdges.push({
-                        id: `edge_${urlNodeId}_${ipNodeId}_${Date.now()}`,
-                        from: urlNodeId,
-                        to: ipNodeId,
-                        label: 'Resolves to'
-                    });
-                    console.log(`Added IP node: ${normalizedHost}, ID: ${ipNodeId}`);
+                    const edgeKey = `${urlNodeId}_${ipNodeId}_Resolves to`;
+                    if (!edgeSet.has(edgeKey)) {
+                        newEdges.push({
+                            id: `edge_${urlNodeId}_${ipNodeId}_${Date.now()}`,
+                            from: urlNodeId,
+                            to: ipNodeId,
+                            label: 'Resolves to'
+                        });
+                        edgeSet.add(edgeKey);
+                        console.log(`Added IP node: ${normalizedHost}, ID: ${ipNodeId}`);
+                    }
                 } else {
                     const existingIpNode = existingNodes.get(`ip:${normalizedHost}`);
-                    newEdges.push({
-                        id: `edge_${urlNodeId}_${existingIpNode.id}_${Date.now()}`,
-                        from: urlNodeId,
-                        to: existingIpNode.id,
-                        label: 'Resolves to'
-                    });
+                    const edgeKey = `${urlNodeId}_${existingIpNode.id}_Resolves to`;
+                    if (!edgeSet.has(edgeKey)) {
+                        newEdges.push({
+                            id: `edge_${urlNodeId}_${existingIpNode.id}_${Date.now()}`,
+                            from: urlNodeId,
+                            to: existingIpNode.id,
+                            label: 'Resolves to'
+                        });
+                        edgeSet.add(edgeKey);
+                    }
                 }
             } else if (domainRegex.test(normalizedHost)) {
                 const domainLevels = getDomainLevels(normalizedHost);
@@ -4979,9 +5015,9 @@ async function processIOCs(text) {
                             domain: level,
                             size: 20
                         };
-                        domainNodes.push(node);
-                        existingNodes.set(`domain:${level}`, { id: nodeId });
                         newNodes.push(node);
+                        existingNodes.set(`domain:${level}`, { id: nodeId });
+                        domainNodes.push(node);
                         console.log(`Added ${isApex ? 'Apex' : 'Domain'} node: ${level}, ID: ${nodeId}`);
                     } else {
                         nodeId = existingNodes.get(`domain:${level}`).id;
@@ -4991,31 +5027,33 @@ async function processIOCs(text) {
 
                 // Create edges for subdomains
                 for (let i = 0; i < domainNodes.length - 1; i++) {
-                    const fromId = domainNodes[i].id;
-                    const toId = domainNodes[i + 1].id;
-                    const edgeId = `edge_${fromId}_${toId}_subdomain_${Date.now()}_${i}`;
-                    if (!newEdges.some(e => e.from === fromId && e.to === toId && e.label === 'Subdomain of')) {
+                    const fromId = domainNodes[i].id; // Higher level (e.g., test.co.uk)
+                    const toId = domainNodes[i + 1].id; // Lower level (e.g., co.uk)
+                    const edgeKey = `${fromId}_${toId}_Subdomain of`;
+                    if (!edgeSet.has(edgeKey)) {
                         newEdges.push({
-                            id: edgeId,
+                            id: `edge_${fromId}_${toId}_subdomain_${Date.now()}`,
                             from: fromId,
                             to: toId,
                             label: 'Subdomain of'
                         });
+                        edgeSet.add(edgeKey);
                         console.log(`Linked Domain ${fromId} to Parent: ${toId}`);
                     }
                 }
 
-                // Link URL to deepest subdomain
+                // Link URL to deepest subdomain (highest level)
                 if (domainNodes.length > 0) {
                     const deepestNode = domainNodes[0];
-                    const edgeId = `edge_${urlNodeId}_${deepestNode.id}_belongs_${Date.now()}`;
-                    if (!newEdges.some(e => e.from === urlNodeId && e.to === deepestNode.id && e.label === 'Belongs to')) {
+                    const edgeKey = `${urlNodeId}_${deepestNode.id}_Belongs to`;
+                    if (!edgeSet.has(edgeKey)) {
                         newEdges.push({
-                            id: edgeId,
+                            id: `edge_${urlNodeId}_${deepestNode.id}_belongs_${Date.now()}`,
                             from: urlNodeId,
                             to: deepestNode.id,
                             label: 'Belongs to'
                         });
+                        edgeSet.add(edgeKey);
                         console.log(`Linked URL ${urlNodeId} to Domain: ${deepestNode.id}`);
                     }
                 }
@@ -5037,21 +5075,29 @@ async function processIOCs(text) {
                         size: 10
                     });
                     existingNodes.set(portKey, { id: portNodeId });
-                    newEdges.push({
-                        id: `edge_${urlNodeId}_${portNodeId}_${Date.now()}`,
-                        from: urlNodeId,
-                        to: portNodeId,
-                        label: 'Uses port'
-                    });
-                    console.log(`Added Port node: TCP/${port}, ID: ${portNodeId}`);
+                    const edgeKey = `${urlNodeId}_${portNodeId}_Uses port`;
+                    if (!edgeSet.has(edgeKey)) {
+                        newEdges.push({
+                            id: `edge_${urlNodeId}_${portNodeId}_${Date.now()}`,
+                            from: urlNodeId,
+                            to: portNodeId,
+                            label: 'Uses port'
+                        });
+                        edgeSet.add(edgeKey);
+                        console.log(`Added Port node: TCP/${port}, ID: ${portNodeId}`);
+                    }
                 } else {
                     const existingPortNode = existingNodes.get(portKey);
-                    newEdges.push({
-                        id: `edge_${urlNodeId}_${existingPortNode.id}_${Date.now()}`,
-                        from: urlNodeId,
-                        to: existingPortNode.id,
-                        label: 'Uses port'
-                    });
+                    const edgeKey = `${urlNodeId}_${existingPortNode.id}_Uses port`;
+                    if (!edgeSet.has(edgeKey)) {
+                        newEdges.push({
+                            id: `edge_${urlNodeId}_${existingPortNode.id}_${Date.now()}`,
+                            from: urlNodeId,
+                            to: existingPortNode.id,
+                            label: 'Uses port'
+                        });
+                        edgeSet.add(edgeKey);
+                    }
                 }
             }
         }
@@ -5123,18 +5169,20 @@ async function processIOCs(text) {
             if (!existingNodes.has(`domain:${level}`)) {
                 nodeId = nextId++;
                 const isApex = level === getApexDomain(domain);
-                const node = {
-                    id: nodeId,
-                    type: 'domain',
-                    label: isApex ? `Apex: ${level}` : `Domain: ${level}`,
-                    title: isApex ? `Apex Domain: ${level}` : `Domain: ${level}`,
-                    color: { background: '#60a5fa' },
-                    domain: level,
-                    size: 20
-                };
-                domainNodes.push(node);
-                existingNodes.set(`domain:${level}`, { id: nodeId });
+                const isMX = domain.endsWith('.'); // Heuristic for MX domains
+            const node = {
+                id: nodeId,
+                type: isMX ? 'mx' : 'domain', // Set type to mx if detected
+                label: isApex ? `Apex: ${level}` : `Domain: ${level}`,
+                title: isApex ? `Apex Domain: ${level}` : `Domain: ${level}`,
+                color: { background: isMX ? '#60a5fa' : '#60a5fa' }, // Blue for MX and domains
+                className: isMX ? 'mx-node' : 'domain-node', // Assign className
+                domain: level,
+                size: 20
+            };
                 newNodes.push(node);
+                existingNodes.set(`domain:${level}`, { id: nodeId });
+                domainNodes.push(node);
                 console.log(`Added ${isApex ? 'Apex' : 'Domain'} node: ${level}, ID: ${nodeId}`);
             } else {
                 nodeId = existingNodes.get(`domain:${level}`).id;
@@ -5144,16 +5192,17 @@ async function processIOCs(text) {
 
         // Create edges for subdomains
         for (let i = 0; i < domainNodes.length - 1; i++) {
-            const fromId = domainNodes[i].id;
-            const toId = domainNodes[i + 1].id;
-            const edgeId = `edge_${fromId}_${toId}_subdomain_${Date.now()}_${i}`;
-            if (!newEdges.some(e => e.from === fromId && e.to === toId && e.label === 'Subdomain of')) {
+            const fromId = domainNodes[i].id; // Higher level (e.g., test.co.uk)
+            const toId = domainNodes[i + 1].id; // Lower level (e.g., co.uk)
+            const edgeKey = `${fromId}_${toId}_Subdomain of`;
+            if (!edgeSet.has(edgeKey)) {
                 newEdges.push({
-                    id: edgeId,
+                    id: `edge_${fromId}_${toId}_subdomain_${Date.now()}`,
                     from: fromId,
                     to: toId,
                     label: 'Subdomain of'
                 });
+                edgeSet.add(edgeKey);
                 console.log(`Linked Domain ${fromId} to Parent: ${toId}`);
             }
         }
@@ -5185,6 +5234,39 @@ async function processIOCs(text) {
             existingNodes.set(`email:${email}`, { id: emailNodeId });
 
             if (domainRegex.test(emailDomain)) {
+                // Create or reuse node for the full email domain
+                let emailDomainNodeId;
+                if (!existingNodes.has(`domain:${emailDomain}`)) {
+                    emailDomainNodeId = nextId++;
+                    newNodes.push({
+                        id: emailDomainNodeId,
+                        type: 'domain',
+                        label: `Domain: ${emailDomain}`,
+                        title: `Domain: ${emailDomain}`,
+                        color: { background: '#60a5fa' },
+                        domain: emailDomain,
+                        size: 20
+                    });
+                    existingNodes.set(`domain:${emailDomain}`, { id: emailDomainNodeId });
+                    console.log(`Added Domain node: ${emailDomain}, ID: ${emailDomainNodeId}`);
+                } else {
+                    emailDomainNodeId = existingNodes.get(`domain:${emailDomain}`).id;
+                }
+
+                // Link email to the full email domain
+                const edgeKeyContact = `${emailNodeId}_${emailDomainNodeId}_Registered with`;
+                if (!edgeSet.has(edgeKeyContact)) {
+                    newEdges.push({
+                        id: `edge_${emailNodeId}_${emailDomainNodeId}_registered_${Date.now()}`,
+                        from: emailNodeId,
+                        to: emailDomainNodeId,
+                        label: 'is asociated with: '
+                    });
+                    edgeSet.add(edgeKeyContact);
+                    console.log(`Linked Email ${emailNodeId} to Domain: ${emailDomainNodeId}`);
+                }
+
+                // Create hierarchy for email domain (subdomains and apex)
                 const domainLevels = getDomainLevels(emailDomain);
                 const domainNodes = [];
 
@@ -5203,9 +5285,9 @@ async function processIOCs(text) {
                             domain: level,
                             size: 20
                         };
-                        domainNodes.push(node);
-                        existingNodes.set(`domain:${level}`, { id: nodeId });
                         newNodes.push(node);
+                        existingNodes.set(`domain:${level}`, { id: nodeId });
+                        domainNodes.push(node);
                         console.log(`Added ${isApex ? 'Apex' : 'Domain'} node: ${level}, ID: ${nodeId}`);
                     } else {
                         nodeId = existingNodes.get(`domain:${level}`).id;
@@ -5215,32 +5297,18 @@ async function processIOCs(text) {
 
                 // Create edges for subdomains
                 for (let i = 0; i < domainNodes.length - 1; i++) {
-                    const fromId = domainNodes[i].id;
-                    const toId = domainNodes[i + 1].id;
-                    const edgeId = `edge_${fromId}_${toId}_subdomain_${Date.now()}_${i}`;
-                    if (!newEdges.some(e => e.from === fromId && e.to === toId && e.label === 'Subdomain of')) {
+                    const fromId = domainNodes[i].id; // Higher level (e.g., test.co.uk)
+                    const toId = domainNodes[i + 1].id; // Lower level (e.g., co.uk)
+                    const edgeKey = `${fromId}_${toId}_Subdomain of`;
+                    if (!edgeSet.has(edgeKey)) {
                         newEdges.push({
-                            id: edgeId,
+                            id: `edge_${fromId}_${toId}_subdomain_${Date.now()}`,
                             from: fromId,
                             to: toId,
                             label: 'Subdomain of'
                         });
+                        edgeSet.add(edgeKey);
                         console.log(`Linked Domain ${fromId} to Parent: ${toId}`);
-                    }
-                }
-
-                // Link email to deepest subdomain
-                if (domainNodes.length > 0) {
-                    const deepestNode = domainNodes[0];
-                    const edgeId = `edge_${emailNodeId}_${deepestNode.id}_registered_${Date.now()}`;
-                    if (!newEdges.some(e => e.from === emailNodeId && e.to === deepestNode.id && e.label === 'Registered with')) {
-                        newEdges.push({
-                            id: edgeId,
-                            from: emailNodeId,
-                            to: deepestNode.id,
-                            label: 'Registered with'
-                        });
-                        console.log(`Linked Email ${emailNodeId} to Domain: ${deepestNode.id}`);
                     }
                 }
             }
@@ -9598,34 +9666,66 @@ function exportToExcel() {
 
 //GOOGLE DNS
 
-const throttledEnrichGoogleDNS = throttleRequest(async function enrichGoogleDNS(domain, domainNodeId, isBulk = false) {
-            network.setOptions({ physics: { enabled: false } });
-            try {
-                const response = await fetch(`https://dns.google/resolve?name=${domain}`);
-                if (!response.ok) throw new Error('Failed to fetch DNS data');
-                const data = await response.json();
-                if (data.Answer) {
-                    data.Answer.forEach(answer => {
-                        if (answer.type === 1) { // Type 1 is A record (IPv4)
-                            const ip = answer.data;
-                            const existingIP = nodes.get({ filter: n => n.type === 'ip' && n.ip === ip })[0];
-                            const ipId = existingIP ? existingIP.id : nextId++;
-                            if (!existingIP) nodes.add({ id: ipId, type: 'ip', label: ip, title: `IP Address: ${ip}`, color: { background: '#f87171' }, ip: ip, size: 20 });
-                            const edgeId = `${domainNodeId}-${ipId}-ResolvesTo`;
-                            if (!edges.get(edgeId)) edges.add({ id: edgeId, from: domainNodeId, to: ipId, label: 'Resolves to' });
-                        }
-                    });
+const throttledEnrichGoogleDNS = throttleRequest(async function enrichGoogleDNS(domain, domainNodeId, isBulk = false, signal) {
+    if (!isBulk) network.setOptions({ physics: { enabled: false } });
+    try {
+        const baseUrl = `https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=A`;
+        const url = constructUrl(baseUrl, false); // No API key needed for Google DNS
+        console.log(`Fetching A records for ${domain}: ${url}`); // Debug log
+        const response = await fetch(url, { signal });
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Failed to fetch DNS data: ${response.status} ${response.statusText} - ${errorText}`);
+        }
+        const data = await response.json();
+        
+        if (data.Status !== 0) {
+            throw new Error(`Google DNS error: Status ${data.Status}${data.Comment ? ` (${data.Comment})` : ''}`);
+        }
+        
+        if (data.Answer) {
+            data.Answer.forEach(answer => {
+                if (answer.type === 1) { // Type 1 is A record (IPv4)
+                    const ip = answer.data;
+                    const existingIP = nodes.get({ filter: n => n.type === 'ip' && n.ip === ip })[0];
+                    const ipId = existingIP ? existingIP.id : nextId++;
+                    if (!existingIP) {
+                        nodes.add({
+                            id: ipId,
+                            type: 'ip',
+                            label: `IP: ${ip}`,
+                            title: `IP Address: ${ip}`,
+                            color: { background: '#f87171' },
+                            ip: ip,
+                            size: 20
+                        });
+                    }
+                    const edgeId = `${domainNodeId}-${ipId}-ResolvesTo`;
+                    if (!edges.get(edgeId)) {
+                        edges.add({ id: edgeId, from: domainNodeId, to: ipId, label: 'Resolves to' });
+                    }
                 }
-                updateNodeSizes();
-                updateSelectOptions();
-                await stabilizeNetwork();
-                if (!isBulk) showToast(`Domain ${domain} enrichment completed using Google DNS`, 'success');
-            } catch (error) {
-                console.error(`Error enriching domain ${domain} with Google DNS: ${error.message}`);
-                showToast(`Error enriching domain ${domain} with Google DNS: ${error.message}`, 'error');
-                await stabilizeNetwork();
-            }
-        });
+            });
+        } else {
+            if (!isBulk) showToast(`No A records found for ${domain}`, 'info');
+        }
+        
+        updateNodeSizes();
+        updateSelectOptions();
+        if (!isBulk) {
+            await stabilizeNetwork();
+            showToast(`Domain ${domain} enrichment completed using Google DNS`, 'success');
+        }
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            showToast(`A record enrichment of domain ${domain} cancelled`, 'info');
+            return;
+        }
+        console.error(`Error enriching domain ${domain} with Google DNS: ${error.message}`);
+        showToast(`Error enriching domain ${domain} with Google DNS: ${error.message}`, 'error');
+        if (!isBulk) await stabilizeNetwork();
+    }
+}, RATE_LIMIT_MS);
 
 // Multiple Google DNS Node Enrichment
 
@@ -9693,10 +9793,10 @@ const throttledEnrichGoogleDNSMX = throttleRequest(async function enrichGoogleDN
                             mxId = nextId++;
                             nodes.add({
                                 id: mxId,
-                                type: 'mx',
+                                type: 'domain',
                                 label: `MX: ${hostname.length > 30 ? hostname.substring(0, 27) + '...' : hostname}`,
                                 title: `Mail Exchanger\nHostname: ${hostname}\nPriority: ${priority}`,
-                                color: { background: '#34d399' },
+                                color: { background: '#1e88e5' },
                                 hostname: hostname,
                                 size: 15
                             });
