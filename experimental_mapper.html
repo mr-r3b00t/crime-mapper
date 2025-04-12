@@ -510,7 +510,7 @@ button {
 #properties-panel {
     position: fixed;
     top: var(--top-bar-height);
-    right: -310px; /* Off-screen initially */
+    right: -350px; /* Ensure it's fully off-screen */
     width: 350px;
     height: calc(100vh - var(--top-bar-height));
     background-color: #fff;
@@ -519,20 +519,19 @@ button {
     padding: 20px;
     overflow-y: auto;
     transition: right var(--transition);
+    display: none; /* Hidden by default */
     box-sizing: border-box;
-    display: none; /* Add this to hide by default */
 }
 
 #properties-panel.active {
     right: 0;
-    display: block; /* Explicitly show when active */
+    display: block; /* Show when active */
 }
 
 .dark-mode #properties-panel {
     background-color: #2d3748;
     box-shadow: -2px 0 10px rgba(0, 0, 0, 0.4);
     color: #e2e8f0;
-    display: block; /* Explicitly show when active */
 }
 
 
@@ -1412,7 +1411,7 @@ input[type="checkbox"] {
         const SHODAN_RATE_LIMIT_MS = 1000; // Specific 1-second delay for Shodan
         const SECURITYTRAILS_RATE_LIMIT_MS = 2000; // 1 second delay for SecurityTrails API
         const ipRegex = { ipv4: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/, ipv6: /^([0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}$/ };
-        const domainRegex = /^(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,}$/;
+        const domainRegex = /^(?:[a-zA-Z0-9-_]+\.)*[a-zA-Z0-9-_]+\.[a-zA-Z]{2,}$/;
         const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 
         let selectedNodes = new Set(); // To track multiple selected nodes
@@ -2031,13 +2030,6 @@ window.onload = function() {
         nextId = 1;
     }
 
-    const propertiesPanel = document.getElementById('properties-panel');
-    if (propertiesPanel) {
-        propertiesPanel.style.display = 'none';
-        propertiesPanel.classList.remove('active');
-        document.getElementById('myNetwork').style.marginRight = '0'; // Reset margin
-    }
-
     document.getElementById('ipinfoApiKey').value = ipinfoApiKey;
     document.getElementById('shodanApiKey').value = shodanApiKey;
     document.getElementById('corsProxyUrl').value = corsProxyUrl;
@@ -2063,7 +2055,9 @@ window.onload = function() {
     document.getElementById('menu-toggle').textContent = '<';  // Set to "<" since menu starts expanded
     ensureInteractionSettings();
     
-
+    container.removeEventListener('mousedown', handleMouseDown);
+    container.removeEventListener('mousemove', handleMouseMove);
+    container.removeEventListener('mouseup', handleMouseUp);
     container.addEventListener('wheel', handleWheel, { passive: false });
 
     if (window.innerWidth <= 768) {
@@ -2144,15 +2138,15 @@ function loadState() {
 }
 
 
-// Separate wheel handler function for reusability
+// Separate wheel handler function for reusability //removed this as it broke pan
 function handleWheel(event) {
-    event.preventDefault();
-    const scale = event.deltaY > 0 ? 0.9 : 1.1;
-    const currentScale = network.getScale();
-    network.moveTo({
-        scale: currentScale * scale,
-        animation: { duration: 100 }
-    });
+    // event.preventDefault();
+    // const scale = event.deltaY > 0 ? 0.9 : 1.1;
+    // const currentScale = network.getScale();
+    // network.moveTo({
+    //     scale: currentScale * scale,
+    //     animation: { duration: 100 }
+    // });
 }
 
 function throttleRequest(fn) {
@@ -4733,7 +4727,7 @@ async function processIOCs(text) {
 
     // Regex patterns
     const urlRegex = /^(https?:\/\/)([^\s/:]+)(?::(\d{1,5}))?(\/.*)?$/i; // Matches http(s)://<host>[:port][/path]
-    const domainRegex = /^([a-zA-Z0-9-_]+\.)+[a-zA-Z]{2,}$/; // Matches domain with TLD
+    const domainRegex = /^(?:[a-zA-Z0-9-_]+\.)*[a-zA-Z0-9-_]+\.[a-zA-Z]{2,}(?<!\.(png|jpg|jpeg|gif|bmp|tif|tiff|pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv|zip|rar|7z|exe|dll|sys|bat|sh|mp3|mp4|avi|mkv|mov|wmv|flv|wav|html|css|js|php|asp|aspx|jsp|sql|db|bak|log|tar|gz|tgz))$/i; // Matches domains, excludes file extensions
     const ipRegex = { 
         // RFC 791-compliant IPv4: 4 octets (0-255), no leading zeros unless 0
         ipv4: /^(?!0\d)(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?!0\d)(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?!0\d)(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?!0\d)(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/,
@@ -4748,6 +4742,16 @@ async function processIOCs(text) {
     };
     const hashPattern = /[0-9a-fA-F]{32,64}/g;
     const timestampRegex = /^\d{2}:\d{2}:\d{2}$/; // Matches HH:MM:SS format (e.g., 16:52:54)
+
+    // Common file extensions to filter out
+    const commonFileExtensions = new Set([
+        'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tif', 'tiff', 'pdf',
+        'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv',
+        'zip', 'rar', '7z', 'exe', 'dll', 'sys', 'bat', 'sh',
+        'mp3', 'mp4', 'avi', 'mkv', 'mov', 'wmv', 'flv', 'wav',
+        'html', 'css', 'js', 'php', 'asp', 'aspx', 'jsp', 'sql',
+        'db', 'bak', 'log', 'tar', 'gz', 'tgz'
+    ]);
 
     // Split text into tokens
     const tokens = text.split(/[\s,\n]+/).filter(token => token.trim().length > 0);
@@ -4798,8 +4802,10 @@ async function processIOCs(text) {
             continue;
         }
 
-        // Check for standalone domains
-        if (domainRegex.test(token) && !urlMatches.has(token)) {
+        // Check for standalone domains, excluding file extensions
+        const tokenLower = token.toLowerCase();
+        const extension = tokenLower.split('.').pop();
+        if (domainRegex.test(token) && !urlMatches.has(token) && !commonFileExtensions.has(extension)) {
             domainMatches.add(token);
             continue;
         }
@@ -4845,11 +4851,26 @@ async function processIOCs(text) {
 
     // Helper function to extract apex domain
     function getApexDomain(fullDomain) {
-        const parts = fullDomain.split('.');
-        if (parts.length >= 2) {
-            return parts.slice(-2).join('.'); // Last two parts (e.g., "gov.uk")
+        const parts = fullDomain.toLowerCase().split('.');
+        if (parts.length < 2) return fullDomain;
+
+        // List of common multi-part TLDs (extend as needed)
+        const multiPartTlds = ['co.uk', 'gov.uk', 'ac.uk', 'org.uk', 'com.au', 'co.jp', 'ne.jp', 'go.jp'];
+
+        // Check for multi-part TLDs
+        for (const tld of multiPartTlds) {
+            const tldParts = tld.split('.');
+            if (parts.slice(-tldParts.length).join('.') === tld) {
+                // Return the part before the TLD plus the TLD
+                if (parts.length > tldParts.length) {
+                    return parts.slice(-(tldParts.length + 1)).join('.');
+                }
+                return fullDomain; // Fallback if domain is exactly the TLD
+            }
         }
-        return fullDomain; // Fallback if no TLD (unlikely)
+
+        // Default to last two parts for simple TLDs (e.g., .com, .org)
+        return parts.slice(-2).join('.');
     }
 
     // Process URLs
@@ -4930,66 +4951,90 @@ async function processIOCs(text) {
                     console.log(`Linked URL ${urlNodeId} to existing IP: ${existingIpNode.id}`);
                 }
             } else if (domainRegex.test(host)) {
-                if (!existingNodes.has(`domain:${host}`)) {
-                    const domainNodeId = nextId++;
-                    newNodes.push({
-                        id: domainNodeId,
-                        type: 'domain',
-                        label: `Domain: ${host}`,
-                        title: `Domain: ${host}`,
-                        color: { background: '#60a5fa' },
-                        domain: host,
-                        size: 20
-                    });
-                    existingNodes.set(`domain:${host}`, { id: domainNodeId });
-                    newEdges.push({
-                        id: `edge_${urlNodeId}_${domainNodeId}_${Date.now()}`,
-                        from: urlNodeId,
-                        to: domainNodeId,
-                        label: 'Belongs to'
-                    });
-                    console.log(`Added Domain node: ${host}, ID: ${domainNodeId}, Edge to URL: ${urlNodeId}`);
+                // Handle subdomains hierarchically
+                let currentDomain = host;
+                const domainNodes = [];
 
-                    // Create apex domain
-                    const apexDomain = getApexDomain(host);
-                    if (apexDomain !== host && !existingNodes.has(`domain:${apexDomain}`)) {
-                        const apexNodeId = nextId++;
-                        newNodes.push({
-                            id: apexNodeId,
+                // Create nodes for each subdomain level
+                while (currentDomain.includes('.') && domainRegex.test(currentDomain)) {
+                    if (!existingNodes.has(`domain:${currentDomain}`)) {
+                        const domainNodeId = nextId++;
+                        domainNodes.push({
+                            id: domainNodeId,
                             type: 'domain',
-                            label: `Apex: ${apexDomain}`,
-                            title: `Apex Domain: ${apexDomain}`,
+                            label: `Domain: ${currentDomain}`,
+                            title: `Domain: ${currentDomain}`,
                             color: { background: '#60a5fa' },
-                            domain: apexDomain,
+                            domain: currentDomain,
                             size: 20
                         });
-                        existingNodes.set(`domain:${apexDomain}`, { id: apexNodeId });
-                        newEdges.push({
-                            id: `edge_${domainNodeId}_${apexNodeId}_${Date.now()}`,
-                            from: domainNodeId,
-                            to: apexNodeId,
-                            label: 'Apex of'
-                        });
-                        console.log(`Added Apex Domain node: ${apexDomain}, ID: ${apexNodeId}, Edge to Domain: ${domainNodeId}`);
-                    } else if (apexDomain !== host) {
-                        const existingApexNode = existingNodes.get(`domain:${apexDomain}`);
-                        newEdges.push({
-                            id: `edge_${domainNodeId}_${existingApexNode.id}_${Date.now()}`,
-                            from: domainNodeId,
-                            to: existingApexNode.id,
-                            label: 'Apex of'
-                        });
-                        console.log(`Linked Domain ${domainNodeId} to existing Apex: ${existingApexNode.id}`);
+                        existingNodes.set(`domain:${currentDomain}`, { id: domainNodeId });
+                        console.log(`Added Domain node: ${currentDomain}, ID: ${domainNodeId}`);
                     }
-                } else {
-                    const existingDomainNode = existingNodes.get(`domain:${host}`);
-                    newEdges.push({
-                        id: `edge_${urlNodeId}_${existingDomainNode.id}_${Date.now()}`,
-                        from: urlNodeId,
-                        to: existingDomainNode.id,
-                        label: 'Belongs to'
+                    // Move up to parent domain (e.g., sub.example.com -> example.com)
+                    const parts = currentDomain.split('.');
+                    currentDomain = parts.slice(1).join('.');
+                }
+
+                // Add nodes in reverse order (apex first)
+                for (let i = domainNodes.length - 1; i >= 0; i--) {
+                    newNodes.push(domainNodes[i]);
+                    // Link to URL for the deepest subdomain
+                    if (i === 0) {
+                        newEdges.push({
+                            id: `edge_${urlNodeId}_${domainNodes[i].id}_${Date.now()}`,
+                            from: urlNodeId,
+                            to: domainNodes[i].id,
+                            label: 'Belongs to'
+                        });
+                        console.log(`Linked URL ${urlNodeId} to Domain: ${domainNodes[i].id}`);
+                    }
+                    // Link subdomains to parent domains
+                    if (i < domainNodes.length - 1) {
+                        newEdges.push({
+                            id: `edge_${domainNodes[i].id}_${domainNodes[i + 1].id}_${Date.now()}`,
+                            from: domainNodes[i].id,
+                            to: domainNodes[i + 1].id,
+                            label: 'Subdomain of'
+                        });
+                        console.log(`Linked Domain ${domainNodes[i].id} to Parent: ${domainNodes[i + 1].id}`);
+                    }
+                }
+
+                // Link the top-level domain to its apex
+                const apexDomain = getApexDomain(host);
+                if (apexDomain !== host && !existingNodes.has(`domain:${apexDomain}`)) {
+                    const apexNodeId = nextId++;
+                    newNodes.push({
+                        id: apexNodeId,
+                        type: 'domain',
+                        label: `Apex: ${apexDomain}`,
+                        title: `Apex Domain: ${apexDomain}`,
+                        color: { background: '#60a5fa' },
+                        domain: apexDomain,
+                        size: 20
                     });
-                    console.log(`Linked URL ${urlNodeId} to existing Domain: ${existingDomainNode.id}`);
+                    existingNodes.set(`domain:${apexDomain}`, { id: apexNodeId });
+                    console.log(`Added Apex Domain node: ${apexDomain}, ID: ${apexNodeId}`);
+                    // Link the top-level domain to the apex
+                    const topLevelNode = domainNodes[domainNodes.length - 1] || domainNodes[0];
+                    newEdges.push({
+                        id: `edge_${topLevelNode.id}_${apexNodeId}_${Date.now()}`,
+                        from: topLevelNode.id,
+                        to: apexNodeId,
+                        label: 'Apex of'
+                    });
+                    console.log(`Linked Domain ${topLevelNode.id} to Apex: ${apexNodeId}`);
+                } else if (apexDomain !== host) {
+                    const existingApexNode = existingNodes.get(`domain:${apexDomain}`);
+                    const topLevelNode = domainNodes[domainNodes.length - 1] || domainNodes[0];
+                    newEdges.push({
+                        id: `edge_${topLevelNode.id}_${existingApexNode.id}_${Date.now()}`,
+                        from: topLevelNode.id,
+                        to: existingApexNode.id,
+                        label: 'Apex of'
+                    });
+                    console.log(`Linked Domain ${topLevelNode.id} to existing Apex: ${existingApexNode.id}`);
                 }
             }
 
@@ -5088,20 +5133,44 @@ async function processIOCs(text) {
     // Process standalone Domains
     for (const domain of domainMatches) {
         if (domainRegex.test(domain) && !existingNodes.has(`domain:${domain}`)) {
-            const nodeId = nextId++;
-            newNodes.push({
-                id: nodeId,
-                type: 'domain',
-                label: `Domain: ${domain}`,
-                title: `Domain: ${domain}`,
-                color: { background: '#60a5fa' },
-                domain: domain,
-                size: 20
-            });
-            existingNodes.set(`domain:${domain}`, { id: nodeId });
-            console.log(`Added standalone Domain node: ${domain}, ID: ${nodeId}`);
+            let currentDomain = domain;
+            const domainNodes = [];
 
-            // Create apex domain for standalone domains
+            // Create nodes for each subdomain level
+            while (currentDomain.includes('.') && domainRegex.test(currentDomain)) {
+                if (!existingNodes.has(`domain:${currentDomain}`)) {
+                    const nodeId = nextId++;
+                    domainNodes.push({
+                        id: nodeId,
+                        type: 'domain',
+                        label: `Domain: ${currentDomain}`,
+                        title: `Domain: ${currentDomain}`,
+                        color: { background: '#60a5fa' },
+                        domain: currentDomain,
+                        size: 20
+                    });
+                    existingNodes.set(`domain:${currentDomain}`, { id: nodeId });
+                    console.log(`Added standalone Domain node: ${currentDomain}, ID: ${nodeId}`);
+                }
+                const parts = currentDomain.split('.');
+                currentDomain = parts.slice(1).join('.');
+            }
+
+            // Add nodes and edges
+            for (let i = domainNodes.length - 1; i >= 0; i--) {
+                newNodes.push(domainNodes[i]);
+                if (i < domainNodes.length - 1) {
+                    newEdges.push({
+                        id: `edge_${domainNodes[i].id}_${domainNodes[i + 1].id}_${Date.now()}`,
+                        from: domainNodes[i].id,
+                        to: domainNodes[i + 1].id,
+                        label: 'Subdomain of'
+                    });
+                    console.log(`Linked Domain ${domainNodes[i].id} to Parent: ${domainNodes[i + 1].id}`);
+                }
+            }
+
+            // Create apex domain
             const apexDomain = getApexDomain(domain);
             if (apexDomain !== domain && !existingNodes.has(`domain:${apexDomain}`)) {
                 const apexNodeId = nextId++;
@@ -5115,13 +5184,24 @@ async function processIOCs(text) {
                     size: 20
                 });
                 existingNodes.set(`domain:${apexDomain}`, { id: apexNodeId });
+                const topLevelNode = domainNodes[domainNodes.length - 1] || domainNodes[0];
                 newEdges.push({
-                    id: `edge_${nodeId}_${apexNodeId}_${Date.now()}`,
-                    from: nodeId,
+                    id: `edge_${topLevelNode.id}_${apexNodeId}_${Date.now()}`,
+                    from: topLevelNode.id,
                     to: apexNodeId,
                     label: 'Apex of'
                 });
-                console.log(`Added Apex Domain node: ${apexDomain}, ID: ${apexNodeId}, Edge to Domain: ${nodeId}`);
+                console.log(`Added Apex Domain node: ${apexDomain}, ID: ${apexNodeId}, Edge to Domain: ${topLevelNode.id}`);
+            } else if (apexDomain !== domain) {
+                const existingApexNode = existingNodes.get(`domain:${apexDomain}`);
+                const topLevelNode = domainNodes[domainNodes.length - 1] || domainNodes[0];
+                newEdges.push({
+                    id: `edge_${topLevelNode.id}_${existingApexNode.id}_${Date.now()}`,
+                    from: topLevelNode.id,
+                    to: existingApexNode.id,
+                    label: 'Apex of'
+                });
+                console.log(`Linked Domain ${topLevelNode.id} to existing Apex: ${existingApexNode.id}`);
             }
         }
         processedCount++;
@@ -5250,7 +5330,8 @@ async function processIOCs(text) {
     await stabilizeNetwork().catch(err => console.error('Error stabilizing network:', err));
     showToast(`Imported ${urlMatches.size} URLs, ${ipMatches.size} IPs, ${subnetMatches.size} subnets, ${domainMatches.size} domains, ${emailMatches.size} emails, ${hashMatches.size} hashes`, 'success');
 }
-        
+
+//End of Process IOCs
 
 
 document.addEventListener('keypress', event => {
@@ -9622,94 +9703,53 @@ async function enrichAllGoogleDNS() {
 const throttledEnrichGoogleDNSMX = throttleRequest(async function enrichGoogleDNSMX(domain, domainNodeId, isBulk = false, signal) {
     if (!isBulk) network.setOptions({ physics: { enabled: false } });
     try {
-        // Validate domain input
-        if (!domain || typeof domain !== 'string' || !domain.trim()) {
-            throw new Error('Invalid or missing domain');
-        }
-
-        // Construct API URL
-        const baseUrl = `https://dns.google/resolve?name=${encodeURIComponent(domain.trim())}&type=MX`;
+        const baseUrl = `https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=MX`;
         const url = constructUrl(baseUrl);
-        console.log(`Fetching MX records for ${domain}: ${url}`);
-
-        // Fetch data
+        console.log(`Fetching MX records for ${domain}: ${url}`); // Debug log
         const response = await fetch(url, { signal });
         if (!response.ok) {
-            const errorText = await response.text().catch(() => 'No response body');
+            const errorText = await response.text();
             throw new Error(`Failed to fetch MX DNS data: ${response.status} ${response.statusText} - ${errorText}`);
         }
-
         const data = await response.json();
-
-        // Check DNS response status
+        
         if (data.Status !== 0) {
-            const statusMessages = {
-                1: 'NXDOMAIN (domain does not exist)',
-                2: 'SERVFAIL (server failure)',
-                3: 'NOTIMP (not implemented)',
-                4: 'REFUSED (query refused)'
-            };
-            throw new Error(`Google DNS error: Status ${data.Status} ${statusMessages[data.Status] || data.Comment || 'Unknown error'}`);
+            throw new Error(`Google DNS error: Status ${data.Status}${data.Comment ? ` (${data.Comment})` : ''}`);
         }
-
-        // Process MX records
-        let mxRecordsFound = false;
-        if (data.Answer && Array.isArray(data.Answer)) {
-            const existingMXNodes = new Map(
-                nodes.get({ filter: n => n.type === 'mx' && n.hostname })
-                    .map(n => [n.hostname.toLowerCase(), n.id])
-            );
-
-            for (const answer of data.Answer) {
+        
+        if (data.Answer) {
+            const existingMXNodes = new Map(nodes.get({ filter: n => n.type === 'mx' && n.hostname }).map(n => [n.hostname.toLowerCase(), n.id]));
+            data.Answer.forEach(answer => {
                 if (answer.type === 15) { // Type 15 is MX record
-                    mxRecordsFound = true;
-                    // MX data format: "priority hostname" (e.g., "10 smtp.google.com")
                     const [priority, hostname] = answer.data.trim().split(' ');
-                    if (hostname && hostname !== '.' && hostname.trim()) {
-                        const normalizedHostname = hostname.toLowerCase().replace(/\.$/, ''); // Remove trailing dot
-                        let mxId = existingMXNodes.get(normalizedHostname);
+                    if (hostname && hostname !== '.') {
+                        let mxId = existingMXNodes.get(hostname.toLowerCase());
                         if (!mxId) {
                             mxId = nextId++;
                             nodes.add({
                                 id: mxId,
                                 type: 'mx',
-                                label: `MX: ${normalizedHostname.length > 30 ? normalizedHostname.substring(0, 27) + '...' : normalizedHostname}`,
-                                title: `Mail Exchanger\nHostname: ${normalizedHostname}\nPriority: ${priority || 'Unknown'}`,
-                                color: { background: '#34d399' }, // Green for MX
-                                hostname: normalizedHostname,
+                                label: `MX: ${hostname.length > 30 ? hostname.substring(0, 27) + '...' : hostname}`,
+                                title: `Mail Exchanger\nHostname: ${hostname}\nPriority: ${priority}`,
+                                color: { background: '#34d399' },
+                                hostname: hostname,
                                 size: 15
                             });
-                            existingMXNodes.set(normalizedHostname, mxId);
+                            existingMXNodes.set(hostname.toLowerCase(), mxId);
                         }
-                        // Create edge if it doesn’t exist
                         const edgeId = `${domainNodeId}-${mxId}-MXFor`;
                         if (!edges.get(edgeId)) {
-                            edges.add({
-                                id: edgeId,
-                                from: domainNodeId,
-                                to: mxId,
-                                label: 'MX for',
-                                color: { color: '#34d399' }
-                            });
+                            edges.add({ id: edgeId, from: domainNodeId, to: mxId, label: 'MX for' });
                         }
                     }
                 }
-            }
+            });
+        } else {
+            if (!isBulk) showToast(`No MX records found for ${domain}`, 'info');
         }
-
-        // Provide feedback
-        if (!mxRecordsFound && !isBulk) {
-            if (data.Answer) {
-                showToast(`No MX records found for ${domain}; received unexpected record types`, 'warning');
-            } else {
-                showToast(`No MX records found for ${domain}`, 'info');
-            }
-        }
-
-        // Update graph
+        
         updateNodeSizes();
         updateSelectOptions();
-
         if (!isBulk) {
             await stabilizeNetwork();
             showToast(`Domain ${domain} MX enrichment completed using Google DNS`, 'success');
