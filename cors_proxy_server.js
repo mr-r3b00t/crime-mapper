@@ -3,196 +3,217 @@ const axios = require('axios');
 const https = require('https');
 const url = require('url');
 const cors = require('cors');
+const querystring = require('querystring');
 
-// Initialize Express app
 const app = express();
 const port = 3000;
 
-// Allowed target domains
 const allowList = [
-  'api.shodan.io',
-  'ipinfo.io',
-  'safebrowsing.googleapis.com',
-  'dns.google.com',
-  'api.hudsonrock.com',
-  'cavalier.hudsonrock.com',
-  'internetdb.shodan.io',
-  'api.greynoise.io',
-  'urlscan.io',
-  'proxy',
-  'api.securitytrails.com',
-  'urlhaus-api.abuse.ch',
-  'api.any.run'
+    'api.shodan.io',
+    'ipinfo.io',
+    'safebrowsing.googleapis.com',
+    'dns.google.com',
+    'api.hudsonrock.com',
+    'cavalier.hudsonrock.com',
+    'internetdb.shodan.io',
+    'api.greynoise.io',
+    'urlscan.io',
+    'api.securitytrails.com',
+    'urlhaus-api.abuse.ch',
+    'api.any.run',
+    'dns.google'
 ];
 
-// Middleware setup
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// CORS configuration
-app.use(cors({
-  origin: (origin, callback) => {
-    const allowed = !origin || origin === 'null' || origin === 'http://localhost:3000';
-    if (allowed) {
-      callback(null, true);
-    } else {
-      console.log(`CORS rejected origin: ${origin}`);
-      callback(new Error('Origin not allowed by CORS policy'));
-    }
-  },
-  optionsSuccessStatus: 200
-}));
-
-// Middleware to validate and sanitize target URL with full request logging
-function validateTargetUrl(req, res, next) {
-  console.log('Full Request Details:', {
-    method: req.method,
-    url: req.originalUrl,
-    headers: req.headers,
-    query: req.query,
-    body: req.body,
-    timestamp: new Date().toISOString()
-  });
-
-  const targetUrlRaw = req.query.url || req.body.url;
-  if (!targetUrlRaw) {
-    console.log('Request rejected: No target URL provided');
-    return res.status(400).json({ error: 'No target URL provided' });
-  }
-
-  let targetUrl = targetUrlRaw.replace(/^\/+/, '');
-  if (!targetUrl.match(/^https?:\/\//)) {
-    targetUrl = `https://${targetUrl}`;
-  }
-
-  let parsedUrl;
-  try {
-    parsedUrl = new url.URL(targetUrl);
-  } catch (error) {
-    console.log(`Request rejected: Invalid URL format - ${targetUrl}`);
-    return res.status(400).json({ error: 'Invalid URL format' });
-  }
-
-  const hostname = parsedUrl.hostname;
-  if (!allowList.includes(hostname)) {
-    console.log(`Request rejected: Domain not allowed - ${hostname}`);
-    return res.status(403).json({ error: 'Target domain not in allow list' });
-  }
-
-  req.targetUrl = targetUrl;
-  console.log(`Request validated: ${targetUrl} (${req.method})`);
-  next();
-}
-
-// Proxy handler function with POST response logging
-async function proxyRequest(req, res) {
-  try {
-    const axiosConfig = {
-      method: req.method.toLowerCase(),
-      url: req.targetUrl,
-      headers: {
-        'User-Agent': 'cors-proxy/1.0',
-        'Content-Type': req.headers['content-type'] || 'application/x-www-form-urlencoded'
-      },
-      httpsAgent: new https.Agent({
-        rejectUnauthorized: false
-      })
-    };
-
-    if (req.method === 'POST' && req.body) {
-      axiosConfig.data = req.body;
-    }
-
-    // Forward specific headers including 'Auth-Key'
-    ['api-key', 'key', 'apikey', 'Auth-Key'].forEach(header => {
-      if (req.headers[header.toLowerCase()]) { // Case-insensitive header matching
-        axiosConfig.headers[header] = req.headers[header.toLowerCase()];
-      }
-    });
-
-    // Forward 'Accept' header if present, default to 'application/json'
-    axiosConfig.headers['Accept'] = req.headers['accept'] || 'application/json';
-
-    const response = await axios(axiosConfig);
-    
-    // Log POST response details
-    if (req.method === 'POST') {
-      console.log(`POST Response from ${req.targetUrl}:`, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: response.headers,
-        data: response.data,
-        timestamp: new Date().toISOString()
-      });
-    } else {
-      console.log(`Response from ${req.targetUrl}: ${response.status}`);
-    }
-
-    res.status(response.status).send(response.data);
-  } catch (error) {
-    console.error(`Proxy error for ${req.targetUrl}:`, error);
-    if (error.response) {
-      // Log error response details for POST requests
-      if (req.method === 'POST') {
-        console.log(`POST Error Response from ${req.targetUrl}:`, {
-          status: error.response.status,
-          statusText: error.response.statusText,
-          headers: error.response.headers,
-          data: error.response.data,
-          timestamp: new Date().toISOString()
-        });
-      }
-      res.status(error.response.status).json({
-        error: 'Proxy request failed',
-        status: error.response.status,
-        statusText: error.response.statusText,
-        headers: error.response.headers,
-        data: error.response.data,
-        request: {
-          url: req.targetUrl,
-          method: req.method
-        }
-      });
-    } else {
-      res.status(500).json({
-        error: 'Proxy error',
-        message: error.message,
-        stack: error.stack,
-        request: {
-          url: req.targetUrl,
-          method: req.method
-        }
-      });
-    }
-  }
-}
-
-// Proxy endpoint
-app.all('/proxy', validateTargetUrl, proxyRequest);
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error(`Server error:`, err);
-  res.status(500).json({
-    error: 'Internal server error',
-    message: err.message,
-    stack: err.stack,
-    request: {
-      url: req.originalUrl,
-      method: req.method,
-      headers: req.headers,
-      body: req.body
-    }
-  });
+// Use default query parser but log for debugging
+app.set('query parser', (str) => {
+    const parsed = querystring.parse(str);
+    console.log(`[Query Parser] Input: ${str}, Parsed: ${JSON.stringify(parsed)}`);
+    return parsed;
 });
 
-// Start server
+app.use(cors({
+    origin: (origin, callback) => {
+        const allowed = !origin || origin === 'null' || origin === 'http://localhost:3000';
+        console.log(`[CORS] Origin: ${origin} - ${allowed ? 'Allowed' : 'Rejected'}`);
+        if (allowed) {
+            callback(null, true);
+        } else {
+            callback(new Error('Origin not allowed by CORS policy'));
+        }
+    },
+    optionsSuccessStatus: 200
+}));
+
+// Status endpoint
+app.get('/status', (req, res) => {
+    console.log('[Status] Request received');
+    res.json({
+        status: 'running',
+        version: 'fixed-2025-04-12-v6',
+        port: port,
+        allowList: allowList,
+        timestamp: new Date().toISOString()
+    });
+});
+
+function validateTargetUrl(req, res, next) {
+    console.log('[Validate] Full Request Details:', {
+        method: req.method,
+        url: req.originalUrl,
+        headers: req.headers,
+        query: req.query,
+        body: req.body,
+        timestamp: new Date().toISOString()
+    });
+
+    // Accurate raw query string
+    const rawQuery = req.originalUrl.includes('?') ? req.originalUrl.split('?')[1] : 'none';
+    console.log(`[Validate] Raw query string: ${rawQuery}`);
+
+    // Reconstruct full URL from req.query
+    let targetUrl = req.query.url;
+    if (!targetUrl) {
+        console.log('[Validate] Rejected: Missing url parameter');
+        return res.status(400).json({ error: 'Missing url parameter' });
+    }
+
+    // Append additional query parameters (e.g., type=MX)
+    const additionalParams = Object.keys(req.query)
+        .filter(key => key !== 'url')
+        .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(req.query[key])}`)
+        .join('&');
+    if (additionalParams) {
+        targetUrl += (targetUrl.includes('?') ? '&' : '?') + additionalParams;
+    }
+
+    console.log(`[Validate] Reconstructed target URL: ${targetUrl}`);
+
+    let parsedUrl;
+    try {
+        parsedUrl = new url.URL(targetUrl);
+    } catch (error) {
+        console.log(`[Validate] Rejected: Invalid URL format - ${targetUrl} - Error: ${error.message}`);
+        return res.status(400).json({ error: 'Invalid URL format' });
+    }
+
+    const hostname = parsedUrl.hostname;
+    if (!allowList.includes(hostname)) {
+        console.log(`[Validate] Rejected: Domain not allowed - ${hostname}`);
+        return res.status(403).json({ error: 'Target domain not in allow list' });
+    }
+
+    req.targetUrl = targetUrl;
+    console.log(`[Validate] Validated: ${targetUrl} (${req.method})`);
+    next();
+}
+
+async function proxyRequest(req, res) {
+    console.log(`[Proxy] Processing request for: ${req.targetUrl}`);
+    try {
+        const axiosConfig = {
+            method: req.method.toLowerCase(),
+            url: req.targetUrl,
+            headers: {
+                'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3.1 Safari/605.1.15',
+                'Content-Type': req.headers['content-type'] || 'application/x-www-form-urlencoded',
+                'Accept': req.headers['accept'] || 'application/json'
+            },
+            httpsAgent: new https.Agent({
+                rejectUnauthorized: false
+            }),
+            responseType: 'stream'
+        };
+
+        if (req.method === 'POST' && req.body) {
+            axiosConfig.data = req.body;
+            console.log(`[Proxy] POST data: ${JSON.stringify(req.body)}`);
+        }
+
+        ['api-key', 'key', 'apikey', 'Auth-Key'].forEach(header => {
+            if (req.headers[header.toLowerCase()]) {
+                axiosConfig.headers[header] = req.headers[header.toLowerCase()];
+                console.log(`[Proxy] Forwarding header: ${header}`);
+            }
+        });
+
+        console.log(`[Proxy] Forwarding request to: ${req.targetUrl} with config:`, {
+            method: axiosConfig.method,
+            url: axiosConfig.url,
+            headers: axiosConfig.headers
+        });
+
+        const response = await axios(axiosConfig);
+
+        Object.keys(response.headers).forEach(key => {
+            res.setHeader(key, response.headers[key]);
+        });
+
+        response.data.pipe(res);
+
+        console.log(`[Proxy] Response from ${req.targetUrl}:`, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: response.headers,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error(`[Proxy] Error for ${req.targetUrl}:`, error);
+        if (error.response) {
+            console.log(`[Proxy] Error Response from ${req.targetUrl}:`, {
+                status: error.response.status,
+                statusText: error.response.statusText,
+                headers: error.response.headers,
+                timestamp: new Date().toISOString()
+            });
+            error.response.data.pipe(res);
+        } else {
+            console.error(`[Proxy] Non-HTTP error: ${error.message}`);
+            res.status(500).json({
+                error: 'Proxy error',
+                message: error.message,
+                stack: error.stack,
+                request: {
+                    url: req.targetUrl,
+                    method: req.method
+                }
+            });
+        }
+    }
+}
+
+app.all('/proxy', validateTargetUrl, proxyRequest);
+
+app.use((err, req, res, next) => {
+    console.error(`[Server] Error:`, {
+        message: err.message,
+        stack: err.stack,
+        request: {
+            url: req.originalUrl,
+            method: req.method,
+            headers: req.headers,
+            body: req.body
+        },
+        timestamp: new Date().toISOString()
+    });
+    res.status(500).json({
+        error: 'Internal server error',
+        message: err.message,
+        stack: err.stack,
+        request: {
+            url: req.originalUrl,
+            method: req.method,
+            headers: req.headers,
+            body: req.body
+        }
+    });
+});
+
 app.listen(port, () => {
-  console.log(`CORS Proxy Server running on http://localhost:${port}`);
-  console.log('Usage:');
-  console.log('  GET:  http://localhost:3000/proxy?url=<target-url>');
-  console.log('  POST: http://localhost:3000/proxy with body { "url": "<target-url>" } or form data');
-  console.log('Example (URLhaus POST):');
-  console.log(`  curl -X POST http://localhost:${port}/proxy -H "Auth-Key: YOUR-AUTH-KEY-HERE" -d "url=https://example.com"`);
-  console.log('Allowed domains:', allowList.join(', '));
+    console.log(`[Server] CORS Proxy Server running on http://localhost:${port}`);
+    console.log('[Server] Usage:');
+    console.log('[Server]   GET:  http://localhost:3000/proxy?url=<target-url>');
+    console.log('[Server] Allowed domains:', allowList.join(', '));
 });
