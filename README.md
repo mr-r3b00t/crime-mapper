@@ -9,7 +9,7 @@ IF YOU WANT TO REALLY TEST THIS, PLEASE RUN IT LOCALLY WITH A LOCAL CORS PROXY (
 
 🔗 [Experimental Version](https://mr-r3b00t.github.io/crime-mapper/experimental_mapper.html)
 
-🔗 [Email Analysis Tool - Experimental](https://mr-r3b00t.github.io/crime-mapper/header_analysis.html)
+✉️ [Email Analysis Tool - Experimental](https://mr-r3b00t.github.io/crime-mapper/header_analysis.html)
 
 🔗 [Live Demo](https://mr-r3b00t.github.io/crime-mapper/crimemapper.html)  
  
