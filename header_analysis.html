@@ -271,7 +271,7 @@
                     <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;">
                 </a>
                 <p>© Xservus Limited</p>
-                <p>Version 0.1</p>
+                <p>Version 0.2</p>
             </footer>
         </div>
         <div class="resize-handle"></div>
@@ -473,7 +473,7 @@
             let tableHtml = renderHeaderFields(headerFields);
 
             if (transactions.length === 0) {
-                tableHtml += '<p>No server transactions found.</p>';
+                tableHtml += '<p>No headers found.</p>';
                 headerResultsDiv.innerHTML = tableHtml;
                 return;
             }
@@ -499,10 +499,10 @@
                     <tr>
                         <td data-label="Order">${transaction.order}</td>
                         <td data-label="Action">${escapeHtml(transaction.action)}</td>
-                        <td data-label="Timestamp">${escapeHtml(transaction.timestamp)}</td>
-                        <td data-label="Server">${escapeHtml(transaction.server)}</td>
-                        <td data-label="IP">${escapeHtml(transaction.ip)}</td>
-                        <td data-label="Email/Domain">${escapeHtml(transaction.emailOrDomain)}</td>
+                        <td data-label="Timestamp">${escapeHtml(transaction.timestamp || '')}</td>
+                        <td data-label="Server">${escapeHtml(transaction.server || '')}</td>
+                        <td data-label="IP">${escapeHtml(transaction.ip || '')}</td>
+                        <td data-label="Email/Domain">${escapeHtml(transaction.emailOrDomain || '')}</td>
                         <td data-label="Details">${escapeHtml(transaction.details)}</td>
                     </tr>
                 `;
@@ -699,8 +699,7 @@
                 transactions = [];
                 headerFields = { from: '', to: [], cc: [], subject: '', date: '' };
 
-                // Regular expressions
-                const receivedRegex = /^Received:.*?(?=\n[A-Z-]|$|\n\n)(?:\n\s+.*?(?=\n[A-Z-]|$|\n\n))*/gim;
+                // Regular expressions for specific headers
                 const fromRegex = /^From:.*$/gim;
                 const senderRegex = /^Sender:.*$/gim;
                 const toRegex = /^To:.*?(?=\n[A-Z-]|$)/gim;
@@ -710,6 +709,7 @@
                 const emailRegex = /[^\s<>,;]+@[^\s<>,;]+\.[^\s<>,;]+/g;
                 const contentTypeRegex = /Content-Type:.*?(?=\n[A-Z-]|$)/gis;
                 const contentEncodingRegex = /Content-Transfer-Encoding:.*?(?=\n[A-Z-]|$)/gis;
+                const receivedRegex = /^Received:.*?(?=\n[A-Z-]|$|\n\n)(?:\n\s+.*?(?=\n[A-Z-]|$|\n\n))*/gim;
                 const receivedDateRegex = /;?\s*(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s*)?\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}\s+\d{2}:\d{2}:\d{2}\s*(?:[+-]\d{4}|GMT)?/i;
                 const serverRegex = /by\s+([a-zA-Z0-9:.-]+)/i;
                 const fromServerRegex = /from\s+([a-zA-Z0-9:.-]+)/i;
@@ -756,100 +756,149 @@
                 let globalSender = headerFields.from;
                 let globalRecipients = headerFields.to;
 
-                // Extract Received headers in reverse (chronological order)
+                // Parse all headers in order
                 let orderCounter = 0;
-                const receivedMatches = (headers.match(receivedRegex) || []).reverse();
-                receivedMatches.forEach((match) => {
-                    const rawValue = match.replace(/^Received:\s*/i, '');
-                    const cleanedValue = rawValue.replace(/\n\s+/g, ' ').trim();
-                    console.log('Processing Received header:', cleanedValue);
+                const headerLines = headers.split('\n');
+                let currentHeader = '';
+                let currentValue = [];
+                const allHeaders = [];
 
-                    let date = '';
-                    const dateMatch = rawValue.match(receivedDateRegex);
-                    if (dateMatch) {
-                        date = parseDate(dateMatch[0].replace(/^;\s*/, '').trim());
-                    } else {
-                        console.log('No date match for:', rawValue);
-                    }
-
-                    let fromServer = '';
-                    let fromDetails = cleanedValue;
-                    const fromServerMatch = rawValue.match(fromServerRegex);
-                    if (fromServerMatch) {
-                        fromServer = fromServerMatch[1].trim();
-                        fromDetails = `from ${fromServerMatch[0].trim()}`;
-                    }
-
-                    let byServer = '';
-                    let byDetails = cleanedValue;
-                    const byServerMatch = rawValue.match(serverRegex);
-                    if (byServerMatch) {
-                        byServer = byServerMatch[1].trim();
-                        byDetails = `by ${byServerMatch[0].trim()} ${rawValue.substring(rawValue.indexOf('by')).trim()}`;
-                    }
-
-                    let fromIp = '';
-                    let byIp = '';
-                    if (fromServer) {
-                        let fromIpMatch = rawValue.match(new RegExp(`from\\s+${escapeRegex(fromServer)}\\s*\\(([^)]+)\\)`));
-                        if (fromIpMatch) {
-                            let ipCandidate = fromIpMatch[1].trim();
-                            const nestedIpMatch = ipCandidate.match(/unknown\s*\[([\d.:a-fA-F]+)\]/);
-                            if (nestedIpMatch) {
-                                ipCandidate = nestedIpMatch[1].trim();
-                            }
-                            fromIp = validateIP(ipCandidate);
-                            console.log('From IP match:', ipCandidate, 'Validated:', fromIp);
-                        } else {
-                            console.log('No from IP match for:', fromServer);
+                // Combine multi-line headers
+                headerLines.forEach(line => {
+                    if (/^[A-Za-z0-9-]+:/.test(line)) {
+                        // New header
+                        if (currentHeader) {
+                            allHeaders.push({
+                                name: currentHeader,
+                                value: currentValue.join(' ').trim()
+                            });
+                            currentValue = [];
                         }
+                        const [name, ...value] = line.split(':');
+                        currentHeader = name.trim();
+                        currentValue.push(value.join(':').trim());
+                    } else if (currentHeader && /^\s+/.test(line)) {
+                        // Continuation of current header
+                        currentValue.push(line.trim());
                     }
+                });
 
-                    if (byServer) {
-                        let byIpMatch = rawValue.match(new RegExp(`by\\s+${escapeRegex(byServer)}\\s*\\(([^)]+)\\)`));
-                        if (byIpMatch) {
-                            let ipCandidate = byIpMatch[1].trim();
-                            const nestedIpMatch = ipCandidate.match(/unknown\s*\[([\d.:a-fA-F]+)\]/);
-                            if (nestedIpMatch) {
-                                ipCandidate = nestedIpMatch[1].trim();
-                            }
-                            byIp = validateIP(ipCandidate);
-                            console.log('By IP match:', ipCandidate, 'Validated:', byIp);
+                // Push the last header
+                if (currentHeader) {
+                    allHeaders.push({
+                        name: currentHeader,
+                        value: currentValue.join(' ').trim()
+                    });
+                }
+
+                // Process headers
+                allHeaders.forEach(header => {
+                    const headerName = header.name;
+                    const headerValue = header.value;
+
+                    if (headerName.toLowerCase() === 'received') {
+                        const rawValue = headerValue;
+                        const cleanedValue = rawValue.replace(/\n\s+/g, ' ').trim();
+                        console.log('Processing Received header:', cleanedValue);
+
+                        let date = '';
+                        const dateMatch = rawValue.match(receivedDateRegex);
+                        if (dateMatch) {
+                            date = parseDate(dateMatch[0].replace(/^;\s*/, '').trim());
                         } else {
-                            byIp = fromIp;
-                            console.log('No by IP match for:', byServer, 'Using fromIp:', byIp);
+                            console.log('No date match for:', rawValue);
                         }
-                    }
 
-                    let recipientEmail = '';
-                    const forMatch = rawValue.match(forRegex);
-                    if (forMatch) {
-                        recipientEmail = parseEmailAddress(forMatch[1]);
+                        let fromServer = '';
+                        let fromDetails = cleanedValue;
+                        const fromServerMatch = rawValue.match(fromServerRegex);
+                        if (fromServerMatch) {
+                            fromServer = fromServerMatch[1].trim();
+                            fromDetails = `from ${fromServerMatch[0].trim()}`;
+                        }
+
+                        let byServer = '';
+                        let byDetails = cleanedValue;
+                        const byServerMatch = rawValue.match(serverRegex);
+                        if (byServerMatch) {
+                            byServer = byServerMatch[1].trim();
+                            byDetails = `by ${byServerMatch[0].trim()} ${rawValue.substring(rawValue.indexOf('by')).trim()}`;
+                        }
+
+                        let fromIp = '';
+                        let byIp = '';
+                        if (fromServer) {
+                            let fromIpMatch = rawValue.match(new RegExp(`from\\s+${escapeRegex(fromServer)}\\s*\\(([^)]+)\\)`));
+                            if (fromIpMatch) {
+                                let ipCandidate = fromIpMatch[1].trim();
+                                const nestedIpMatch = ipCandidate.match(/unknown\s*\[([\d.:a-fA-F]+)\]/);
+                                if (nestedIpMatch) {
+                                    ipCandidate = nestedIpMatch[1].trim();
+                                }
+                                fromIp = validateIP(ipCandidate);
+                                console.log('From IP match:', ipCandidate, 'Validated:', fromIp);
+                            } else {
+                                console.log('No from IP match for:', fromServer);
+                            }
+                        }
+
+                        if (byServer) {
+                            let byIpMatch = rawValue.match(new RegExp(`by\\s+${escapeRegex(byServer)}\\s*\\(([^)]+)\\)`));
+                            if (byIpMatch) {
+                                let ipCandidate = byIpMatch[1].trim();
+                                const nestedIpMatch = ipCandidate.match(/unknown\s*\[([\d.:a-fA-F]+)\]/);
+                                if (nestedIpMatch) {
+                                    ipCandidate = nestedIpMatch[1].trim();
+                                }
+                                byIp = validateIP(ipCandidate);
+                                console.log('By IP match:', ipCandidate, 'Validated:', byIp);
+                            } else {
+                                byIp = fromIp;
+                                console.log('No by IP match for:', byServer, 'Using fromIp:', byIp);
+                            }
+                        }
+
+                        let recipientEmail = '';
+                        const forMatch = rawValue.match(forRegex);
+                        if (forMatch) {
+                            recipientEmail = parseEmailAddress(forMatch[1]);
+                        } else {
+                            recipientEmail = globalRecipients[0] || '';
+                        }
+
+                        if (fromServer) {
+                            transactions.push({
+                                order: ++orderCounter,
+                                action: 'Send',
+                                timestamp: date,
+                                server: fromServer,
+                                ip: fromIp,
+                                emailOrDomain: globalSender || fromServer,
+                                details: cleanedValue
+                            });
+                        }
+
+                        if (byServer) {
+                            transactions.push({
+                                order: ++orderCounter,
+                                action: 'Receive',
+                                timestamp: date,
+                                server: byServer,
+                                ip: byIp,
+                                emailOrDomain: recipientEmail,
+                                details: cleanedValue
+                            });
+                        }
                     } else {
-                        recipientEmail = globalRecipients[0] || '';
-                    }
-
-                    if (fromServer) {
+                        // Handle non-Received headers
                         transactions.push({
                             order: ++orderCounter,
-                            action: 'Send',
-                            timestamp: date,
-                            server: fromServer,
-                            ip: fromIp,
-                            emailOrDomain: globalSender || fromServer,
-                            details: cleanedValue
-                        });
-                    }
-
-                    if (byServer) {
-                        transactions.push({
-                            order: ++orderCounter,
-                            action: 'Receive',
-                            timestamp: date,
-                            server: byServer,
-                            ip: byIp,
-                            emailOrDomain: recipientEmail,
-                            details: cleanedValue
+                            action: headerName,
+                            timestamp: '',
+                            server: '',
+                            ip: '',
+                            emailOrDomain: '',
+                            details: headerValue
                         });
                     }
                 });
