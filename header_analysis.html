@@ -183,6 +183,23 @@
             margin-bottom: 0;
         }
 
+        .spf-status {
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            color: white;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .spf-pass {
+            background-color: #28a745;
+        }
+
+        .spf-fail {
+            background-color: #dc3545;
+        }
+
         /* Adjust column widths for header table */
         th:nth-child(1), td:nth-child(1) { /* Order */
             width: 8%;
@@ -289,41 +306,41 @@
         // Sidebar resizing logic
         const sidebar = document.querySelector('.sidebar');
         const resizeHandle = document.querySelector('.resize-handle');
-
         let isResizing = false;
 
-        resizeHandle.addEventListener('mousedown', (e) => {
-            isResizing = true;
-            document.body.style.userSelect = 'none';
-        });
+        if (resizeHandle && sidebar) {
+            resizeHandle.addEventListener('mousedown', (e) => {
+                isResizing = true;
+                document.body.style.userSelect = 'none';
+            });
 
-        document.addEventListener('mousemove', (e) => {
-            if (!isResizing) return;
+            document.addEventListener('mousemove', (e) => {
+                if (!isResizing) return;
+                const newWidth = e.clientX - sidebar.getBoundingClientRect().left;
+                if (newWidth >= 200 && newWidth <= 500) {
+                    sidebar.style.width = `${newWidth}px`;
+                }
+            });
 
-            const newWidth = e.clientX - sidebar.getBoundingClientRect().left;
-            if (newWidth >= 200 && newWidth <= 500) {
-                sidebar.style.width = `${newWidth}px`;
-            }
-        });
-
-        document.addEventListener('mouseup', () => {
-            if (isResizing) {
-                isResizing = false;
-                document.body.style.userSelect = '';
-            }
-        });
+            document.addEventListener('mouseup', () => {
+                if (isResizing) {
+                    isResizing = false;
+                    document.body.style.userSelect = '';
+                }
+            });
+        }
 
         // Analysis and sorting logic
-        document.getElementById('analyseBtn').addEventListener('click', analyseEmail);
-        document.getElementById('clearBtn').addEventListener('click', clearResults);
+        const analyseBtn = document.getElementById('analyseBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        if (analyseBtn) analyseBtn.addEventListener('click', analyseEmail);
+        if (clearBtn) clearBtn.addEventListener('click', clearResults);
 
-        // Sorting state
-        let sortState = {
-            column: 'order',
-            direction: 'asc'
-        };
+        // Global state
+        let sortState = { column: 'order', direction: 'asc' };
         let transactions = [];
         let headerFields = {};
+        let lastSpfResult = { status: 'N/A', message: '', details: '' };
 
         function escapeHtml(text) {
             if (typeof text !== 'string') return '';
@@ -337,20 +354,24 @@
                 const div = document.createElement('div');
                 div.innerHTML = html;
 
-                ['script', 'iframe'].forEach(tag => {
+                // Remove dangerous tags
+                ['script', 'iframe', 'object', 'embed'].forEach(tag => {
                     const elements = div.getElementsByTagName(tag);
                     while (elements.length) {
                         elements[0].parentNode.removeChild(elements[0]);
                     }
                 });
 
+                // Sanitize attributes
                 const elements = div.querySelectorAll('*');
                 elements.forEach(el => {
                     Array.from(el.attributes).forEach(attr => {
-                        if (attr.name.startsWith('on') || attr.value.includes('javascript:')) {
+                        const name = attr.name.toLowerCase();
+                        const value = attr.value.toLowerCase();
+                        if (name.startsWith('on') || value.includes('javascript:') || value.includes('data:')) {
                             el.removeAttribute(attr.name);
                         }
-                        if (['src', 'href'].includes(attr.name) && attr.value.startsWith('http')) {
+                        if (['src', 'href'].includes(name) && (value.startsWith('http') || value.startsWith('//'))) {
                             el.setAttribute(attr.name, '#');
                         }
                     });
@@ -364,27 +385,31 @@
         }
 
         function decodeQuotedPrintable(text) {
+            if (typeof text !== 'string') return '';
             return text.replace(/=([0-9A-F]{2})/g, (match, hex) => String.fromCharCode(parseInt(hex, 16)))
                        .replace(/=\r?\n/g, '');
         }
 
         function parseEmailAddress(emailStr) {
+            if (typeof emailStr !== 'string') return '';
             const match = emailStr.match(/<([^>]+)>|[^\s<>,;]+@[^\s<>,;]+\.[^\s<>,;]+/);
             return match ? match[1] || match[0] : '';
         }
 
         function escapeRegex(str) {
+            if (typeof str !== 'string') return '';
             return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         }
 
         function validateIP(ip) {
+            if (typeof ip !== 'string') return '';
             const ipv4Regex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
             const ipv6Regex = /^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$/;
             return ipv4Regex.test(ip) || ipv6Regex.test(ip) ? ip : '';
         }
 
         function parseDate(dateStr) {
-            if (!dateStr) return '';
+            if (!dateStr || typeof dateStr !== 'string') return '';
             let cleanedDate = dateStr.replace(/^;?\s*|\s*;?\s*$/g, '').replace(/\s+/g, ' ').trim();
             console.log('Parsing date:', cleanedDate);
 
@@ -419,7 +444,7 @@
 
             try {
                 const date = new Date(dateString);
-                if (isNaN(date)) {
+                if (isNaN(date.getTime())) {
                     console.log('Invalid date:', dateString);
                     return '';
                 }
@@ -428,6 +453,38 @@
                 console.error('Date parsing error:', e, dateString);
                 return '';
             }
+        }
+
+        function analyseSPFRecord(headers) {
+            if (typeof headers !== 'string') {
+                return {
+                    status: 'FAIL',
+                    message: 'Invalid headers provided',
+                    details: 'Headers must be a string'
+                };
+            }
+            const spfRegex = /^Received-SPF:.*$/gim;
+            const spfMatches = headers.match(spfRegex) || [];
+            if (spfMatches.length === 0) {
+                return {
+                    status: 'FAIL',
+                    message: 'No SPF record found in headers',
+                    details: 'SPF header is missing'
+                };
+            }
+
+            const spfHeader = spfMatches[0].replace(/^Received-SPF:\s*/i, '').trim();
+            const isPass = spfHeader.toLowerCase().startsWith('pass');
+            const status = isPass ? 'PASS' : 'FAIL';
+            const message = isPass
+                ? 'SPF check passed successfully'
+                : 'SPF check failed - potential spoofing risk';
+
+            return {
+                status,
+                message,
+                details: spfHeader
+            };
         }
 
         function sortTransactions(column, direction) {
@@ -448,16 +505,25 @@
                 }
 
                 if (!valA && !valB) return 0;
-                if (!valA) return 1;
-                if (!valB) return -1;
+                if (!valA) return direction === 'asc' ? 1 : -1;
+                if (!valB) return direction === 'asc' ? -1 : 1;
                 return direction === 'asc'
                     ? valA.localeCompare(valB)
                     : valB.localeCompare(valA);
             });
         }
 
-        function renderHeaderFields(headerFields) {
+        function renderHeaderFields(headerFields, spfResult) {
             let html = '<div class="header-fields" style="margin-bottom: 20px;">';
+            html += `
+                <div class="spf-status ${spfResult.status === 'PASS' ? 'spf-pass' : 'spf-fail'}">
+                    SPF: ${spfResult.status}
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <p><strong>SPF Message:</strong> ${escapeHtml(spfResult.message)}</p>
+                    <p><strong>SPF Details:</strong> ${escapeHtml(spfResult.details)}</p>
+                </div>
+            `;
             html += '<h3>Email Details</h3>';
             html += '<p><strong>From:</strong> ' + (headerFields.from ? escapeHtml(headerFields.from) : 'Not provided') + '</p>';
             html += '<p><strong>To:</strong> ' + (headerFields.to.length ? escapeHtml(headerFields.to.join(', ')) : 'Not provided') + '</p>';
@@ -468,10 +534,14 @@
             return html;
         }
 
-        function renderTable() {
+        function renderTable(spfResult) {
             const headerResultsDiv = document.getElementById('headerResults');
-            let tableHtml = renderHeaderFields(headerFields);
+            if (!headerResultsDiv) {
+                console.error('Header results div not found');
+                return;
+            }
 
+            let tableHtml = renderHeaderFields(headerFields, spfResult);
             if (transactions.length === 0) {
                 tableHtml += '<p>No headers found.</p>';
                 headerResultsDiv.innerHTML = tableHtml;
@@ -497,7 +567,7 @@
             transactions.forEach(transaction => {
                 tableHtml += `
                     <tr>
-                        <td data-label="Order">${transaction.order}</td>
+                        <td data-label="Order">${transaction.order || ''}</td>
                         <td data-label="Action">${escapeHtml(transaction.action)}</td>
                         <td data-label="Timestamp">${escapeHtml(transaction.timestamp || '')}</td>
                         <td data-label="Server">${escapeHtml(transaction.server || '')}</td>
@@ -520,10 +590,11 @@
                 sortState.direction = 'asc';
             }
             sortTransactions(sortState.column, sortState.direction);
-            renderTable();
+            renderTable(lastSpfResult);
         }
 
         function processIOCs(text, bodyParts) {
+            if (typeof text !== 'string' || !Array.isArray(bodyParts)) return [];
             const decodedText = decodeQuotedPrintable(text);
             const patterns = {
                 url: /https?:\/\/[^\s/$.?#].[^\s]*/gi,
@@ -563,8 +634,12 @@
             };
 
             function extractMatches(content, regex, set, transform = v => v) {
+                if (typeof content !== 'string') return;
                 const matches = content.match(regex) || [];
-                matches.forEach(match => set.add(transform(match)));
+                matches.forEach(match => {
+                    const transformed = transform(match);
+                    if (transformed) set.add(transformed);
+                });
             }
 
             extractMatches(cleanedText, patterns.url, iocs.url);
@@ -597,6 +672,7 @@
                 if (part.encoding === 'quoted-printable') {
                     content = decodeQuotedPrintable(content);
                 }
+                if (typeof content !== 'string') return;
                 content = content.replace(patterns.timestamp, '');
 
                 extractMatches(content, patterns.url, iocs.url);
@@ -639,7 +715,12 @@
 
         function renderIOCs(iocs) {
             const iocResultsDiv = document.getElementById('iocResults');
-            if (iocs.length === 0) {
+            if (!iocResultsDiv) {
+                console.error('IOC results div not found');
+                return;
+            }
+
+            if (!Array.isArray(iocs) || iocs.length === 0) {
                 iocResultsDiv.innerHTML = '<p>No IOCs found.</p>';
                 return;
             }
@@ -669,21 +750,33 @@
         }
 
         function clearResults() {
-            document.getElementById('headerInput').value = '';
-            document.getElementById('headerResults').innerHTML = '';
-            document.getElementById('bodyResults').innerHTML = '';
-            document.getElementById('iocResults').innerHTML = '';
-            transactions = [];
-            headerFields = {};
-        }
-
-        function analyseEmail() {
-            const headerInput = document.getElementById('headerInput').value.trim();
+            const headerInput = document.getElementById('headerInput');
             const headerResultsDiv = document.getElementById('headerResults');
             const bodyResultsDiv = document.getElementById('bodyResults');
             const iocResultsDiv = document.getElementById('iocResults');
 
-            if (!headerInput) {
+            if (headerInput) headerInput.value = '';
+            if (headerResultsDiv) headerResultsDiv.innerHTML = '';
+            if (bodyResultsDiv) bodyResultsDiv.innerHTML = '';
+            if (iocResultsDiv) iocResultsDiv.innerHTML = '';
+            transactions = [];
+            headerFields = {};
+            lastSpfResult = { status: 'N/A', message: '', details: '' };
+        }
+
+        function analyseEmail() {
+            const headerInput = document.getElementById('headerInput');
+            const headerResultsDiv = document.getElementById('headerResults');
+            const bodyResultsDiv = document.getElementById('bodyResults');
+            const iocResultsDiv = document.getElementById('iocResults');
+
+            if (!headerInput || !headerResultsDiv || !bodyResultsDiv || !iocResultsDiv) {
+                console.error('Required DOM elements missing');
+                return;
+            }
+
+            const input = headerInput.value.trim();
+            if (!input) {
                 headerResultsDiv.innerHTML = '<p>Please enter email headers to analyse.</p>';
                 bodyResultsDiv.innerHTML = '<p>No body content provided.</p>';
                 iocResultsDiv.innerHTML = '<p>No IOCs found.</p>';
@@ -692,12 +785,15 @@
 
             try {
                 // Normalize line endings and split headers from body
-                const normalizedInput = headerInput.replace(/\r\n/g, '\n');
+                const normalizedInput = input.replace(/\r\n/g, '\n');
                 const headerEndIndex = normalizedInput.indexOf('\n\n');
                 const headers = headerEndIndex !== -1 ? normalizedInput.substring(0, headerEndIndex) : normalizedInput;
                 const body = headerEndIndex !== -1 ? normalizedInput.substring(headerEndIndex).trim() : '';
                 transactions = [];
                 headerFields = { from: '', to: [], cc: [], subject: '', date: '' };
+
+                // Perform SPF analysis
+                lastSpfResult = analyseSPFRecord(headers);
 
                 // Regular expressions for specific headers
                 const fromRegex = /^From:.*$/gim;
@@ -713,7 +809,7 @@
                 const receivedDateRegex = /;?\s*(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s*)?\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}\s+\d{2}:\d{2}:\d{2}\s*(?:[+-]\d{4}|GMT)?/i;
                 const serverRegex = /by\s+([a-zA-Z0-9:.-]+)/i;
                 const fromServerRegex = /from\s+([a-zA-Z0-9:.-]+)/i;
-                const ipRegex = /\((?:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})|([0-9a-fA-F:]+))\)/;
+                const ipRegex = /\[(?:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})|([0-9a-fA-F:]+))\]/;
                 const boundaryRegex = /boundary=["']?([^"'\n;]+)["']?/i;
                 const forRegex = /for\s+<?([^\s>]+@[^\s>]+)>?/i;
 
@@ -752,11 +848,11 @@
                     headerFields.date = parseDate(dateMatches[0].replace(/^Date:\s*/i, '').trim());
                 }
 
-                // Extract global sender and recipients for transactions
-                let globalSender = headerFields.from;
-                let globalRecipients = headerFields.to;
+                // Extract global sender and recipients
+                const globalSender = headerFields.from;
+                const globalRecipients = headerFields.to;
 
-                // Parse all headers in order
+                // Parse all headers
                 let orderCounter = 0;
                 const headerLines = headers.split('\n');
                 let currentHeader = '';
@@ -766,11 +862,10 @@
                 // Combine multi-line headers
                 headerLines.forEach(line => {
                     if (/^[A-Za-z0-9-]+:/.test(line)) {
-                        // New header
                         if (currentHeader) {
                             allHeaders.push({
                                 name: currentHeader,
-                                value: currentValue.join(' ').trim()
+                                value: currentValue.join('\n').trim()
                             });
                             currentValue = [];
                         }
@@ -778,16 +873,14 @@
                         currentHeader = name.trim();
                         currentValue.push(value.join(':').trim());
                     } else if (currentHeader && /^\s+/.test(line)) {
-                        // Continuation of current header
                         currentValue.push(line.trim());
                     }
                 });
 
-                // Push the last header
                 if (currentHeader) {
                     allHeaders.push({
                         name: currentHeader,
-                        value: currentValue.join(' ').trim()
+                        value: currentValue.join('\n').trim()
                     });
                 }
 
@@ -799,62 +892,42 @@
                     if (headerName.toLowerCase() === 'received') {
                         const rawValue = headerValue;
                         const cleanedValue = rawValue.replace(/\n\s+/g, ' ').trim();
-                        console.log('Processing Received header:', cleanedValue);
 
                         let date = '';
                         const dateMatch = rawValue.match(receivedDateRegex);
                         if (dateMatch) {
                             date = parseDate(dateMatch[0].replace(/^;\s*/, '').trim());
-                        } else {
-                            console.log('No date match for:', rawValue);
                         }
 
                         let fromServer = '';
-                        let fromDetails = cleanedValue;
                         const fromServerMatch = rawValue.match(fromServerRegex);
                         if (fromServerMatch) {
                             fromServer = fromServerMatch[1].trim();
-                            fromDetails = `from ${fromServerMatch[0].trim()}`;
                         }
 
                         let byServer = '';
-                        let byDetails = cleanedValue;
                         const byServerMatch = rawValue.match(serverRegex);
                         if (byServerMatch) {
                             byServer = byServerMatch[1].trim();
-                            byDetails = `by ${byServerMatch[0].trim()} ${rawValue.substring(rawValue.indexOf('by')).trim()}`;
                         }
 
                         let fromIp = '';
                         let byIp = '';
                         if (fromServer) {
-                            let fromIpMatch = rawValue.match(new RegExp(`from\\s+${escapeRegex(fromServer)}\\s*\\(([^)]+)\\)`));
+                            const fromIpMatch = rawValue.match(new RegExp(`\\[${escapeRegex(fromServer)}\\s*\\[([\\d.:a-fA-F]+)\\]\\]`)) || 
+                                               rawValue.match(new RegExp(`from\\s+${escapeRegex(fromServer)}\\s*\\[([\\d.:a-fA-F]+)\\]`));
                             if (fromIpMatch) {
-                                let ipCandidate = fromIpMatch[1].trim();
-                                const nestedIpMatch = ipCandidate.match(/unknown\s*\[([\d.:a-fA-F]+)\]/);
-                                if (nestedIpMatch) {
-                                    ipCandidate = nestedIpMatch[1].trim();
-                                }
-                                fromIp = validateIP(ipCandidate);
-                                console.log('From IP match:', ipCandidate, 'Validated:', fromIp);
-                            } else {
-                                console.log('No from IP match for:', fromServer);
+                                fromIp = validateIP(fromIpMatch[1].trim());
                             }
                         }
 
                         if (byServer) {
-                            let byIpMatch = rawValue.match(new RegExp(`by\\s+${escapeRegex(byServer)}\\s*\\(([^)]+)\\)`));
+                            const byIpMatch = rawValue.match(new RegExp(`by\\s+${escapeRegex(byServer)}\\s*\\[([\\d.:a-fA-F]+)\\]`)) || 
+                                             rawValue.match(new RegExp(`\\[${escapeRegex(byServer)}\\s*\\[([\\d.:a-fA-F]+)\\]\\]`));
                             if (byIpMatch) {
-                                let ipCandidate = byIpMatch[1].trim();
-                                const nestedIpMatch = ipCandidate.match(/unknown\s*\[([\d.:a-fA-F]+)\]/);
-                                if (nestedIpMatch) {
-                                    ipCandidate = nestedIpMatch[1].trim();
-                                }
-                                byIp = validateIP(ipCandidate);
-                                console.log('By IP match:', ipCandidate, 'Validated:', byIp);
+                                byIp = validateIP(byIpMatch[1].trim());
                             } else {
                                 byIp = fromIp;
-                                console.log('No by IP match for:', byServer, 'Using fromIp:', byIp);
                             }
                         }
 
@@ -890,7 +963,6 @@
                             });
                         }
                     } else {
-                        // Handle non-Received headers
                         transactions.push({
                             order: ++orderCounter,
                             action: headerName,
@@ -903,10 +975,10 @@
                     }
                 });
 
-                // Default sort by order ascending (sequential)
+                // Default sort
                 sortState = { column: 'order', direction: 'asc' };
                 sortTransactions(sortState.column, sortState.direction);
-                renderTable();
+                renderTable(lastSpfResult);
 
                 // Process body
                 let bodyHtml = '';
@@ -916,7 +988,6 @@
                         bodyHtml = '<p>No body content provided.</p>';
                     } else {
                         const contentTypeMatch = headers.match(contentTypeRegex) || [];
-                        const contentEncodingMatch = headers.match(contentEncodingRegex) || [];
                         let boundary = '';
                         for (let match of contentTypeMatch) {
                             const boundaryMatch = match.match(boundaryRegex);
@@ -970,7 +1041,7 @@
 
                 // Process IOCs
                 try {
-                    const iocs = processIOCs(headerInput, bodyParts);
+                    const iocs = processIOCs(input, bodyParts);
                     renderIOCs(iocs);
                 } catch (e) {
                     console.error('Error processing IOCs:', e);
