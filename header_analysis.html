@@ -18,6 +18,11 @@
             background-color: #f0f2f5;
         }
 
+        .sidebar-container {
+            display: flex;
+            position: relative;
+        }
+
         .sidebar {
             width: 300px;
             background-color: #ffffff;
@@ -26,6 +31,8 @@
             display: flex;
             flex-direction: column;
             gap: 15px;
+            min-width: 200px;
+            max-width: 500px;
         }
 
         .sidebar h2 {
@@ -78,6 +85,17 @@
             background-color: #b02a37;
         }
 
+        .resize-handle {
+            width: 5px;
+            background-color: #ddd;
+            cursor: col-resize;
+            transition: background-color 0.2s;
+        }
+
+        .resize-handle:hover {
+            background-color: #bbb;
+        }
+
         .main {
             flex: 1;
             padding: 20px;
@@ -105,10 +123,58 @@
         th {
             background-color: #007bff;
             color: white;
+            cursor: pointer;
+            position: relative;
+            user-select: none;
+        }
+
+        th:hover {
+            background-color: #0056b3;
+        }
+
+        th.sort-asc::after {
+            content: '↑';
+            position: absolute;
+            right: 8px;
+        }
+
+        th.sort-desc::after {
+            content: '↓';
+            position: absolute;
+            right: 8px;
         }
 
         tr:hover {
             background-color: #f8f9fa;
+        }
+
+        /* Adjust column widths for nine columns */
+        th:nth-child(1), td:nth-child(1) { /* Type */
+            width: 8%;
+        }
+        th:nth-child(2), td:nth-child(2) { /* Date */
+            width: 18%;
+        }
+        th:nth-child(3), td:nth-child(3) { /* Sender Email */
+            width: 12%;
+        }
+        th:nth-child(4), td:nth-child(4) { /* From Server */
+            width: 12%;
+        }
+        th:nth-child(5), td:nth-child(5) { /* Sender IP */
+            width: 12%;
+        }
+        th:nth-child(6), td:nth-child(6) { /* Recipients */
+            width: 12%;
+        }
+        th:nth-child(7), td:nth-child(7) { /* Server */
+            width: 10%;
+        }
+        th:nth-child(8), td:nth-child(8) { /* Recipient IP */
+            width: 12%;
+        }
+        th:nth-child(9), td:nth-child(9) { /* Details */
+            width: 14%;
         }
 
         @media (max-width: 768px) {
@@ -116,23 +182,55 @@
                 flex-direction: column;
             }
 
+            .sidebar-container {
+                width: 100%;
+            }
+
             .sidebar {
                 width: 100%;
-                box-shadow: none;
+                max-width: none;
+                min-width: 0;
+            }
+
+            .resize-handle {
+                display: none;
             }
 
             .main {
                 width: 100%;
             }
+
+            table, thead, tbody, th, td, tr {
+                display: block;
+            }
+            th, td {
+                width: 100% !important;
+                box-sizing: border-box;
+            }
+            th::before {
+                content: attr(data-label);
+                font-weight: bold;
+                display: inline-block;
+                width: 30%;
+            }
+            td::before {
+                content: attr(data-label);
+                font-weight: bold;
+                display: inline-block;
+                width: 30%;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="sidebar">
-        <h2>Email Header Analyser</h2>
-        <textarea id="headerInput" placeholder="Paste email headers here..."></textarea>
-        <button id="analyseBtn">Analyse</button>
-        <button id="clearBtn">Clear</button>
+    <div class="sidebar-container">
+        <div class="sidebar">
+            <h2>Email Header Analyser</h2>
+            <textarea id="headerInput" placeholder="Paste email headers here..."></textarea>
+            <button id="analyseBtn">Analyse</button>
+            <button id="clearBtn">Clear</button>
+        </div>
+        <div class="resize-handle"></div>
     </div>
     <div class="main">
         <h2>Analysis Results</h2>
@@ -140,162 +238,243 @@
     </div>
 
     <script>
+        // Sidebar resizing logic
+        const sidebar = document.querySelector('.sidebar');
+        const resizeHandle = document.querySelector('.resize-handle');
+
+        let isResizing = false;
+
+        resizeHandle.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            document.body.style.userSelect = 'none';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+
+            const newWidth = e.clientX - sidebar.getBoundingClientRect().left;
+            if (newWidth >= 200 && newWidth <= 500) {
+                sidebar.style.width = `${newWidth}px`;
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isResizing) {
+                isResizing = false;
+                document.body.style.userSelect = '';
+            }
+        });
+
+        // Analysis and sorting logic
         document.getElementById('analyseBtn').addEventListener('click', analyseHeaders);
         document.getElementById('clearBtn').addEventListener('click', clearResults);
+
+        // Sorting state
+        let sortState = {
+            column: 'date',
+            direction: 'desc'
+        };
+        let transactions = [];
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function sortTransactions(column, direction) {
+            transactions.sort((a, b) => {
+                let valA = a[column] || '';
+                let valB = b[column] || '';
+
+                // Handle Date column
+                if (column === 'date') {
+                    valA = valA ? new Date(valA) : new Date(0);
+                    valB = valB ? new Date(valB) : new Date(0);
+                    return direction === 'asc' ? valA - valB : valB - valA;
+                }
+
+                // Handle string columns
+                if (!valA && !valB) return 0;
+                if (!valA) return 1;
+                if (!valB) return -1;
+                return direction === 'asc'
+                    ? valA.localeCompare(valB)
+                    : valB.localeCompare(valA);
+            });
+        }
+
+        function renderTable() {
+            const resultsDiv = document.getElementById('results');
+            if (transactions.length === 0) {
+                resultsDiv.innerHTML = '<p>No server transactions found.</p>';
+                return;
+            }
+
+            let tableHtml = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th data-column="type" class="${sortState.column === 'type' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('type')">Type</th>
+                            <th data-column="date" class="${sortState.column === 'date' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('date')">Date</th>
+                            <th data-column="senderEmail" class="${sortState.column === 'senderEmail' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('senderEmail')">Sender Email</th>
+                            <th data-column="fromServer" class="${sortState.column === 'fromServer' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('fromServer')">From Server</th>
+                            <th data-column="senderIp" class="${sortState.column === 'senderIp' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('senderIp')">Sender IP</th>
+                            <th data-column="recipients" class="${sortState.column === 'recipients' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('recipients')">Recipients</th>
+                            <th data-column="server" class="${sortState.column === 'server' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('server')">Server</th>
+                            <th data-column="recipientIp" class="${sortState.column === 'recipientIp' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('recipientIp')">Recipient IP</th>
+                            <th data-column="details" class="${sortState.column === 'details' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('details')">Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            transactions.forEach(transaction => {
+                tableHtml += `
+                    <tr>
+                        <td data-label="Type">${transaction.type}</td>
+                        <td data-label="Date">${transaction.date}</td>
+                        <td data-label="Sender Email">${transaction.senderEmail}</td>
+                        <td data-label="From Server">${transaction.fromServer}</td>
+                        <td data-label="Sender IP">${transaction.senderIp}</td>
+                        <td data-label="Recipients">${transaction.recipients}</td>
+                        <td data-label="Server">${transaction.server}</td>
+                        <td data-label="Recipient IP">${transaction.recipientIp}</td>
+                        <td data-label="Details">${transaction.details}</td>
+                    </tr>
+                `;
+            });
+
+            tableHtml += '</tbody></table>';
+            resultsDiv.innerHTML = tableHtml;
+        }
+
+        function sortColumn(column) {
+            if (sortState.column === column) {
+                sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortState.column = column;
+                sortState.direction = 'asc';
+            }
+            sortTransactions(sortState.column, sortState.direction);
+            renderTable();
+        }
 
         function analyseHeaders() {
             const headerInput = document.getElementById('headerInput').value.trim();
             const resultsDiv = document.getElementById('results');
-            resultsDiv.innerHTML = ''; // Clear previous results
 
             if (!headerInput) {
                 resultsDiv.innerHTML = '<p>Please enter email headers to analyse.</p>';
                 return;
             }
 
-            // 1. Unfold headers (Combine lines starting with whitespace)
-            const unfoldedHeaders = headerInput.replace(/\\r?\\n[ \\t]+/g, ' ');
+            // Normalize line endings and split headers from body
+            const normalizedInput = headerInput.replace(/\r\n/g, '\n');
+            const headerEndIndex = normalizedInput.search(/\n\n|\n\s*MIME-Version:/i);
+            const headers = headerEndIndex !== -1 ? normalizedInput.substring(0, headerEndIndex) : normalizedInput;
+            transactions = [];
 
-            // 2. Split into individual header lines
-            const lines = unfoldedHeaders.split(/\\r?\\n/);
+            // Regular expressions
+            const receivedRegex = /Received:.*?(?=\n[A-Z]|\n*$)/gis;
+            const fromRegex = /^From:.*?(?=\n|$)/gim;
+            const toRegex = /(?:To|Cc|Bcc):.*?(?=\n[A-Z]|\n*$)/gis;
+            const receivedDateRegex = /;?\s*(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s*0?\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}\s+\d{2}:\d{2}:\d{2}\s*[-+]\d{4}(?:\s*\([A-Za-z]+\))?/i;
+            const serverRegex = /by\s+([a-zA-Z0-9:.-]+)/i;
+            const fromServerRegex = /from\s+([a-zA-Z0-9:.-]+)/i;
+            const receivedRecipientRegex = /for\s+<?([\w@.-]+(?:,\s*[\w@.-]+)*)>?/i;
+            const emailRegex = /\S+@\S+/g;
+            const ipRegex = /(?:\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b|\b[0-9a-fA-F]{1,4}(?::[0-9a-fA-F]{1,4}){1,7}\b|\b[0-9a-fA-F]{1,4}::[0-9a-fA-F]{1,4}\b)/;
 
-            // 3. Parse headers into key-value pairs
-            const parsedHeaders = {};
-            let currentHeader = '';
-            lines.forEach(line => {
-                const match = line.match(/^([\\w\\-]+):\\s*(.*)$/); // Use \\w\\- for header names
-                if (match) {
-                    currentHeader = match[1].toLowerCase();
-                    const value = match[2].trim();
-                    // Handle multiple headers with the same name (like Received)
-                    if (parsedHeaders[currentHeader]) {
-                        if (!Array.isArray(parsedHeaders[currentHeader])) {
-                            parsedHeaders[currentHeader] = [parsedHeaders[currentHeader]];
-                        }
-                        parsedHeaders[currentHeader].push(value);
-                    } else {
-                        parsedHeaders[currentHeader] = value;
-                    }
-                } else if (currentHeader && line.trim() !== '' && line.startsWith(' ') || line.startsWith('\\t')) {
-                    // This case should ideally be covered by unfolding, but acts as a fallback
-                     console.warn("Potentially missed folded line:", line);
-                    // if (Array.isArray(parsedHeaders[currentHeader])) {
-                    //      parsedHeaders[currentHeader][parsedHeaders[currentHeader].length - 1] += ' ' + line.trim();
-                    // } else {
-                    //      parsedHeaders[currentHeader] += ' ' + line.trim();
-                    // }
-                } else if (line.trim() !== '') {
-                    // Reset currentHeader if line doesn't match header format or continuation
-                    currentHeader = '';
+            // Extract global sender email and recipients
+            let senderEmail = '';
+            const fromMatches = headers.match(fromRegex) || [];
+            if (fromMatches.length > 0) {
+                const fromValue = fromMatches[0].replace(/^From:\s*/i, '').trim();
+                const emailMatch = fromValue.match(emailRegex);
+                senderEmail = emailMatch ? emailMatch[0] : '';
+            }
+
+            let globalRecipients = [];
+            const toMatches = headers.match(toRegex) || [];
+            toMatches.forEach(match => {
+                const emails = match.match(emailRegex) || [];
+                globalRecipients.push(...emails);
+            });
+            globalRecipients = [...new Set(globalRecipients)];
+
+            // Extract Received headers
+            const receivedMatches = headers.match(receivedRegex) || [];
+            receivedMatches.forEach(match => {
+                const rawValue = match.replace(/^Received:\s*/i, '');
+                const cleanedValue = rawValue.replace(/\n\s+/g, ' ').trim();
+
+                // Extract date
+                let date = '';
+                const dateMatch = rawValue.match(receivedDateRegex);
+                if (dateMatch) {
+                    date = dateMatch[0].replace(/^;\s*/, '').trim();
                 }
-            });
 
-            // 4. Extract key information
-            const keyInfo = [
-                { name: 'Subject', value: parsedHeaders['subject'] },
-                { name: 'From', value: parsedHeaders['from'] },
-                { name: 'To', value: parsedHeaders['to'] },
-                { name: 'Date', value: parsedHeaders['date'] },
-                { name: 'Message-ID', value: parsedHeaders['message-id'] },
-                { name: 'Return-Path', value: parsedHeaders['return-path'] }
-            ].filter(item => item.value); // Filter out headers that weren't found
+                // Extract server
+                let server = '';
+                const serverMatch = rawValue.match(serverRegex);
+                if (serverMatch) {
+                    server = serverMatch[1].trim();
+                }
 
-            // 5. Parse Authentication-Results
-            const authResultsHeader = parsedHeaders['authentication-results'];
-            let authInfo = [];
-            if (authResultsHeader) {
-                // Simple parsing: split by semicolon and show key=value pairs
-                const parts = authResultsHeader.split(';').map(p => p.trim()).filter(p => p);
-                parts.forEach(part => {
-                    const eqIndex = part.indexOf('=');
-                    if (eqIndex > 0) {
-                         authInfo.push({ name: part.substring(0, eqIndex).trim(), value: part.substring(eqIndex + 1).trim() });
-                    } else if (authInfo.length === 0) {
-                         // Assume the first part without '=' is the server identifier
-                         authInfo.push({ name: 'Auth Server', value: part });
-                    } else {
-                         // Treat other parts without '=' as flags or comments
-                         authInfo.push({ name: 'Info', value: part });
-                    }
-                });
-            }
+                // Extract from server
+                let fromServer = '';
+                const fromServerMatch = rawValue.match(fromServerRegex);
+                if (fromServerMatch) {
+                    fromServer = fromServerMatch[1].trim();
+                }
 
-            // 6. Parse Received headers (hops)
-            const receivedHeaders = Array.isArray(parsedHeaders['received']) ? parsedHeaders['received'] : (parsedHeaders['received'] ? [parsedHeaders['received']] : []);
-            const hops = [];
-            receivedHeaders.reverse().forEach((header, index) => { // Reverse to show chronologically
-                // More robust regex, trying to capture hostnames and IPs in parentheses
-                let fromMatch = header.match(/from\s+([\w.-]+)(?:\s+\((?:[^)]*\[)?([\d.:a-fA-F]+)\]?[^)]*\))?/i);
-                let byMatch = header.match(/by\s+([\w.-]+)(?:\s+\((?:[^)]*\[)?([\d.:a-fA-F]+)\]?[^)]*\))?/i);
-                let withMatch = header.match(/with\s+([^\s;]+)/i);
-                let dateMatch = header.match(/;\s*(.*)$/);
+                // Extract IPs
+                let senderIp = '';
+                let recipientIp = '';
+                const ipMatches = rawValue.match(ipRegex) || [];
+                const fromClause = fromServerMatch ? rawValue.substring(rawValue.indexOf('from')) : '';
+                const fromIpMatch = fromClause.match(ipRegex);
+                if (fromIpMatch) {
+                    senderIp = fromIpMatch[0];
+                }
+                const byClause = serverMatch ? rawValue.substring(rawValue.indexOf('by')) : '';
+                const byIpMatch = byClause.match(ipRegex);
+                if (byIpMatch) {
+                    recipientIp = byIpMatch[0];
+                }
 
-                // Prioritize IP address if available in parentheses
-                let fromServer = fromMatch ? (fromMatch[2] || fromMatch[1]) : 'N/A';
-                let byServer = byMatch ? (byMatch[2] || byMatch[1]) : 'N/A';
+                // Extract recipients
+                let recipients = globalRecipients.join(', ');
+                const recipientMatch = rawValue.match(receivedRecipientRegex);
+                if (recipientMatch) {
+                    recipients = recipientMatch[1].trim();
+                }
 
-                hops.push({
-                    hop: index + 1,
-                    from: fromServer,
-                    by: byServer,
-                    with: withMatch ? withMatch[1] : 'N/A',
-                    date: dateMatch ? dateMatch[1].trim() : 'N/A'
+                transactions.push({
+                    type: 'Received',
+                    date: escapeHtml(date),
+                    senderEmail: escapeHtml(senderEmail),
+                    fromServer: escapeHtml(fromServer),
+                    senderIp: escapeHtml(senderIp),
+                    recipients: escapeHtml(recipients),
+                    server: escapeHtml(server),
+                    recipientIp: escapeHtml(recipientIp),
+                    details: escapeHtml(cleanedValue)
                 });
             });
 
-
-            // 7. Generate HTML Output
-            let outputHtml = '';
-
-            if (keyInfo.length > 0) {
-                outputHtml += '<h3>Key Information</h3>';
-                outputHtml += '<table><thead><tr><th>Header</th><th>Value</th></tr></thead><tbody>';
-                keyInfo.forEach(item => {
-                    // Basic HTML escaping for display
-                    const escapedValue = item.value.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-                    outputHtml += `<tr><td>${item.name}</td><td>${escapedValue}</td></tr>`;
-                });
-                outputHtml += '</tbody></table><br>'; // Add space between tables
-            }
-
-            if (authInfo.length > 0) {
-                outputHtml += '<h3>Authentication Results</h3>';
-                outputHtml += '<table><thead><tr><th>Property</th><th>Value</th></tr></thead><tbody>';
-                authInfo.forEach(item => {
-                    const escapedValue = item.value.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-                    outputHtml += `<tr><td>${item.name}</td><td>${escapedValue}</td></tr>`;
-                });
-                outputHtml += '</tbody></table><br>'; // Add space between tables
-            }
-
-            if (hops.length > 0) {
-                outputHtml += '<h3>Message Path (Hops)</h3>';
-                outputHtml += '<table><thead><tr><th>Hop</th><th>Receiving Server (by)</th><th>Sending Server (from)</th><th>Protocol (with)</th><th>Timestamp</th></tr></thead><tbody>';
-                hops.forEach(hop => {
-                     const escapedBy = hop.by.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-                     const escapedFrom = hop.from.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-                     const escapedWith = hop.with.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-                     const escapedDate = hop.date.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-                     outputHtml += `<tr><td>${hop.hop}</td><td>${escapedBy}</td><td>${escapedFrom}</td><td>${escapedWith}</td><td>${escapedDate}</td></tr>`;
-                });
-                outputHtml += '</tbody></table>';
-            }
-
-             // Display a message if no meaningful data was parsed
-            if (!keyInfo.length && !hops.length && !authInfo.length && headerInput) {
-                 outputHtml = '<p>Could not parse significant header information. Please ensure the full headers are pasted correctly.</p>';
-            } else if (!headerInput) {
-                 // This case is handled at the beginning, but added for safety
-                 outputHtml = '<p>Please enter email headers to analyse.</p>';
-            }
-
-
-            resultsDiv.innerHTML = outputHtml;
+            // Default sort by date descending
+            sortState = { column: 'date', direction: 'desc' };
+            sortTransactions(sortState.column, sortState.direction);
+            renderTable();
         }
 
         function clearResults() {
             document.getElementById('headerInput').value = '';
             document.getElementById('results').innerHTML = '';
+            transactions = [];
         }
     </script>
 </body>
