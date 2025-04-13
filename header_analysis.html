@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Email Header Analyser</title>
+    <title>Email Analyser</title>
     <style>
         * {
             margin: 0;
@@ -102,7 +102,7 @@
             overflow-y: auto;
         }
 
-        .main h2 {
+        .main h2, .main h3 {
             color: #333;
             margin-bottom: 20px;
         }
@@ -112,6 +112,7 @@
             border-collapse: collapse;
             background-color: #ffffff;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
         }
 
         th, td {
@@ -146,6 +147,26 @@
 
         tr:hover {
             background-color: #f8f9fa;
+        }
+
+        .body-section {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .body-section pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            margin: 0;
+            font-size: 14px;
+        }
+
+        .body-section .html-content {
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 5px;
         }
 
         /* Adjust column widths for nine columns */
@@ -225,16 +246,18 @@
 <body>
     <div class="sidebar-container">
         <div class="sidebar">
-            <h2>Email Header Analyser</h2>
-            <textarea id="headerInput" placeholder="Paste email headers here..."></textarea>
+            <h2>Email Analyser</h2>
+            <textarea id="headerInput" placeholder="Paste email headers and body here..."></textarea>
             <button id="analyseBtn">Analyse</button>
             <button id="clearBtn">Clear</button>
         </div>
         <div class="resize-handle"></div>
     </div>
     <div class="main">
-        <h2>Analysis Results</h2>
-        <div id="results"></div>
+        <h2>Header Analysis</h2>
+        <div id="headerResults"></div>
+        <h3>Body Content</h3>
+        <div id="bodyResults" class="body-section"></div>
     </div>
 
     <script>
@@ -266,7 +289,7 @@
         });
 
         // Analysis and sorting logic
-        document.getElementById('analyseBtn').addEventListener('click', analyseHeaders);
+        document.getElementById('analyseBtn').addEventListener('click', analyseEmail);
         document.getElementById('clearBtn').addEventListener('click', clearResults);
 
         // Sorting state
@@ -277,9 +300,42 @@
         let transactions = [];
 
         function escapeHtml(text) {
+            if (typeof text !== 'string') return '';
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        function sanitizeHtml(html) {
+            try {
+                const div = document.createElement('div');
+                div.innerHTML = html;
+
+                // Remove dangerous elements and attributes
+                ['script', 'iframe'].forEach(tag => {
+                    const elements = div.getElementsByTagName(tag);
+                    while (elements.length) {
+                        elements[0].parentNode.removeChild(elements[0]);
+                    }
+                });
+
+                const elements = div.querySelectorAll('*');
+                elements.forEach(el => {
+                    Array.from(el.attributes).forEach(attr => {
+                        if (attr.name.startsWith('on') || attr.value.includes('javascript:')) {
+                            el.removeAttribute(attr.name);
+                        }
+                        if (['src', 'href'].includes(attr.name) && attr.value.startsWith('http')) {
+                            el.setAttribute(attr.name, '#');
+                        }
+                    });
+                });
+
+                return div.innerHTML;
+            } catch (e) {
+                console.error('Error sanitizing HTML:', e);
+                return '<p>Error rendering HTML content.</p>';
+            }
         }
 
         function sortTransactions(column, direction) {
@@ -305,9 +361,9 @@
         }
 
         function renderTable() {
-            const resultsDiv = document.getElementById('results');
+            const headerResultsDiv = document.getElementById('headerResults');
             if (transactions.length === 0) {
-                resultsDiv.innerHTML = '<p>No server transactions found.</p>';
+                headerResultsDiv.innerHTML = '<p>No server transactions found.</p>';
                 return;
             }
 
@@ -332,21 +388,21 @@
             transactions.forEach(transaction => {
                 tableHtml += `
                     <tr>
-                        <td data-label="Type">${transaction.type}</td>
-                        <td data-label="Date">${transaction.date}</td>
-                        <td data-label="Sender Email">${transaction.senderEmail}</td>
-                        <td data-label="From Server">${transaction.fromServer}</td>
-                        <td data-label="Sender IP">${transaction.senderIp}</td>
-                        <td data-label="Recipients">${transaction.recipients}</td>
-                        <td data-label="Server">${transaction.server}</td>
-                        <td data-label="Recipient IP">${transaction.recipientIp}</td>
-                        <td data-label="Details">${transaction.details}</td>
+                        <td data-label="Type">${escapeHtml(transaction.type)}</td>
+                        <td data-label="Date">${escapeHtml(transaction.date)}</td>
+                        <td data-label="Sender Email">${escapeHtml(transaction.senderEmail)}</td>
+                        <td data-label="From Server">${escapeHtml(transaction.fromServer)}</td>
+                        <td data-label="Sender IP">${escapeHtml(transaction.senderIp)}</td>
+                        <td data-label="Recipients">${escapeHtml(transaction.recipients)}</td>
+                        <td data-label="Server">${escapeHtml(transaction.server)}</td>
+                        <td data-label="Recipient IP">${escapeHtml(transaction.recipientIp)}</td>
+                        <td data-label="Details">${escapeHtml(transaction.details)}</td>
                     </tr>
                 `;
             });
 
             tableHtml += '</tbody></table>';
-            resultsDiv.innerHTML = tableHtml;
+            headerResultsDiv.innerHTML = tableHtml;
         }
 
         function sortColumn(column) {
@@ -360,120 +416,180 @@
             renderTable();
         }
 
-        function analyseHeaders() {
+        function analyseEmail() {
             const headerInput = document.getElementById('headerInput').value.trim();
-            const resultsDiv = document.getElementById('results');
+            const headerResultsDiv = document.getElementById('headerResults');
+            const bodyResultsDiv = document.getElementById('bodyResults');
 
             if (!headerInput) {
-                resultsDiv.innerHTML = '<p>Please enter email headers to analyse.</p>';
+                headerResultsDiv.innerHTML = '<p>Please enter email headers to analyse.</p>';
+                bodyResultsDiv.innerHTML = '<p>No body content provided.</p>';
                 return;
             }
 
-            // Normalize line endings and split headers from body
-            const normalizedInput = headerInput.replace(/\r\n/g, '\n');
-            const headerEndIndex = normalizedInput.search(/\n\n|\n\s*MIME-Version:/i);
-            const headers = headerEndIndex !== -1 ? normalizedInput.substring(0, headerEndIndex) : normalizedInput;
-            transactions = [];
+            try {
+                // Normalize line endings and split headers from body
+                const normalizedInput = headerInput.replace(/\r\n/g, '\n');
+                const headerEndIndex = normalizedInput.search(/\n\n|\n\s*MIME-Version:/i);
+                const headers = headerEndIndex !== -1 ? normalizedInput.substring(0, headerEndIndex) : normalizedInput;
+                const body = headerEndIndex !== -1 ? normalizedInput.substring(headerEndIndex).trim() : '';
+                transactions = [];
 
-            // Regular expressions
-            const receivedRegex = /Received:.*?(?=\n[A-Z]|\n*$)/gis;
-            const fromRegex = /^From:.*?(?=\n|$)/gim;
-            const toRegex = /(?:To|Cc|Bcc):.*?(?=\n[A-Z]|\n*$)/gis;
-            const receivedDateRegex = /;?\s*(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s*0?\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}\s+\d{2}:\d{2}:\d{2}\s*[-+]\d{4}(?:\s*\([A-Za-z]+\))?/i;
-            const serverRegex = /by\s+([a-zA-Z0-9:.-]+)/i;
-            const fromServerRegex = /from\s+([a-zA-Z0-9:.-]+)/i;
-            const receivedRecipientRegex = /for\s+<?([\w@.-]+(?:,\s*[\w@.-]+)*)>?/i;
-            const emailRegex = /\S+@\S+/g;
-            const ipRegex = /(?:\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b|\b[0-9a-fA-F]{1,4}(?::[0-9a-fA-F]{1,4}){1,7}\b|\b[0-9a-fA-F]{1,4}::[0-9a-fA-F]{1,4}\b)/;
+                // Regular expressions
+                const receivedRegex = /Received:.*?(?=\n[A-Z]|\n*$)/gis;
+                const fromRegex = /^From:.*?(?=\n|$)/gim;
+                const toRegex = /(?:To|Cc|Bcc):.*?(?=\n[A-Z]|\n*$)/gis;
+                const contentTypeRegex = /Content-Type:.*?(?=\n[A-Z]|\n*$)/gis;
+                const receivedDateRegex = /;?\s*(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s*0?\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}\s+\d{2}:\d{2}:\d{2}\s*[-+]\d{4}(?:\s*\([A-Za-z]+\))?/i;
+                const serverRegex = /by\s+([a-zA-Z0-9:.-]+)/i;
+                const fromServerRegex = /from\s+([a-zA-Z0-9:.-]+)/i;
+                const receivedRecipientRegex = /for\s+<?([\w.-]+@[\w.-]+\.[a-zA-Z]{2,}(?:,\s*[\w.-]+@[\w.-]+\.[a-zA-Z]{2,})*)>?/i;
+                const emailRegex = /\S+@\S+\.\S+/g;
+                const ipRegex = /(?:\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b|\b[0-9a-fA-F]{1,4}(?::[0-9a-fA-F]{1,4}){1,7}\b|\b[0-9a-fA-F]{1,4}::[0-9a-fA-F]{1,4}\b)/;
+                const boundaryRegex = /boundary=["']?([^"'\n;]+)["']?/i;
 
-            // Extract global sender email and recipients
-            let senderEmail = '';
-            const fromMatches = headers.match(fromRegex) || [];
-            if (fromMatches.length > 0) {
-                const fromValue = fromMatches[0].replace(/^From:\s*/i, '').trim();
-                const emailMatch = fromValue.match(emailRegex);
-                senderEmail = emailMatch ? emailMatch[0] : '';
-            }
-
-            let globalRecipients = [];
-            const toMatches = headers.match(toRegex) || [];
-            toMatches.forEach(match => {
-                const emails = match.match(emailRegex) || [];
-                globalRecipients.push(...emails);
-            });
-            globalRecipients = [...new Set(globalRecipients)];
-
-            // Extract Received headers
-            const receivedMatches = headers.match(receivedRegex) || [];
-            receivedMatches.forEach(match => {
-                const rawValue = match.replace(/^Received:\s*/i, '');
-                const cleanedValue = rawValue.replace(/\n\s+/g, ' ').trim();
-
-                // Extract date
-                let date = '';
-                const dateMatch = rawValue.match(receivedDateRegex);
-                if (dateMatch) {
-                    date = dateMatch[0].replace(/^;\s*/, '').trim();
+                // Extract global sender email and recipients
+                let senderEmail = '';
+                const fromMatches = headers.match(fromRegex) || [];
+                if (fromMatches.length > 0) {
+                    const fromValue = fromMatches[0].replace(/^From:\s*/i, '').trim();
+                    const emailMatch = fromValue.match(emailRegex);
+                    senderEmail = emailMatch ? emailMatch[0] : '';
                 }
 
-                // Extract server
-                let server = '';
-                const serverMatch = rawValue.match(serverRegex);
-                if (serverMatch) {
-                    server = serverMatch[1].trim();
-                }
-
-                // Extract from server
-                let fromServer = '';
-                const fromServerMatch = rawValue.match(fromServerRegex);
-                if (fromServerMatch) {
-                    fromServer = fromServerMatch[1].trim();
-                }
-
-                // Extract IPs
-                let senderIp = '';
-                let recipientIp = '';
-                const ipMatches = rawValue.match(ipRegex) || [];
-                const fromClause = fromServerMatch ? rawValue.substring(rawValue.indexOf('from')) : '';
-                const fromIpMatch = fromClause.match(ipRegex);
-                if (fromIpMatch) {
-                    senderIp = fromIpMatch[0];
-                }
-                const byClause = serverMatch ? rawValue.substring(rawValue.indexOf('by')) : '';
-                const byIpMatch = byClause.match(ipRegex);
-                if (byIpMatch) {
-                    recipientIp = byIpMatch[0];
-                }
-
-                // Extract recipients
-                let recipients = globalRecipients.join(', ');
-                const recipientMatch = rawValue.match(receivedRecipientRegex);
-                if (recipientMatch) {
-                    recipients = recipientMatch[1].trim();
-                }
-
-                transactions.push({
-                    type: 'Received',
-                    date: escapeHtml(date),
-                    senderEmail: escapeHtml(senderEmail),
-                    fromServer: escapeHtml(fromServer),
-                    senderIp: escapeHtml(senderIp),
-                    recipients: escapeHtml(recipients),
-                    server: escapeHtml(server),
-                    recipientIp: escapeHtml(recipientIp),
-                    details: escapeHtml(cleanedValue)
+                let globalRecipients = [];
+                const toMatches = headers.match(toRegex) || [];
+                toMatches.forEach(match => {
+                    const emails = match.match(emailRegex) || [];
+                    globalRecipients.push(...emails);
                 });
-            });
+                globalRecipients = [...new Set(globalRecipients)];
 
-            // Default sort by date descending
-            sortState = { column: 'date', direction: 'desc' };
-            sortTransactions(sortState.column, sortState.direction);
-            renderTable();
+                // Extract Received headers
+                const receivedMatches = headers.match(receivedRegex) || [];
+                receivedMatches.forEach(match => {
+                    const rawValue = match.replace(/^Received:\s*/i, '');
+                    const cleanedValue = rawValue.replace(/\n\s+/g, ' ').trim();
+
+                    let date = '';
+                    const dateMatch = rawValue.match(receivedDateRegex);
+                    if (dateMatch) {
+                        date = dateMatch[0].replace(/^;\s*/, '').trim();
+                    }
+
+                    let server = '';
+                    const serverMatch = rawValue.match(serverRegex);
+                    if (serverMatch) {
+                        server = serverMatch[1].trim();
+                    }
+
+                    let fromServer = '';
+                    const fromServerMatch = rawValue.match(fromServerRegex);
+                    if (fromServerMatch) {
+                        fromServer = fromServerMatch[1].trim();
+                    }
+
+                    let senderIp = '';
+                    let recipientIp = '';
+                    const ipMatches = rawValue.match(ipRegex) || [];
+                    const fromClause = fromServerMatch ? rawValue.substring(rawValue.indexOf('from')) : '';
+                    const fromIpMatch = fromClause.match(ipRegex);
+                    if (fromIpMatch) {
+                        senderIp = fromIpMatch[0];
+                    }
+                    const byClause = serverMatch ? rawValue.substring(rawValue.indexOf('by')) : '';
+                    const byIpMatch = byClause.match(ipRegex);
+                    if (byIpMatch) {
+                        recipientIp = byIpMatch[0];
+                    }
+
+                    let recipients = globalRecipients.join(', ');
+                    const recipientMatch = rawValue.match(receivedRecipientRegex);
+                    if (recipientMatch) {
+                        const emails = recipientMatch[1].split(',').map(e => e.trim()).filter(e => e.match(emailRegex));
+                        recipients = emails.join(', ');
+                    }
+
+                    transactions.push({
+                        type: 'Received',
+                        date: date,
+                        senderEmail: senderEmail,
+                        fromServer: fromServer,
+                        senderIp: senderIp,
+                        recipients: recipients,
+                        server: server,
+                        recipientIp: recipientIp,
+                        details: cleanedValue
+                    });
+                });
+
+                // Default sort by date descending
+                sortState = { column: 'date', direction: 'desc' };
+                sortTransactions(sortState.column, sortState.direction);
+                renderTable();
+
+                // Process body
+                let bodyHtml = '';
+                try {
+                    if (!body) {
+                        bodyHtml = '<p>No body content provided.</p>';
+                    } else {
+                        const contentTypeMatch = headers.match(contentTypeRegex) || [];
+                        let boundary = '';
+                        for (let match of contentTypeMatch) {
+                            const boundaryMatch = match.match(boundaryRegex);
+                            if (boundaryMatch) {
+                                boundary = boundaryMatch[1];
+                                break;
+                            }
+                        }
+
+                        if (boundary) {
+                            const parts = body.split(`--${boundary}`).filter(part => part.trim() && !part.startsWith('--'));
+                            bodyHtml = parts.map(part => {
+                                const lines = part.trim().split('\n');
+                                let contentType = '';
+                                let content = '';
+                                let inContent = false;
+
+                                for (let line of lines) {
+                                    if (!inContent && line.match(/^Content-Type:/i)) {
+                                        contentType = line.replace(/^Content-Type:\s*/i, '').trim();
+                                    } else if (!inContent && line.trim() === '') {
+                                        inContent = true;
+                                    } else if (inContent) {
+                                        content += line + '\n';
+                                    }
+                                }
+
+                                content = content.trim();
+                                if (contentType.includes('text/plain')) {
+                                    return `<h4>Plain Text</h4><pre>${escapeHtml(content)}</pre>`;
+                                } else if (contentType.includes('text/html')) {
+                                    return `<h4>HTML Content</h4><div class="html-content">${sanitizeHtml(content)}</div>`;
+                                }
+                                return '';
+                            }).filter(part => part).join('');
+                        } else {
+                            bodyHtml = `<h4>Plain Text</h4><pre>${escapeHtml(body)}</pre>`;
+                        }
+                    }
+                    bodyResultsDiv.innerHTML = bodyHtml;
+                } catch (e) {
+                    console.error('Error rendering body:', e);
+                    bodyResultsDiv.innerHTML = '<p>Error rendering body content.</p>';
+                }
+            } catch (e) {
+                console.error('Error processing email:', e);
+                headerResultsDiv.innerHTML = '<p>Error analysing headers.</p>';
+                bodyResultsDiv.innerHTML = '<p>Error rendering body content.</p>';
+            }
         }
 
         function clearResults() {
             document.getElementById('headerInput').value = '';
-            document.getElementById('results').innerHTML = '';
+            document.getElementById('headerResults').innerHTML = '';
+            document.getElementById('bodyResults').innerHTML = '';
             transactions = [];
         }
     </script>
