@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Header Analyser</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            display: flex;
+            min-height: 100vh;
+            background-color: #f0f2f5;
+        }
+
+        .sidebar {
+            width: 300px;
+            background-color: #ffffff;
+            padding: 20px;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .sidebar h2 {
+            color: #333;
+            font-size: 1.5em;
+            margin-bottom: 10px;
+        }
+
+        .sidebar textarea {
+            width: 100%;
+            height: 200px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            resize: none;
+            font-size: 14px;
+            background-color: #fafafa;
+        }
+
+        .sidebar textarea:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+        }
+
+        .sidebar button {
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .sidebar button#analyseBtn {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .sidebar button#analyseBtn:hover {
+            background-color: #0056b3;
+        }
+
+        .sidebar button#clearBtn {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        .sidebar button#clearBtn:hover {
+            background-color: #b02a37;
+        }
+
+        .main {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .main h2 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: #ffffff;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background-color: #007bff;
+            color: white;
+        }
+
+        tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                box-shadow: none;
+            }
+
+            .main {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>Email Header Analyser</h2>
+        <textarea id="headerInput" placeholder="Paste email headers here..."></textarea>
+        <button id="analyseBtn">Analyse</button>
+        <button id="clearBtn">Clear</button>
+    </div>
+    <div class="main">
+        <h2>Analysis Results</h2>
+        <div id="results"></div>
+    </div>
+
+    <script>
+        document.getElementById('analyseBtn').addEventListener('click', analyseHeaders);
+        document.getElementById('clearBtn').addEventListener('click', clearResults);
+
+        function analyseHeaders() {
+            const headerInput = document.getElementById('headerInput').value.trim();
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = ''; // Clear previous results
+
+            if (!headerInput) {
+                resultsDiv.innerHTML = '<p>Please enter email headers to analyse.</p>';
+                return;
+            }
+
+            // 1. Unfold headers (Combine lines starting with whitespace)
+            const unfoldedHeaders = headerInput.replace(/\\r?\\n[ \\t]+/g, ' ');
+
+            // 2. Split into individual header lines
+            const lines = unfoldedHeaders.split(/\\r?\\n/);
+
+            // 3. Parse headers into key-value pairs
+            const parsedHeaders = {};
+            let currentHeader = '';
+            lines.forEach(line => {
+                const match = line.match(/^([\\w\\-]+):\\s*(.*)$/); // Use \\w\\- for header names
+                if (match) {
+                    currentHeader = match[1].toLowerCase();
+                    const value = match[2].trim();
+                    // Handle multiple headers with the same name (like Received)
+                    if (parsedHeaders[currentHeader]) {
+                        if (!Array.isArray(parsedHeaders[currentHeader])) {
+                            parsedHeaders[currentHeader] = [parsedHeaders[currentHeader]];
+                        }
+                        parsedHeaders[currentHeader].push(value);
+                    } else {
+                        parsedHeaders[currentHeader] = value;
+                    }
+                } else if (currentHeader && line.trim() !== '' && line.startsWith(' ') || line.startsWith('\\t')) {
+                    // This case should ideally be covered by unfolding, but acts as a fallback
+                     console.warn("Potentially missed folded line:", line);
+                    // if (Array.isArray(parsedHeaders[currentHeader])) {
+                    //      parsedHeaders[currentHeader][parsedHeaders[currentHeader].length - 1] += ' ' + line.trim();
+                    // } else {
+                    //      parsedHeaders[currentHeader] += ' ' + line.trim();
+                    // }
+                } else if (line.trim() !== '') {
+                    // Reset currentHeader if line doesn't match header format or continuation
+                    currentHeader = '';
+                }
+            });
+
+            // 4. Extract key information
+            const keyInfo = [
+                { name: 'Subject', value: parsedHeaders['subject'] },
+                { name: 'From', value: parsedHeaders['from'] },
+                { name: 'To', value: parsedHeaders['to'] },
+                { name: 'Date', value: parsedHeaders['date'] },
+                { name: 'Message-ID', value: parsedHeaders['message-id'] },
+                { name: 'Return-Path', value: parsedHeaders['return-path'] }
+            ].filter(item => item.value); // Filter out headers that weren't found
+
+            // 5. Parse Authentication-Results
+            const authResultsHeader = parsedHeaders['authentication-results'];
+            let authInfo = [];
+            if (authResultsHeader) {
+                // Simple parsing: split by semicolon and show key=value pairs
+                const parts = authResultsHeader.split(';').map(p => p.trim()).filter(p => p);
+                parts.forEach(part => {
+                    const eqIndex = part.indexOf('=');
+                    if (eqIndex > 0) {
+                         authInfo.push({ name: part.substring(0, eqIndex).trim(), value: part.substring(eqIndex + 1).trim() });
+                    } else if (authInfo.length === 0) {
+                         // Assume the first part without '=' is the server identifier
+                         authInfo.push({ name: 'Auth Server', value: part });
+                    } else {
+                         // Treat other parts without '=' as flags or comments
+                         authInfo.push({ name: 'Info', value: part });
+                    }
+                });
+            }
+
+            // 6. Parse Received headers (hops)
+            const receivedHeaders = Array.isArray(parsedHeaders['received']) ? parsedHeaders['received'] : (parsedHeaders['received'] ? [parsedHeaders['received']] : []);
+            const hops = [];
+            receivedHeaders.reverse().forEach((header, index) => { // Reverse to show chronologically
+                // More robust regex, trying to capture hostnames and IPs in parentheses
+                let fromMatch = header.match(/from\s+([\w.-]+)(?:\s+\((?:[^)]*\[)?([\d.:a-fA-F]+)\]?[^)]*\))?/i);
+                let byMatch = header.match(/by\s+([\w.-]+)(?:\s+\((?:[^)]*\[)?([\d.:a-fA-F]+)\]?[^)]*\))?/i);
+                let withMatch = header.match(/with\s+([^\s;]+)/i);
+                let dateMatch = header.match(/;\s*(.*)$/);
+
+                // Prioritize IP address if available in parentheses
+                let fromServer = fromMatch ? (fromMatch[2] || fromMatch[1]) : 'N/A';
+                let byServer = byMatch ? (byMatch[2] || byMatch[1]) : 'N/A';
+
+                hops.push({
+                    hop: index + 1,
+                    from: fromServer,
+                    by: byServer,
+                    with: withMatch ? withMatch[1] : 'N/A',
+                    date: dateMatch ? dateMatch[1].trim() : 'N/A'
+                });
+            });
+
+
+            // 7. Generate HTML Output
+            let outputHtml = '';
+
+            if (keyInfo.length > 0) {
+                outputHtml += '<h3>Key Information</h3>';
+                outputHtml += '<table><thead><tr><th>Header</th><th>Value</th></tr></thead><tbody>';
+                keyInfo.forEach(item => {
+                    // Basic HTML escaping for display
+                    const escapedValue = item.value.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                    outputHtml += `<tr><td>${item.name}</td><td>${escapedValue}</td></tr>`;
+                });
+                outputHtml += '</tbody></table><br>'; // Add space between tables
+            }
+
+            if (authInfo.length > 0) {
+                outputHtml += '<h3>Authentication Results</h3>';
+                outputHtml += '<table><thead><tr><th>Property</th><th>Value</th></tr></thead><tbody>';
+                authInfo.forEach(item => {
+                    const escapedValue = item.value.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                    outputHtml += `<tr><td>${item.name}</td><td>${escapedValue}</td></tr>`;
+                });
+                outputHtml += '</tbody></table><br>'; // Add space between tables
+            }
+
+            if (hops.length > 0) {
+                outputHtml += '<h3>Message Path (Hops)</h3>';
+                outputHtml += '<table><thead><tr><th>Hop</th><th>Receiving Server (by)</th><th>Sending Server (from)</th><th>Protocol (with)</th><th>Timestamp</th></tr></thead><tbody>';
+                hops.forEach(hop => {
+                     const escapedBy = hop.by.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                     const escapedFrom = hop.from.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                     const escapedWith = hop.with.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                     const escapedDate = hop.date.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                     outputHtml += `<tr><td>${hop.hop}</td><td>${escapedBy}</td><td>${escapedFrom}</td><td>${escapedWith}</td><td>${escapedDate}</td></tr>`;
+                });
+                outputHtml += '</tbody></table>';
+            }
+
+             // Display a message if no meaningful data was parsed
+            if (!keyInfo.length && !hops.length && !authInfo.length && headerInput) {
+                 outputHtml = '<p>Could not parse significant header information. Please ensure the full headers are pasted correctly.</p>';
+            } else if (!headerInput) {
+                 // This case is handled at the beginning, but added for safety
+                 outputHtml = '<p>Please enter email headers to analyse.</p>';
+            }
+
+
+            resultsDiv.innerHTML = outputHtml;
+        }
+
+        function clearResults() {
+            document.getElementById('headerInput').value = '';
+            document.getElementById('results').innerHTML = '';
+        }
+    </script>
+</body>
+</html>
