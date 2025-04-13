@@ -1,4 +1,9 @@
-<!DOCTYPE html>
+<script type="text/javascript">
+    var gk_fileData = {};
+    function loadFileData(filename) {
+      return gk_fileData[filename] || "";
+    }
+    </script><!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -183,6 +188,23 @@
             margin-bottom: 0;
         }
 
+        .spf-section {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .spf-section h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .spf-section table {
+            margin-bottom: 0;
+        }
+
         .spf-status {
             padding: 10px;
             margin-bottom: 10px;
@@ -261,12 +283,14 @@
             width: 15%;
         }
 
-        /* Adjust column widths for IOC and Forefront tables */
+        /* Adjust column widths for IOC, SPF, and Forefront tables */
         .ioc-section th:nth-child(1), .ioc-section td:nth-child(1),
+        .spf-section th:nth-child(1), .spf-section td:nth-child(1),
         .forefront-section th:nth-child(1), .forefront-section td:nth-child(1) { /* Type/Field */
             width: 40%;
         }
         .ioc-section th:nth-child(2), .ioc-section td:nth-child(2),
+        .spf-section th:nth-child(2), .spf-section td:nth-child(2),
         .forefront-section th:nth-child(2), .forefront-section td:nth-child(2) { /* Value */
             width: 60%;
         }
@@ -334,6 +358,8 @@
         <div class="resize-handle"></div>
     </div>
     <div class="main">
+        <h2>Email Details</h2>
+        <div id="emailDetails"></div>
         <h2>Header Analysis</h2>
         <div id="headerResults"></div>
         <h3>Body Content</h3>
@@ -380,7 +406,14 @@
         let sortState = { column: 'order', direction: 'asc' };
         let transactions = [];
         let headerFields = {};
-        let lastSpfResult = { status: 'N/A', message: '', details: '' };
+        let lastSpfResult = {
+            status: 'N/A',
+            fields: {
+                Result: '', Receiver: '', ClientIP: '', EnvelopeFrom: '',
+                HELO: '', Mechanism: '', PriorityProtocol: ''
+            },
+            details: ''
+        };
         let lastBclResult = { status: 'N/A', value: '', message: '', details: '' };
         let lastForefrontResult = {
             status: 'N/A',
@@ -510,31 +543,44 @@
         function analyseSPFRecord(headers) {
             if (typeof headers !== 'string') {
                 return {
-                    status: 'FAIL',
-                    message: 'Invalid headers provided',
+                    status: 'N/A',
+                    fields: {
+                        Result: '', Receiver: '', ClientIP: '', EnvelopeFrom: '',
+                        HELO: '', Mechanism: '', PriorityProtocol: ''
+                    },
                     details: 'Headers must be a string'
                 };
             }
-            const spfRegex = /^Received-SPF:.*$/gim;
+            const spfRegex = /^Received-SPF:.*?(?=\n[A-Z-]|$)/gim;
             const spfMatches = headers.match(spfRegex) || [];
             if (spfMatches.length === 0) {
                 return {
-                    status: 'FAIL',
-                    message: 'No SPF record found in headers',
+                    status: 'N/A',
+                    fields: {
+                        Result: '', Receiver: '', ClientIP: '', EnvelopeFrom: '',
+                        HELO: '', Mechanism: '', PriorityProtocol: ''
+                    },
                     details: 'SPF header is missing'
                 };
             }
 
-            const spfHeader = spfMatches[0].replace(/^Received-SPF:\s*/i, '').trim();
-            const isPass = spfHeader.toLowerCase().startsWith('pass');
-            const status = isPass ? 'PASS' : 'FAIL';
-            const message = isPass
-                ? 'SPF check passed successfully'
-                : 'SPF check failed - potential spoofing risk';
+            const spfHeader = spfMatches[0].replace(/^Received-SPF:\s*/i, '');
+            console.log('Captured SPF header:', spfHeader);
+            const fields = {
+                Result: (spfHeader.match(/^(\w+)/i) || [])[1] || '',
+                Receiver: (spfHeader.match(/receiver=([^;]+)/i) || [])[1] || '',
+                ClientIP: (spfHeader.match(/client-ip=([^;]+)/i) || [])[1] || '',
+                EnvelopeFrom: (spfHeader.match(/envelope-from=([^;]+)/i) || 
+                              spfHeader.match(/domain of\s*<?([^;>\s]+)/i) || [])[1] || '',
+                HELO: (spfHeader.match(/helo=([^;]+)/i) || [])[1] || '',
+                Mechanism: (spfHeader.match(/mechanism=([^;]+)/i) || 
+                           spfHeader.match(/problem=([^;]+)/i) || [])[1] || '',
+                PriorityProtocol: (spfHeader.match(/pr=([^;]+)/i) || [])[1] || ''
+            };
 
             return {
-                status,
-                message,
+                status: fields.Result.toLowerCase() === 'pass' ? 'PASS' : 'FAIL',
+                fields,
                 details: spfHeader
             };
         }
@@ -667,12 +713,32 @@
         function renderHeaderFields(headerFields, spfResult, bclResult, forefrontResult) {
             let html = '<div class="header-fields" style="margin-bottom: 20px;">';
             html += `
-                <div class="spf-status ${spfResult.status === 'PASS' ? 'spf-pass' : 'spf-fail'}">
-                    SPF: ${spfResult.status}
-                </div>
-                <div style="margin-bottom: 10px;">
-                    <p><strong>SPF Message:</strong> ${escapeHtml(spfResult.message)}</p>
-                    <p><strong>SPF Details:</strong> ${escapeHtml(spfResult.details)}</p>
+                <div class="spf-section">
+                    ${spfResult.status === 'N/A' ? 
+                        '<div class="spf-status spf-fail">SPF: N/A</div><p>No SPF record found.</p>' : 
+                        `<div class="spf-status ${spfResult.status === 'PASS' ? 'spf-pass' : 'spf-fail'}">
+                            SPF: ${escapeHtml(spfResult.fields.Result || 'N/A')}
+                        </div>
+                        <h3>SPF Analysis</h3>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th data-label="Field">Field</th>
+                                    <th data-label="Value">Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td data-label="Result">Result</td><td data-label="Value">${escapeHtml(spfResult.fields.Result || 'N/A')}</td></tr>
+                                <tr><td data-label="Receiver">Receiver</td><td data-label="Value">${escapeHtml(spfResult.fields.Receiver || 'N/A')}</td></tr>
+                                <tr><td data-label="Client IP">Client IP</td><td data-label="Value">${escapeHtml(spfResult.fields.ClientIP || 'N/A')}</td></tr>
+                                <tr><td data-label="Envelope From">Envelope From</td><td data-label="Value">${escapeHtml(spfResult.fields.EnvelopeFrom || 'N/A')}</td></tr>
+                                <tr><td data-label="HELO">HELO</td><td data-label="Value">${escapeHtml(spfResult.fields.HELO || 'N/A')}</td></tr>
+                                <tr><td data-label="Mechanism">Mechanism</td><td data-label="Value">${escapeHtml(spfResult.fields.Mechanism || 'N/A')}</td></tr>
+                                <tr><td data-label="Priority/Protocol">Priority/Protocol</td><td data-label="Value">${escapeHtml(spfResult.fields.PriorityProtocol || 'N/A')}</td></tr>
+                            </tbody>
+                        </table>`
+                    }
+                    <p style="margin-top: 10px; word-break: break-all;"><strong>Full Details:</strong> ${escapeHtml(spfResult.details)}</p>
                 </div>
             `;
             html += `
@@ -714,6 +780,11 @@
                     <p style="margin-top: 10px;"><strong>Full Details:</strong> ${escapeHtml(forefrontResult.details)}</p>
                 </div>
             `;
+            return html;
+        }
+
+        function renderEmailDetails(headerFields) {
+            let html = '<div class="email-details" style="margin-bottom: 20px;">';
             html += '<h3>Email Details</h3>';
             html += '<p><strong>From:</strong> ' + (headerFields.from ? escapeHtml(headerFields.from) : 'Not provided') + '</p>';
             html += '<p><strong>To:</strong> ' + (headerFields.to.length ? escapeHtml(headerFields.to.join(', ')) : 'Not provided') + '</p>';
@@ -726,10 +797,13 @@
 
         function renderTable(spfResult, bclResult, forefrontResult) {
             const headerResultsDiv = document.getElementById('headerResults');
-            if (!headerResultsDiv) {
-                console.error('Header results div not found');
+            const emailDetailsDiv = document.getElementById('emailDetails');
+            if (!headerResultsDiv || !emailDetailsDiv) {
+                console.error('Header results or email details div not found');
                 return;
             }
+
+            emailDetailsDiv.innerHTML = renderEmailDetails(headerFields);
 
             let tableHtml = renderHeaderFields(headerFields, spfResult, bclResult, forefrontResult);
             if (transactions.length === 0) {
@@ -942,16 +1016,25 @@
         function clearResults() {
             const headerInput = document.getElementById('headerInput');
             const headerResultsDiv = document.getElementById('headerResults');
+            const emailDetailsDiv = document.getElementById('emailDetails');
             const bodyResultsDiv = document.getElementById('bodyResults');
             const iocResultsDiv = document.getElementById('iocResults');
 
             if (headerInput) headerInput.value = '';
             if (headerResultsDiv) headerResultsDiv.innerHTML = '';
+            if (emailDetailsDiv) emailDetailsDiv.innerHTML = '';
             if (bodyResultsDiv) bodyResultsDiv.innerHTML = '';
             if (iocResultsDiv) iocResultsDiv.innerHTML = '';
             transactions = [];
             headerFields = {};
-            lastSpfResult = { status: 'N/A', message: '', details: '' };
+            lastSpfResult = {
+                status: 'N/A',
+                fields: {
+                    Result: '', Receiver: '', ClientIP: '', EnvelopeFrom: '',
+                    HELO: '', Mechanism: '', PriorityProtocol: ''
+                },
+                details: ''
+            };
             lastBclResult = { status: 'N/A', value: '', message: '', details: '' };
             lastForefrontResult = {
                 status: 'N/A',
@@ -966,16 +1049,18 @@
         function analyseEmail() {
             const headerInput = document.getElementById('headerInput');
             const headerResultsDiv = document.getElementById('headerResults');
+            const emailDetailsDiv = document.getElementById('emailDetails');
             const bodyResultsDiv = document.getElementById('bodyResults');
             const iocResultsDiv = document.getElementById('iocResults');
 
-            if (!headerInput || !headerResultsDiv || !bodyResultsDiv || !iocResultsDiv) {
+            if (!headerInput || !headerResultsDiv || !emailDetailsDiv || !bodyResultsDiv || !iocResultsDiv) {
                 console.error('Required DOM elements missing');
                 return;
             }
 
             const input = headerInput.value.trim();
             if (!input) {
+                emailDetailsDiv.innerHTML = '<p>Please enter email headers to analyse.</p>';
                 headerResultsDiv.innerHTML = '<p>Please enter email headers to analyse.</p>';
                 bodyResultsDiv.innerHTML = '<p>No body content provided.</p>';
                 iocResultsDiv.innerHTML = '<p>No IOCs found.</p>';
@@ -1252,6 +1337,7 @@
                 }
             } catch (e) {
                 console.error('Error processing email:', e);
+                emailDetailsDiv.innerHTML = '<p>Error analysing headers.</p>';
                 headerResultsDiv.innerHTML = '<p>Error analysing headers.</p>';
                 bodyResultsDiv.innerHTML = '<p>Error rendering body content.</p>';
                 iocResultsDiv.innerHTML = '<p>Error processing IOCs.</p>';
