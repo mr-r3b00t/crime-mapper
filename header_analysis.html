@@ -13,6 +13,7 @@
         }
 
         body {
+            font-size: 14px;
             display: flex;
             min-height: 100vh;
             background-color: #f0f2f5;
@@ -37,7 +38,7 @@
 
         .sidebar h2 {
             color: #333;
-            font-size: 1.5em;
+            font-size: 1.3em;
             margin-bottom: 10px;
         }
 
@@ -62,7 +63,7 @@
             padding: 10px;
             border: none;
             border-radius: 5px;
-            font-size: 16px;
+            font-size: 14px;
             cursor: pointer;
             transition: background-color 0.3s;
         }
@@ -117,6 +118,7 @@
 
         th, td {
             padding: 12px;
+            font-size: 13px;
             text-align: left;
             border-bottom: 1px solid #ddd;
         }
@@ -250,13 +252,13 @@
             }
             th::before {
                 content: attr(data-label);
-                font-weight: bold;
+                font-weight: normal;
                 display: inline-block;
                 width: 30%;
             }
             td::before {
                 content: attr(data-label);
-                font-weight: bold;
+                font-weight: normal;
                 display: inline-block;
                 width: 30%;
             }
@@ -270,21 +272,10 @@
             <textarea id="headerInput" placeholder="Paste email headers and body here..."></textarea>
             <button id="analyseBtn">Analyse</button>
             <button id="clearBtn">Clear</button>
-            <!-- Buy Me a Coffee Button -->
-            <div id="buy-me-a-coffee-container" style="text-align: center; padding: 10px; margin-top: auto;">
-                <script type="text/javascript" src="https://cdnjs.buymeacoffee.com/1.0.0/button.prod.min.js" 
-                    data-name="bmc-button" 
-                    data-slug="mrr3b00t" 
-                    data-color="#FFDD00" 
-                    data-emoji=""  
-                    data-font="Cookie" 
-                    data-text="Buy me a coffee" 
-                    data-outline-color="#000000" 
-                    data-font-color="#000000" 
-                    data-coffee-color="#ffffff">
-                </script>
+            <div id="buy-me-a-coffee-container" style="text-align: center; padding: 10px;">
+                <script type="text/javascript" src="https://cdnjs.buymeacoffee.com/1.0.0/button.prod.min.js" data-name="bmc-button" data-slug="mrr3b00t" data-color="#FFDD00" data-emoji=""  data-font="Cookie" data-text="Buy me a coffee" data-outline-color="#000000" data-font-color="#000000" data-coffee-color="#ffffff" ></script>
             </div>
-            <footer style="text-align: center; font-size: 10px; color: #6b7280; padding-top: 10px;"> 
+            <footer style="text-align: center; font-size: 10px; color: #6b7280; padding-top: 10px;">
                 <p>© Xservus Limited</p>
             </footer>
         </div>
@@ -457,14 +448,14 @@
             renderTable();
         }
 
-        function processIOCs(text) {
+        function processIOCs(text, bodyParts) {
             // Decode quoted-printable text
             const decodedText = decodeQuotedPrintable(text);
 
             // Regex patterns
             const urlRegex = /https?:\/\/[^\s/$.?#].[^\s]*/gi;
-            const domainRegex = /(?:[a-zA-Z0-9-_]+\.)*[a-zA-Z0-9-_]+\.[a-zA-Z]{2,}(?<!\.(png|jpg|jpeg|gif|bmp|tif|tiff|pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv|zip|rar|7z|exe|dll|sys|bat|sh|mp3|mp4|avi|mkv|mov|wmv|flv|wav|html|css|js|php|asp|aspx|jsp|sql|db|bak|log|tar|gz|tgz))\.?/gi;
-            const ipRegex = /(?:\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b|\b[0-9a-fA-F]{1,4}(?::[0-9a-fA-F]{1,4}){1,7}\b|\b[0-9a-fA-F]{1,4}::[0-9a-fA-F]{1,4}\b)(?:[\]\)])?/g;
+            const domainRegex = /(?:[a-zA-Z0-9-_]+\.)+[a-zA-Z0-9-_]+\.[a-zA-Z]{2,}/gi;
+            const ipRegex = /(?:\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b|\b[0-9a-fA-F]{1,4}(?::[0-9a-fA-F]{1,4}){1,7}\b|\b[0-9a-fA-F]{1,4}::[0-9a-fA-F]{1,4}\b)(?:[\[\]\(\)])?/gi;
             const subnetRegex = /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}\b/g;
             const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
             const hashRegex = {
@@ -487,14 +478,23 @@
             ]);
 
             // Extract matches
-            const urlMatches = new Set(decodedText.match(urlRegex) || []);
-            const ipMatches = new Set(decodedText.match(ipRegex) || []);
-            const subnetMatches = new Set(decodedText.match(subnetRegex) || []);
+            const urlMatches = new Set();
+            const ipMatches = new Set();
+            const subnetMatches = new Set();
             const domainMatches = new Set();
-            const emailMatches = new Set(decodedText.match(emailRegex) || []);
+            const emailMatches = new Set();
             const hashMatches = new Set();
 
-            // Domains (filter out IPs, subnets, file extensions)
+            // Process headers and body separately
+            const urlMatchesText = decodedText.match(urlRegex) || [];
+            urlMatchesText.forEach(url => urlMatches.add(url));
+
+            const ipMatchesText = decodedText.match(ipRegex) || [];
+            ipMatchesText.forEach(ip => ipMatches.add(ip.replace(/[\[\]\(\)]/g, '')));
+
+            const subnetMatchesText = decodedText.match(subnetRegex) || [];
+            subnetMatchesText.forEach(subnet => subnetMatches.add(subnet));
+
             const potentialDomains = decodedText.match(domainRegex) || [];
             potentialDomains.forEach(domain => {
                 const normalizedDomain = domain.replace(/\.$/, '');
@@ -504,7 +504,9 @@
                 }
             });
 
-            // Hashes (filter out message IDs)
+            const emailMatchesText = decodedText.match(emailRegex) || [];
+            emailMatchesText.forEach(email => emailMatches.add(email));
+
             const hashCandidates = decodedText.match(hashPattern) || [];
             const messageIds = decodedText.match(messageIdRegex) || [];
             hashCandidates.forEach(hash => {
@@ -519,10 +521,49 @@
                 }
             });
 
+            // Process body parts for additional IOCs
+            bodyParts.forEach(part => {
+                let content = part.content;
+                if (part.encoding === 'quoted-printable') {
+                    content = decodeQuotedPrintable(content);
+                }
+                // URLs
+                const partUrls = content.match(urlRegex) || [];
+                partUrls.forEach(url => urlMatches.add(url));
+
+                // Domains
+                const partDomains = content.match(domainRegex) || [];
+                partDomains.forEach(domain => {
+                    const normalizedDomain = domain.replace(/\.$/, '');
+                    const extension = normalizedDomain.toLowerCase().split('.').pop();
+                    if (!ipMatches.has(normalizedDomain) && !subnetMatches.has(normalizedDomain) && !commonFileExtensions.has(extension)) {
+                        domainMatches.add(normalizedDomain);
+                    }
+                });
+
+                // Emails
+                const partEmails = content.match(emailRegex) || [];
+                partEmails.forEach(email => emailMatches.add(email));
+
+                // Hashes
+                const partHashes = content.match(hashPattern) || [];
+                partHashes.forEach(hash => {
+                    if (!messageIds.includes(hash)) {
+                        if (hashRegex.sha256.test(hash)) {
+                            hashMatches.add(JSON.stringify({ value: hash, type: 'SHA256' }));
+                        } else if (hashRegex.md5.test(hash)) {
+                            hashMatches.add(JSON.stringify({ value: hash, type: 'MD5' }));
+                        } else if (hashRegex.sha1.test(hash)) {
+                            hashMatches.add(JSON.stringify({ value: hash, type: 'SHA1' }));
+                        }
+                    }
+                });
+            });
+
             // Compile IOCs
             const iocs = [];
             urlMatches.forEach(url => iocs.push({ type: 'URL', value: url }));
-            ipMatches.forEach(ip => iocs.push({ type: 'IP', value: ip.replace(/[\]\)]$/, '') }));
+            ipMatches.forEach(ip => iocs.push({ type: 'IP', value: ip }));
             subnetMatches.forEach(subnet => iocs.push({ type: 'Subnet', value: subnet }));
             domainMatches.forEach(domain => iocs.push({ type: 'Domain', value: domain }));
             emailMatches.forEach(email => iocs.push({ type: 'Email', value: email }));
@@ -530,6 +571,9 @@
                 const { value, type } = JSON.parse(hash);
                 iocs.push({ type: `Hash (${type})`, value });
             });
+
+            // Sort IOCs by type
+            iocs.sort((a, b) => a.type.localeCompare(b.type));
 
             return iocs;
         }
@@ -591,6 +635,7 @@
                 const fromRegex = /^From:.*?(?=\n|$)/gim;
                 const toRegex = /(?:To|Cc|Bcc):.*?(?=\n[A-Z]|\n*$)/gis;
                 const contentTypeRegex = /Content-Type:.*?(?=\n[A-Z]|\n*$)/gis;
+                const contentEncodingRegex = /Content-Transfer-Encoding:.*?(?=\n[A-Z]|\n*$)/gis;
                 const receivedDateRegex = /;?\s*(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s*0?\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}\s+\d{2}:\d{2}:\d{2}\s*[-+]\d{4}(?:\s*\([A-Za-z]+\))?/i;
                 const serverRegex = /by\s+([a-zA-Z0-9:.-]+)/i;
                 const fromServerRegex = /from\s+([a-zA-Z0-9:.-]+)/i;
@@ -681,11 +726,13 @@
 
                 // Process body
                 let bodyHtml = '';
+                const bodyParts = [];
                 try {
                     if (!body) {
                         bodyHtml = '<p>No body content provided.</p>';
                     } else {
                         const contentTypeMatch = headers.match(contentTypeRegex) || [];
+                        const contentEncodingMatch = headers.match(contentEncodingRegex) || [];
                         let boundary = '';
                         for (let match of contentTypeMatch) {
                             const boundaryMatch = match.match(boundaryRegex);
@@ -700,12 +747,15 @@
                             bodyHtml = parts.map(part => {
                                 const lines = part.trim().split('\n');
                                 let contentType = '';
+                                let encoding = '7bit';
                                 let content = '';
                                 let inContent = false;
 
                                 for (let line of lines) {
                                     if (!inContent && line.match(/^Content-Type:/i)) {
                                         contentType = line.replace(/^Content-Type:\s*/i, '').trim();
+                                    } else if (!inContent && line.match(/^Content-Transfer-Encoding:/i)) {
+                                        encoding = line.replace(/^Content-Transfer-Encoding:\s*/i, '').trim().toLowerCase();
                                     } else if (!inContent && line.trim() === '') {
                                         inContent = true;
                                     } else if (inContent) {
@@ -714,6 +764,8 @@
                                 }
 
                                 content = content.trim();
+                                bodyParts.push({ content, encoding });
+
                                 if (contentType.includes('text/plain')) {
                                     return `<h4>Plain Text</h4><pre>${escapeHtml(content)}</pre>`;
                                 } else if (contentType.includes('text/html')) {
@@ -723,6 +775,7 @@
                             }).filter(part => part).join('');
                         } else {
                             bodyHtml = `<h4>Plain Text</h4><pre>${escapeHtml(body)}</pre>`;
+                            bodyParts.push({ content: body, encoding: '7bit' });
                         }
                     }
                     bodyResultsDiv.innerHTML = bodyHtml;
@@ -733,7 +786,7 @@
 
                 // Process IOCs
                 try {
-                    const iocs = processIOCs(headerInput);
+                    const iocs = processIOCs(headerInput, bodyParts);
                     renderIOCs(iocs);
                 } catch (e) {
                     console.error('Error processing IOCs:', e);
