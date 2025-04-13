@@ -154,6 +154,7 @@
             padding: 20px;
             border-radius: 5px;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
         }
 
         .body-section pre {
@@ -169,7 +170,18 @@
             border-radius: 5px;
         }
 
-        /* Adjust column widths for nine columns */
+        .ioc-section {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .ioc-section table {
+            margin-bottom: 0;
+        }
+
+        /* Adjust column widths for header table */
         th:nth-child(1), td:nth-child(1) { /* Type */
             width: 8%;
         }
@@ -196,6 +208,14 @@
         }
         th:nth-child(9), td:nth-child(9) { /* Details */
             width: 14%;
+        }
+
+        /* Adjust column widths for IOC table */
+        .ioc-section th:nth-child(1), .ioc-section td:nth-child(1) { /* Type */
+            width: 20%;
+        }
+        .ioc-section th:nth-child(2), .ioc-section td:nth-child(2) { /* Value */
+            width: 80%;
         }
 
         @media (max-width: 768px) {
@@ -258,6 +278,8 @@
         <div id="headerResults"></div>
         <h3>Body Content</h3>
         <div id="bodyResults" class="body-section"></div>
+        <h2>IOCs</h2>
+        <div id="iocResults" class="ioc-section"></div>
     </div>
 
     <script>
@@ -311,7 +333,6 @@
                 const div = document.createElement('div');
                 div.innerHTML = html;
 
-                // Remove dangerous elements and attributes
                 ['script', 'iframe'].forEach(tag => {
                     const elements = div.getElementsByTagName(tag);
                     while (elements.length) {
@@ -338,19 +359,22 @@
             }
         }
 
+        function decodeQuotedPrintable(text) {
+            return text.replace(/=([0-9A-F]{2})/g, (match, hex) => String.fromCharCode(parseInt(hex, 16)))
+                       .replace(/=\r?\n/g, '');
+        }
+
         function sortTransactions(column, direction) {
             transactions.sort((a, b) => {
                 let valA = a[column] || '';
                 let valB = b[column] || '';
 
-                // Handle Date column
                 if (column === 'date') {
                     valA = valA ? new Date(valA) : new Date(0);
                     valB = valB ? new Date(valB) : new Date(0);
                     return direction === 'asc' ? valA - valB : valB - valA;
                 }
 
-                // Handle string columns
                 if (!valA && !valB) return 0;
                 if (!valA) return 1;
                 if (!valB) return -1;
@@ -416,14 +440,124 @@
             renderTable();
         }
 
+        function processIOCs(text) {
+            // Decode quoted-printable text
+            const decodedText = decodeQuotedPrintable(text);
+
+            // Regex patterns
+            const urlRegex = /https?:\/\/[^\s/$.?#].[^\s]*/gi;
+            const domainRegex = /(?:[a-zA-Z0-9-_]+\.)*[a-zA-Z0-9-_]+\.[a-zA-Z]{2,}(?<!\.(png|jpg|jpeg|gif|bmp|tif|tiff|pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv|zip|rar|7z|exe|dll|sys|bat|sh|mp3|mp4|avi|mkv|mov|wmv|flv|wav|html|css|js|php|asp|aspx|jsp|sql|db|bak|log|tar|gz|tgz))\.?/gi;
+            const ipRegex = /(?:\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b|\b[0-9a-fA-F]{1,4}(?::[0-9a-fA-F]{1,4}){1,7}\b|\b[0-9a-fA-F]{1,4}::[0-9a-fA-F]{1,4}\b)(?:[\]\)])?/g;
+            const subnetRegex = /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}\b/g;
+            const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+            const hashRegex = {
+                sha256: /^[0-9a-fA-F]{64}$/,
+                md5: /^[0-9a-fA-F]{32}$/,
+                sha1: /^[0-9a-fA-F]{40}$/
+            };
+            const hashPattern = /\b[0-9a-fA-F]{32,64}\b/g;
+            const timestampRegex = /\b\d{2}:\d{2}:\d{2}\b/g;
+            const messageIdRegex = /\b[a-zA-Z0-9-]+\.\d+\.\d+\.\d+\b/g;
+
+            // Common file extensions to filter out
+            const commonFileExtensions = new Set([
+                'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tif', 'tiff', 'pdf',
+                'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv',
+                'zip', 'rar', '7z', 'exe', 'dll', 'sys', 'bat', 'sh',
+                'mp3', 'mp4', 'avi', 'mkv', 'mov', 'wmv', 'flv', 'wav',
+                'html', 'css', 'js', 'php', 'asp', 'aspx', 'jsp', 'sql',
+                'db', 'bak', 'log', 'tar', 'gz', 'tgz'
+            ]);
+
+            // Extract matches
+            const urlMatches = new Set(decodedText.match(urlRegex) || []);
+            const ipMatches = new Set(decodedText.match(ipRegex) || []);
+            const subnetMatches = new Set(decodedText.match(subnetRegex) || []);
+            const domainMatches = new Set();
+            const emailMatches = new Set(decodedText.match(emailRegex) || []);
+            const hashMatches = new Set();
+
+            // Domains (filter out IPs, subnets, file extensions)
+            const potentialDomains = decodedText.match(domainRegex) || [];
+            potentialDomains.forEach(domain => {
+                const normalizedDomain = domain.replace(/\.$/, '');
+                const extension = normalizedDomain.toLowerCase().split('.').pop();
+                if (!ipMatches.has(normalizedDomain) && !subnetMatches.has(normalizedDomain) && !commonFileExtensions.has(extension)) {
+                    domainMatches.add(normalizedDomain);
+                }
+            });
+
+            // Hashes (filter out message IDs)
+            const hashCandidates = decodedText.match(hashPattern) || [];
+            const messageIds = decodedText.match(messageIdRegex) || [];
+            hashCandidates.forEach(hash => {
+                if (!messageIds.includes(hash)) {
+                    if (hashRegex.sha256.test(hash)) {
+                        hashMatches.add(JSON.stringify({ value: hash, type: 'SHA256' }));
+                    } else if (hashRegex.md5.test(hash)) {
+                        hashMatches.add(JSON.stringify({ value: hash, type: 'MD5' }));
+                    } else if (hashRegex.sha1.test(hash)) {
+                        hashMatches.add(JSON.stringify({ value: hash, type: 'SHA1' }));
+                    }
+                }
+            });
+
+            // Compile IOCs
+            const iocs = [];
+            urlMatches.forEach(url => iocs.push({ type: 'URL', value: url }));
+            ipMatches.forEach(ip => iocs.push({ type: 'IP', value: ip.replace(/[\]\)]$/, '') }));
+            subnetMatches.forEach(subnet => iocs.push({ type: 'Subnet', value: subnet }));
+            domainMatches.forEach(domain => iocs.push({ type: 'Domain', value: domain }));
+            emailMatches.forEach(email => iocs.push({ type: 'Email', value: email }));
+            hashMatches.forEach(hash => {
+                const { value, type } = JSON.parse(hash);
+                iocs.push({ type: `Hash (${type})`, value });
+            });
+
+            return iocs;
+        }
+
+        function renderIOCs(iocs) {
+            const iocResultsDiv = document.getElementById('iocResults');
+            if (iocs.length === 0) {
+                iocResultsDiv.innerHTML = '<p>No IOCs found.</p>';
+                return;
+            }
+
+            let tableHtml = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th data-label="Type">Type</th>
+                            <th data-label="Value">Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            iocs.forEach(ioc => {
+                tableHtml += `
+                    <tr>
+                        <td data-label="Type">${escapeHtml(ioc.type)}</td>
+                        <td data-label="Value">${escapeHtml(ioc.value)}</td>
+                    </tr>
+                `;
+            });
+
+            tableHtml += '</tbody></table>';
+            iocResultsDiv.innerHTML = tableHtml;
+        }
+
         function analyseEmail() {
             const headerInput = document.getElementById('headerInput').value.trim();
             const headerResultsDiv = document.getElementById('headerResults');
             const bodyResultsDiv = document.getElementById('bodyResults');
+            const iocResultsDiv = document.getElementById('iocResults');
 
             if (!headerInput) {
                 headerResultsDiv.innerHTML = '<p>Please enter email headers to analyse.</p>';
                 bodyResultsDiv.innerHTML = '<p>No body content provided.</p>';
+                iocResultsDiv.innerHTML = '<p>No IOCs found.</p>';
                 return;
             }
 
@@ -579,10 +713,20 @@
                     console.error('Error rendering body:', e);
                     bodyResultsDiv.innerHTML = '<p>Error rendering body content.</p>';
                 }
+
+                // Process IOCs
+                try {
+                    const iocs = processIOCs(headerInput);
+                    renderIOCs(iocs);
+                } catch (e) {
+                    console.error('Error processing IOCs:', e);
+                    iocResultsDiv.innerHTML = '<p>Error processing IOCs.</p>';
+                }
             } catch (e) {
                 console.error('Error processing email:', e);
                 headerResultsDiv.innerHTML = '<p>Error analysing headers.</p>';
                 bodyResultsDiv.innerHTML = '<p>Error rendering body content.</p>';
+                iocResultsDiv.innerHTML = '<p>Error processing IOCs.</p>';
             }
         }
 
@@ -590,6 +734,7 @@
             document.getElementById('headerInput').value = '';
             document.getElementById('headerResults').innerHTML = '';
             document.getElementById('bodyResults').innerHTML = '';
+            document.getElementById('iocResults').innerHTML = '';
             transactions = [];
         }
     </script>
