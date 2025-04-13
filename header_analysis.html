@@ -185,7 +185,7 @@
 
         .spf-status {
             padding: 10px;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
             border-radius: 5px;
             color: white;
             font-weight: bold;
@@ -198,6 +198,44 @@
 
         .spf-fail {
             background-color: #dc3545;
+        }
+
+        .bcl-status {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            color: white;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .bcl-low {
+            background-color: #28a745;
+        }
+
+        .bcl-medium {
+            background-color: #ffc107;
+        }
+
+        .bcl-high {
+            background-color: #dc3545;
+        }
+
+        .forefront-section {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .forefront-section h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .forefront-section table {
+            margin-bottom: 0;
         }
 
         /* Adjust column widths for header table */
@@ -223,12 +261,14 @@
             width: 15%;
         }
 
-        /* Adjust column widths for IOC table */
-        .ioc-section th:nth-child(1), .ioc-section td:nth-child(1) { /* Type */
-            width: 20%;
+        /* Adjust column widths for IOC and Forefront tables */
+        .ioc-section th:nth-child(1), .ioc-section td:nth-child(1),
+        .forefront-section th:nth-child(1), .forefront-section td:nth-child(1) { /* Type/Field */
+            width: 40%;
         }
-        .ioc-section th:nth-child(2), .ioc-section td:nth-child(2) { /* Value */
-            width: 80%;
+        .ioc-section th:nth-child(2), .ioc-section td:nth-child(2),
+        .forefront-section th:nth-child(2), .forefront-section td:nth-child(2) { /* Value */
+            width: 60%;
         }
 
         @media (max-width: 768px) {
@@ -341,6 +381,15 @@
         let transactions = [];
         let headerFields = {};
         let lastSpfResult = { status: 'N/A', message: '', details: '' };
+        let lastBclResult = { status: 'N/A', value: '', message: '', details: '' };
+        let lastForefrontResult = {
+            status: 'N/A',
+            fields: {
+                CIP: '', CTRY: '', LANG: '', SCL: '', SRV: '', IPV: '',
+                SFV: '', H: '', PTR: '', CAT: '', SFS: '', DIR: ''
+            },
+            details: ''
+        };
 
         function escapeHtml(text) {
             if (typeof text !== 'string') return '';
@@ -354,7 +403,6 @@
                 const div = document.createElement('div');
                 div.innerHTML = html;
 
-                // Remove dangerous tags
                 ['script', 'iframe', 'object', 'embed'].forEach(tag => {
                     const elements = div.getElementsByTagName(tag);
                     while (elements.length) {
@@ -362,7 +410,6 @@
                     }
                 });
 
-                // Sanitize attributes
                 const elements = div.querySelectorAll('*');
                 elements.forEach(el => {
                     Array.from(el.attributes).forEach(attr => {
@@ -413,7 +460,7 @@
             let cleanedDate = dateStr.replace(/^;?\s*|\s*;?\s*$/g, '').replace(/\s+/g, ' ').trim();
             console.log('Parsing date:', cleanedDate);
 
-            const parts = cleanedDate.match(/(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s*)?(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})\s+(\d{2}:\d{2}:\d{2})\s*([+-]\d{4}|GMT)?/i);
+            const parts = cleanedDate.match(/(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s*)?(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})\s+(\d{2}:\d{2}:\d{2})\s*(?:(?:[+-]\d{4}|GMT|UTC|Z|\w+)?)?/i);
             if (!parts) {
                 console.log('Date regex failed for:', cleanedDate);
                 return '';
@@ -435,9 +482,14 @@
                 return '';
             }
 
-            tz = tz || '+0000';
-            if (tz.toUpperCase() === 'GMT') tz = '+0000';
-            tz = tz.replace(/([+-]\d{2})(\d{2})/, '$1:$2');
+            tz = tz ? tz.trim() : '+0000';
+            if (['GMT', 'UTC', 'Z'].includes(tz.toUpperCase())) {
+                tz = '+0000';
+            } else if (!tz.match(/^[+-]\d{4}$/)) {
+                tz = '+0000';
+            } else {
+                tz = tz.replace(/([+-]\d{2})(\d{2})/, '$1:$2');
+            }
 
             const dateString = `${year}-${month}-${day}T${time}${tz}`;
             console.log('Constructed date:', dateString);
@@ -487,6 +539,105 @@
             };
         }
 
+        function analyseBCLRecord(headers) {
+            if (typeof headers !== 'string') {
+                return {
+                    status: 'N/A',
+                    value: '',
+                    message: 'Invalid headers provided',
+                    details: 'Headers must be a string'
+                };
+            }
+            const bclRegex = /^X-Microsoft-Antispam:.*$/gim;
+            const bclMatches = headers.match(bclRegex) || [];
+            if (bclMatches.length === 0) {
+                return {
+                    status: 'N/A',
+                    value: '',
+                    message: 'No X-Microsoft-Antispam header found',
+                    details: 'X-Microsoft-Antispam header is missing'
+                };
+            }
+
+            const bclHeader = bclMatches[0].replace(/^X-Microsoft-Antispam:\s*/i, '').trim();
+            const bclValueMatch = bclHeader.match(/BCL:(\d+)/i);
+            if (!bclValueMatch) {
+                return {
+                    status: 'N/A',
+                    value: '',
+                    message: 'BCL value not found in header',
+                    details: bclHeader
+                };
+            }
+
+            const bclValue = parseInt(bclValueMatch[1], 10);
+            let status, message;
+            if (bclValue <= 3) {
+                status = 'LOW';
+                message = 'Low bulk complaint level - email is unlikely to be spam';
+            } else if (bclValue <= 6) {
+                status = 'MEDIUM';
+                message = 'Medium bulk complaint level - email may be spam';
+            } else {
+                status = 'HIGH';
+                message = 'High bulk complaint level - email is likely spam';
+            }
+
+            return {
+                status,
+                value: bclValue.toString(),
+                message,
+                details: bclHeader
+            };
+        }
+
+        function analyseForefrontAntispam(headers) {
+            if (typeof headers !== 'string') {
+                return {
+                    status: 'N/A',
+                    fields: {
+                        CIP: '', CTRY: '', LANG: '', SCL: '', SRV: '', IPV: '',
+                        SFV: '', H: '', PTR: '', CAT: '', SFS: '', DIR: ''
+                    },
+                    details: 'Headers must be a string'
+                };
+            }
+            const forefrontRegex = /^X-Forefront-Antispam-Report:.*$/gim;
+            const forefrontMatches = headers.match(forefrontRegex) || [];
+            if (forefrontMatches.length === 0) {
+                return {
+                    status: 'N/A',
+                    fields: {
+                        CIP: '', CTRY: '', LANG: '', SCL: '', SRV: '', IPV: '',
+                        SFV: '', H: '', PTR: '', CAT: '', SFS: '', DIR: ''
+                    },
+                    details: 'X-Forefront-Antispam-Report header is missing'
+                };
+            }
+
+            const forefrontHeader = forefrontMatches[0].replace(/^X-Forefront-Antispam-Report:\s*/i, '').trim();
+            const fields = {
+                CIP: (forefrontHeader.match(/CIP:([^;]+)/i) || [])[1] || '',
+                CTRY: (forefrontHeader.match(/CTRY:([^;]+)/i) || [])[1] || '',
+                LANG: (forefrontHeader.match(/LANG:([^;]+)/i) || [])[1] || '',
+                SCL: (forefrontHeader.match(/SCL:([^;]+)/i) || [])[1] || '',
+                SRV: (forefrontHeader.match(/SRV:([^;]+)/i) || [])[1] || '',
+                IPV: (forefrontHeader.match(/IPV:([^;]+)/i) || [])[1] || '',
+                SFV: (forefrontHeader.match(/SFV:([^;]+)/i) || [])[1] || '',
+                H: (forefrontHeader.match(/H:([^;]+)/i) || [])[1] || '',
+                PTR: (forefrontHeader.match(/PTR:([^;]+)/i) || [])[1] || '',
+                CAT: (forefrontHeader.match(/CAT:([^;]+)/i) || [])[1] || '',
+                SFS: (forefrontHeader.match(/SFS:([^;]+)/i) || [])[1] || '',
+                DIR: (forefrontHeader.match(/DIR:([^;]+)/i) || [])[1] || ''
+            };
+
+            return {
+                status: 'VALID',
+                fields,
+                details: forefrontHeader
+            };
+        }
+
         function sortTransactions(column, direction) {
             transactions.sort((a, b) => {
                 let valA = a[column] || '';
@@ -513,15 +664,54 @@
             });
         }
 
-        function renderHeaderFields(headerFields, spfResult) {
+        function renderHeaderFields(headerFields, spfResult, bclResult, forefrontResult) {
             let html = '<div class="header-fields" style="margin-bottom: 20px;">';
             html += `
                 <div class="spf-status ${spfResult.status === 'PASS' ? 'spf-pass' : 'spf-fail'}">
                     SPF: ${spfResult.status}
                 </div>
-                <div style="margin-bottom: 20px;">
+                <div style="margin-bottom: 10px;">
                     <p><strong>SPF Message:</strong> ${escapeHtml(spfResult.message)}</p>
                     <p><strong>SPF Details:</strong> ${escapeHtml(spfResult.details)}</p>
+                </div>
+            `;
+            html += `
+                <div class="bcl-status ${bclResult.status === 'LOW' ? 'bcl-low' : bclResult.status === 'MEDIUM' ? 'bcl-medium' : 'bcl-high'}">
+                    X-Microsoft-Antispam Bulk Complaint Level = ${escapeHtml(bclResult.value || 'N/A')}
+                </div>
+                <div style="margin-bottom: 10px;">
+                    <p><strong>BCL Message:</strong> ${escapeHtml(bclResult.message)}</p>
+                    <p><strong>BCL Details:</strong> ${escapeHtml(bclResult.details)}</p>
+                </div>
+            `;
+            html += `
+                <div class="forefront-section">
+                    <h3>X-Forefront-Antispam-Report Analysis</h3>
+                    ${forefrontResult.status === 'N/A' ? 
+                        '<p>No X-Forefront-Antispam-Report header found.</p>' : 
+                        `<table>
+                            <thead>
+                                <tr>
+                                    <th data-label="Field">Field</th>
+                                    <th data-label="Value">Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td data-label="Language">Language</td><td data-label="Value">${escapeHtml(forefrontResult.fields.LANG || 'N/A')}</td></tr>
+                                <tr><td data-label="Spam Confidence Level">Spam Confidence Level</td><td data-label="Value">${escapeHtml(forefrontResult.fields.SCL || 'N/A')}</td></tr>
+                                <tr><td data-label="Spam Filtering Verdict">Spam Filtering Verdict</td><td data-label="Value">${escapeHtml(forefrontResult.fields.SFV || 'N/A')}</td></tr>
+                                <tr><td data-label="IP Filter Verdict">IP Filter Verdict</td><td data-label="Value">${escapeHtml(forefrontResult.fields.IPV || 'N/A')}</td></tr>
+                                <tr><td data-label="HELO/EHLO">HELO/EHLO</td><td data-label="Value">${escapeHtml(forefrontResult.fields.H || 'N/A')}</td></tr>
+                                <tr><td data-label="PTR Record">PTR Record</td><td data-label="Value">${escapeHtml(forefrontResult.fields.PTR || 'N/A')}</td></tr>
+                                <tr><td data-label="Connecting IP Address">Connecting IP Address</td><td data-label="Value">${escapeHtml(forefrontResult.fields.CIP || 'N/A')}</td></tr>
+                                <tr><td data-label="Protection Policy Category">Protection Policy Category</td><td data-label="Value">${escapeHtml(forefrontResult.fields.CAT || 'N/A')}</td></tr>
+                                <tr><td data-label="Spam Rules">Spam Rules</td><td data-label="Value">${escapeHtml(forefrontResult.fields.SFS || 'N/A')}</td></tr>
+                                <tr><td data-label="Source Header">Source Header</td><td data-label="Value">${escapeHtml(forefrontResult.fields.SRV || 'N/A')}</td></tr>
+                                <tr><td data-label="Direction">Direction</td><td data-label="Value">${escapeHtml(forefrontResult.fields.DIR || 'N/A')}</td></tr>
+                            </tbody>
+                        </table>`
+                    }
+                    <p style="margin-top: 10px;"><strong>Full Details:</strong> ${escapeHtml(forefrontResult.details)}</p>
                 </div>
             `;
             html += '<h3>Email Details</h3>';
@@ -534,14 +724,14 @@
             return html;
         }
 
-        function renderTable(spfResult) {
+        function renderTable(spfResult, bclResult, forefrontResult) {
             const headerResultsDiv = document.getElementById('headerResults');
             if (!headerResultsDiv) {
                 console.error('Header results div not found');
                 return;
             }
 
-            let tableHtml = renderHeaderFields(headerFields, spfResult);
+            let tableHtml = renderHeaderFields(headerFields, spfResult, bclResult, forefrontResult);
             if (transactions.length === 0) {
                 tableHtml += '<p>No headers found.</p>';
                 headerResultsDiv.innerHTML = tableHtml;
@@ -590,7 +780,7 @@
                 sortState.direction = 'asc';
             }
             sortTransactions(sortState.column, sortState.direction);
-            renderTable(lastSpfResult);
+            renderTable(lastSpfResult, lastBclResult, lastForefrontResult);
         }
 
         function processIOCs(text, bodyParts) {
@@ -762,6 +952,15 @@
             transactions = [];
             headerFields = {};
             lastSpfResult = { status: 'N/A', message: '', details: '' };
+            lastBclResult = { status: 'N/A', value: '', message: '', details: '' };
+            lastForefrontResult = {
+                status: 'N/A',
+                fields: {
+                    CIP: '', CTRY: '', LANG: '', SCL: '', SRV: '', IPV: '',
+                    SFV: '', H: '', PTR: '', CAT: '', SFS: '', DIR: ''
+                },
+                details: ''
+            };
         }
 
         function analyseEmail() {
@@ -792,16 +991,18 @@
                 transactions = [];
                 headerFields = { from: '', to: [], cc: [], subject: '', date: '' };
 
-                // Perform SPF analysis
+                // Perform analyses
                 lastSpfResult = analyseSPFRecord(headers);
+                lastBclResult = analyseBCLRecord(headers);
+                lastForefrontResult = analyseForefrontAntispam(headers);
 
                 // Regular expressions for specific headers
-                const fromRegex = /^From:.*$/gim;
-                const senderRegex = /^Sender:.*$/gim;
+                const fromRegex = /^From:.*?(?=\n[A-Z-]|$)/gim;
+                const senderRegex = /^Sender:.*?(?=\n[A-Z-]|$)/gim;
                 const toRegex = /^To:.*?(?=\n[A-Z-]|$)/gim;
                 const ccRegex = /^Cc:.*?(?=\n[A-Z-]|$)/gim;
-                const subjectRegex = /^Subject:.*$/gim;
-                const dateRegex = /^Date:.*$/gim;
+                const subjectRegex = /^Subject:.*?(?=\n[A-Z-]|$)/gim;
+                const dateRegex = /^Date:.*?(?=\n[A-Z-]|$)/gim;
                 const emailRegex = /[^\s<>,;]+@[^\s<>,;]+\.[^\s<>,;]+/g;
                 const contentTypeRegex = /Content-Type:.*?(?=\n[A-Z-]|$)/gis;
                 const contentEncodingRegex = /Content-Transfer-Encoding:.*?(?=\n[A-Z-]|$)/gis;
@@ -845,7 +1046,9 @@
 
                 const dateMatches = headers.match(dateRegex) || [];
                 if (dateMatches.length > 0) {
-                    headerFields.date = parseDate(dateMatches[0].replace(/^Date:\s*/i, '').trim());
+                    const dateValue = dateMatches[0].replace(/^Date:\s*/i, '').trim();
+                    console.log('Raw date header:', dateValue);
+                    headerFields.date = parseDate(dateValue);
                 }
 
                 // Extract global sender and recipients
@@ -978,7 +1181,7 @@
                 // Default sort
                 sortState = { column: 'order', direction: 'asc' };
                 sortTransactions(sortState.column, sortState.direction);
-                renderTable(lastSpfResult);
+                renderTable(lastSpfResult, lastBclResult, lastForefrontResult);
 
                 // Process body
                 let bodyHtml = '';
