@@ -184,22 +184,25 @@
         }
 
         /* Adjust column widths for header table */
-        th:nth-child(1), td:nth-child(1) { /* Action */
+        th:nth-child(1), td:nth-child(1) { /* Order */
+            width: 8%;
+        }
+        th:nth-child(2), td:nth-child(2) { /* Action */
             width: 10%;
         }
-        th:nth-child(2), td:nth-child(2) { /* Timestamp */
-            width: 20%;
+        th:nth-child(3), td:nth-child(3) { /* Timestamp */
+            width: 18%;
         }
-        th:nth-child(3), td:nth-child(3) { /* Server */
-            width: 20%;
+        th:nth-child(4), td:nth-child(4) { /* Server */
+            width: 18%;
         }
-        th:nth-child(4), td:nth-child(4) { /* IP */
-            width: 15%;
+        th:nth-child(5), td:nth-child(5) { /* IP */
+            width: 13%;
         }
-        th:nth-child(5), td:nth-child(5) { /* Email/Domain */
-            width: 20%;
+        th:nth-child(6), td:nth-child(6) { /* Email/Domain */
+            width: 18%;
         }
-        th:nth-child(6), td:nth-child(6) { /* Details */
+        th:nth-child(7), td:nth-child(7) { /* Details */
             width: 15%;
         }
 
@@ -316,7 +319,7 @@
 
         // Sorting state
         let sortState = {
-            column: 'timestamp',
+            column: 'order',
             direction: 'asc'
         };
         let transactions = [];
@@ -432,6 +435,12 @@
                 let valA = a[column] || '';
                 let valB = b[column] || '';
 
+                if (column === 'order') {
+                    valA = parseInt(valA) || 0;
+                    valB = parseInt(valB) || 0;
+                    return direction === 'asc' ? valA - valB : valB - valA;
+                }
+
                 if (column === 'timestamp') {
                     valA = valA ? new Date(valA) : new Date(0);
                     valB = valB ? new Date(valB) : new Date(0);
@@ -473,6 +482,7 @@
                 <table>
                     <thead>
                         <tr>
+                            <th data-column="order" class="${sortState.column === 'order' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('order')">Order</th>
                             <th data-column="action" class="${sortState.column === 'action' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('action')">Action</th>
                             <th data-column="timestamp" class="${sortState.column === 'timestamp' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('timestamp')">Timestamp</th>
                             <th data-column="server" class="${sortState.column === 'server' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('server')">Server</th>
@@ -487,6 +497,7 @@
             transactions.forEach(transaction => {
                 tableHtml += `
                     <tr>
+                        <td data-label="Order">${transaction.order}</td>
                         <td data-label="Action">${escapeHtml(transaction.action)}</td>
                         <td data-label="Timestamp">${escapeHtml(transaction.timestamp)}</td>
                         <td data-label="Server">${escapeHtml(transaction.server)}</td>
@@ -746,8 +757,9 @@
                 let globalRecipients = headerFields.to;
 
                 // Extract Received headers in reverse (chronological order)
+                let orderCounter = 0;
                 const receivedMatches = (headers.match(receivedRegex) || []).reverse();
-                receivedMatches.forEach((match, index) => {
+                receivedMatches.forEach((match) => {
                     const rawValue = match.replace(/^Received:\s*/i, '');
                     const cleanedValue = rawValue.replace(/\n\s+/g, ' ').trim();
                     console.log('Processing Received header:', cleanedValue);
@@ -778,41 +790,36 @@
 
                     let fromIp = '';
                     let byIp = '';
-// Extract IP from brackets after fromServer
-if (fromServer) {
-    let fromIpMatch = rawValue.match(new RegExp(`from\\s+${escapeRegex(fromServer)}\\s*\\(([^)]+)\\)`));
-    if (fromIpMatch) {
-        let ipCandidate = fromIpMatch[1].trim();
-        // Check for nested (unknown [IP]) format
-        const nestedIpMatch = ipCandidate.match(/unknown\s*\[([\d.:a-fA-F]+)\]/);
-        if (nestedIpMatch) {
-            ipCandidate = nestedIpMatch[1].trim();
-        }
-        fromIp = validateIP(ipCandidate);
-        console.log('From IP match:', ipCandidate, 'Validated:', fromIp);
-    } else {
-        console.log('No from IP match for:', fromServer);
-    }
-}
+                    if (fromServer) {
+                        let fromIpMatch = rawValue.match(new RegExp(`from\\s+${escapeRegex(fromServer)}\\s*\\(([^)]+)\\)`));
+                        if (fromIpMatch) {
+                            let ipCandidate = fromIpMatch[1].trim();
+                            const nestedIpMatch = ipCandidate.match(/unknown\s*\[([\d.:a-fA-F]+)\]/);
+                            if (nestedIpMatch) {
+                                ipCandidate = nestedIpMatch[1].trim();
+                            }
+                            fromIp = validateIP(ipCandidate);
+                            console.log('From IP match:', ipCandidate, 'Validated:', fromIp);
+                        } else {
+                            console.log('No from IP match for:', fromServer);
+                        }
+                    }
 
-// Extract IP from brackets after byServer, fallback to fromIp
-if (byServer) {
-    let byIpMatch = rawValue.match(new RegExp(`by\\s+${escapeRegex(byServer)}\\s*\\(([^)]+)\\)`));
-    if (byIpMatch) {
-        let ipCandidate = byIpMatch[1].trim();
-        // Check for nested (unknown [IP]) format
-        const nestedIpMatch = ipCandidate.match(/unknown\s*\[([\d.:a-fA-F]+)\]/);
-        if (nestedIpMatch) {
-            ipCandidate = nestedIpMatch[1].trim();
-        }
-        byIp = validateIP(ipCandidate);
-        console.log('By IP match:', ipCandidate, 'Validated:', byIp);
-    } else {
-        // Fallback to fromIp if no by IP is found
-        byIp = fromIp;
-        console.log('No by IP match for:', byServer, 'Using fromIp:', byIp);
-    }
-}
+                    if (byServer) {
+                        let byIpMatch = rawValue.match(new RegExp(`by\\s+${escapeRegex(byServer)}\\s*\\(([^)]+)\\)`));
+                        if (byIpMatch) {
+                            let ipCandidate = byIpMatch[1].trim();
+                            const nestedIpMatch = ipCandidate.match(/unknown\s*\[([\d.:a-fA-F]+)\]/);
+                            if (nestedIpMatch) {
+                                ipCandidate = nestedIpMatch[1].trim();
+                            }
+                            byIp = validateIP(ipCandidate);
+                            console.log('By IP match:', ipCandidate, 'Validated:', byIp);
+                        } else {
+                            byIp = fromIp;
+                            console.log('No by IP match for:', byServer, 'Using fromIp:', byIp);
+                        }
+                    }
 
                     let recipientEmail = '';
                     const forMatch = rawValue.match(forRegex);
@@ -824,6 +831,7 @@ if (byServer) {
 
                     if (fromServer) {
                         transactions.push({
+                            order: ++orderCounter,
                             action: 'Send',
                             timestamp: date,
                             server: fromServer,
@@ -835,6 +843,7 @@ if (byServer) {
 
                     if (byServer) {
                         transactions.push({
+                            order: ++orderCounter,
                             action: 'Receive',
                             timestamp: date,
                             server: byServer,
@@ -845,8 +854,8 @@ if (byServer) {
                     }
                 });
 
-                // Default sort by timestamp ascending (chronological)
-                sortState = { column: 'timestamp', direction: 'asc' };
+                // Default sort by order ascending (sequential)
+                sortState = { column: 'order', direction: 'asc' };
                 sortTransactions(sortState.column, sortState.direction);
                 renderTable();
 
