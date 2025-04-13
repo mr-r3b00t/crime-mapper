@@ -23,7 +23,6 @@
             display: flex;
             position: relative;
         }
-        
 
         .sidebar {
             width: 300px;
@@ -185,32 +184,23 @@
         }
 
         /* Adjust column widths for header table */
-        th:nth-child(1), td:nth-child(1) { /* Type */
-            width: 8%;
-        }
-        th:nth-child(2), td:nth-child(2) { /* Date */
-            width: 18%;
-        }
-        th:nth-child(3), td:nth-child(3) { /* Sender Email */
-            width: 12%;
-        }
-        th:nth-child(4), td:nth-child(4) { /* From Server */
-            width: 12%;
-        }
-        th:nth-child(5), td:nth-child(5) { /* Sender IP */
-            width: 12%;
-        }
-        th:nth-child(6), td:nth-child(6) { /* Recipients */
-            width: 12%;
-        }
-        th:nth-child(7), td:nth-child(7) { /* Server */
+        th:nth-child(1), td:nth-child(1) { /* Action */
             width: 10%;
         }
-        th:nth-child(8), td:nth-child(8) { /* Recipient IP */
-            width: 12%;
+        th:nth-child(2), td:nth-child(2) { /* Timestamp */
+            width: 20%;
         }
-        th:nth-child(9), td:nth-child(9) { /* Details */
-            width: 14%;
+        th:nth-child(3), td:nth-child(3) { /* Server */
+            width: 20%;
+        }
+        th:nth-child(4), td:nth-child(4) { /* IP */
+            width: 15%;
+        }
+        th:nth-child(5), td:nth-child(5) { /* Email/Domain */
+            width: 20%;
+        }
+        th:nth-child(6), td:nth-child(6) { /* Details */
+            width: 15%;
         }
 
         /* Adjust column widths for IOC table */
@@ -273,8 +263,10 @@
             <textarea id="headerInput" placeholder="Paste email headers and body here..."></textarea>
             <button id="analyseBtn">Analyse</button>
             <button id="clearBtn">Clear</button>
-            <footer style="text-align: center; font-size: 10px; color: #6b7280; padding-top: 10px;"></footer>
-            <a href="https://www.buymeacoffee.com/mrr3b00t" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
+            <footer style="text-align: center; font-size: 10px; color: #6b7280; padding-top: 10px;">
+                <a href="https://www.buymeacoffee.com/mrr3b00t" target="_blank">
+                    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;">
+                </a>
                 <p>© Xservus Limited</p>
                 <p>Version 0.1</p>
             </footer>
@@ -324,8 +316,8 @@
 
         // Sorting state
         let sortState = {
-            column: 'date',
-            direction: 'desc'
+            column: 'timestamp',
+            direction: 'asc'
         };
         let transactions = [];
 
@@ -372,12 +364,75 @@
                        .replace(/=\r?\n/g, '');
         }
 
+        function parseEmailAddress(emailStr) {
+            const match = emailStr.match(/<([^>]+)>|[^\s<>,;]+@[^\s<>,;]+\.[^\s<>,;]+/);
+            return match ? match[1] || match[0] : '';
+        }
+
+        function validateIP(ip) {
+            const ipv4Regex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+            const ipv6Regex = /^([0-9a-fA-F]{1,4}:){1,7}(:|[0-9a-fA-F]{1,4})$|^[0-9a-fA-F]{1,4}::[0-9a-fA-F]{1,4}$/;
+            return ipv4Regex.test(ip) || ipv6Regex.test(ip) ? ip : '';
+        }
+
+        function parseDate(dateStr) {
+    if (!dateStr) return '';
+    // Remove leading/trailing semicolons and normalize whitespace
+    let cleanedDate = dateStr.replace(/^;?\s*|\s*;?\s*$/g, '').replace(/\s+/g, ' ').trim();
+    console.log('Parsing date:', cleanedDate); // Debug
+
+    // Match: [Sun, ]DD Mon YYYY HH:MM:SS [+0000|GMT]
+    const parts = cleanedDate.match(/(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s*)?(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})\s+(\d{2}:\d{2}:\d{2})\s*([+-]\d{4}|GMT)?/i);
+    if (!parts) {
+        console.log('Date regex failed for:', cleanedDate);
+        return '';
+    }
+
+    let [, day, month, year, time, tz] = parts;
+    console.log('Date parts:', { day, month, year, time, tz }); // Debug
+
+    const months = {
+        'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
+        'may': '05', 'jun': '06', 'jul': '07', 'aug': '08',
+        'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
+    };
+
+    // Pad day and normalize month
+    day = day.padStart(2, '0');
+    month = months[month.toLowerCase()];
+    if (!month) {
+        console.log('Invalid month:', month);
+        return '';
+    }
+
+    // Normalize timezone
+    tz = tz || '+0000';
+    if (tz.toUpperCase() === 'GMT') tz = '+0000';
+    tz = tz.replace(/([+-]\d{2})(\d{2})/, '$1:$2');
+
+    // Construct date string
+    const dateString = `${year}-${month}-${day}T${time}${tz}`;
+    console.log('Constructed date:', dateString); // Debug
+
+    try {
+        const date = new Date(dateString);
+        if (isNaN(date)) {
+            console.log('Invalid date:', dateString);
+            return '';
+        }
+        return date.toISOString();
+    } catch (e) {
+        console.error('Date parsing error:', e, dateString);
+        return '';
+    }
+}
+
         function sortTransactions(column, direction) {
             transactions.sort((a, b) => {
                 let valA = a[column] || '';
                 let valB = b[column] || '';
 
-                if (column === 'date') {
+                if (column === 'timestamp') {
                     valA = valA ? new Date(valA) : new Date(0);
                     valB = valB ? new Date(valB) : new Date(0);
                     return direction === 'asc' ? valA - valB : valB - valA;
@@ -403,14 +458,11 @@
                 <table>
                     <thead>
                         <tr>
-                            <th data-column="type" class="${sortState.column === 'type' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('type')">Type</th>
-                            <th data-column="date" class="${sortState.column === 'date' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('date')">Date</th>
-                            <th data-column="senderEmail" class="${sortState.column === 'senderEmail' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('senderEmail')">Sender Email</th>
-                            <th data-column="fromServer" class="${sortState.column === 'fromServer' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('fromServer')">From Server</th>
-                            <th data-column="senderIp" class="${sortState.column === 'senderIp' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('senderIp')">Sender IP</th>
-                            <th data-column="recipients" class="${sortState.column === 'recipients' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('recipients')">Recipients</th>
+                            <th data-column="action" class="${sortState.column === 'action' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('action')">Action</th>
+                            <th data-column="timestamp" class="${sortState.column === 'timestamp' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('timestamp')">Timestamp</th>
                             <th data-column="server" class="${sortState.column === 'server' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('server')">Server</th>
-                            <th data-column="recipientIp" class="${sortState.column === 'recipientIp' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('recipientIp')">Recipient IP</th>
+                            <th data-column="ip" class="${sortState.column === 'ip' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('ip')">IP</th>
+                            <th data-column="emailOrDomain" class="${sortState.column === 'emailOrDomain' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('emailOrDomain')">Email/Domain</th>
                             <th data-column="details" class="${sortState.column === 'details' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('details')">Details</th>
                         </tr>
                     </thead>
@@ -420,14 +472,11 @@
             transactions.forEach(transaction => {
                 tableHtml += `
                     <tr>
-                        <td data-label="Type">${escapeHtml(transaction.type)}</td>
-                        <td data-label="Date">${escapeHtml(transaction.date)}</td>
-                        <td data-label="Sender Email">${escapeHtml(transaction.senderEmail)}</td>
-                        <td data-label="From Server">${escapeHtml(transaction.fromServer)}</td>
-                        <td data-label="Sender IP">${escapeHtml(transaction.senderIp)}</td>
-                        <td data-label="Recipients">${escapeHtml(transaction.recipients)}</td>
+                        <td data-label="Action">${escapeHtml(transaction.action)}</td>
+                        <td data-label="Timestamp">${escapeHtml(transaction.timestamp)}</td>
                         <td data-label="Server">${escapeHtml(transaction.server)}</td>
-                        <td data-label="Recipient IP">${escapeHtml(transaction.recipientIp)}</td>
+                        <td data-label="IP">${escapeHtml(transaction.ip)}</td>
+                        <td data-label="Email/Domain">${escapeHtml(transaction.emailOrDomain)}</td>
                         <td data-label="Details">${escapeHtml(transaction.details)}</td>
                     </tr>
                 `;
@@ -449,140 +498,118 @@
         }
 
         function processIOCs(text, bodyParts) {
-    // Decode quoted-printable text
-    const decodedText = decodeQuotedPrintable(text);
+            const decodedText = decodeQuotedPrintable(text);
+            const patterns = {
+                url: /https?:\/\/[^\s/$.?#].[^\s]*/gi,
+                ipv4: /\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b/g,
+                ipv6: /\b(?:[0-9a-fA-F]{1,4}:){1,7}(?::[0-9a-fA-F]{1,4}|:)\b|\b[0-9a-fA-F]{1,4}::[0-9a-fA-F]{1,4}\b/g,
+                subnet: /\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\/(?:[8-9]|[1-2][0-9]|3[0-2])\b/g,
+                domain: /(?:[a-zA-Z0-9-_]+\.)+[a-zA-Z0-9-_]+\.[a-zA-Z]{2,}/gi,
+                email: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g,
+                hash: /\b[0-9a-fA-F]{32,64}\b/g,
+                timestamp: /\b(?:[0-1][0-9]|2[0-3]|[0-9]):[0-5][0-9]:[0-5][0-9](?:\.\d{1,3})?\b/g,
+                messageId: /\b[a-zA-Z0-9-]+\.\d+\.\d+\.\d+\b/g
+            };
 
-    // Regex patterns for IOC extraction
-    const patterns = {
-        url: /https?:\/\/[^\s/$.?#].[^\s]*/gi,
-        // IPv4: Strict 0-255 per segment
-        ipv4: /\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b/g,
-        // IPv6: Full and compressed formats, avoids time-like patterns
-        ipv6: /\b(?:[0-9a-fA-F]{1,4}:){1,7}(?::[0-9a-fA-F]{1,4}|:)\b|\b[0-9a-fA-F]{1,4}::[0-9a-fA-F]{1,4}\b/g,
-        // Subnet: IPv4 with /8 to /32
-        subnet: /\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\/(?:[8-9]|[1-2][0-9]|3[0-2])\b/g,
-        domain: /(?:[a-zA-Z0-9-_]+\.)+[a-zA-Z0-9-_]+\.[a-zA-Z]{2,}/gi,
-        email: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g,
-        hash: /\b[0-9a-fA-F]{32,64}\b/g,
-        // Timestamp: HH:MM:SS or H:MM:SS, optional milliseconds
-        timestamp: /\b(?:[0-1][0-9]|2[0-3]|[0-9]):[0-5][0-9]:[0-5][0-9](?:\.\d{1,3})?\b/g,
-        messageId: /\b[a-zA-Z0-9-]+\.\d+\.\d+\.\d+\b/g
-    };
+            const hashRegex = {
+                sha256: /^[0-9a-fA-F]{64}$/,
+                md5: /^[0-9a-fA-F]{32}$/,
+                sha1: /^[0-9a-fA-F]{40}$/
+            };
 
-    // Hash validation regex
-    const hashRegex = {
-        sha256: /^[0-9a-fA-F]{64}$/,
-        md5: /^[0-9a-fA-F]{32}$/,
-        sha1: /^[0-9a-fA-F]{40}$/
-    };
+            const commonFileExtensions = new Set([
+                'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tif', 'tiff', 'pdf',
+                'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv',
+                'zip', 'rar', '7z', 'exe', 'dll', 'sys', 'bat', 'sh',
+                'mp3', 'mp4', 'avi', 'mkv', 'mov', 'wmv', 'flv', 'wav',
+                'html', 'css', 'js', 'php', 'asp', 'aspx', 'jsp', 'sql',
+                'db', 'bak', 'log', 'tar', 'gz', 'tgz'
+            ]);
 
-    // Common file extensions to filter domains
-    const commonFileExtensions = new Set([
-        'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tif', 'tiff', 'pdf',
-        'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv',
-        'zip', 'rar', '7z', 'exe', 'dll', 'sys', 'bat', 'sh',
-        'mp3', 'mp4', 'avi', 'mkv', 'mov', 'wmv', 'flv', 'wav',
-        'html', 'css', 'js', 'php', 'asp', 'aspx', 'jsp', 'sql',
-        'db', 'bak', 'log', 'tar', 'gz', 'tgz'
-    ]);
+            let cleanedText = decodedText.replace(patterns.timestamp, '');
+            const iocs = {
+                url: new Set(),
+                ip: new Set(),
+                subnet: new Set(),
+                domain: new Set(),
+                email: new Set(),
+                hash: new Set()
+            };
 
-    // Remove timestamps to prevent false positives in IP extraction
-    let cleanedText = decodedText.replace(patterns.timestamp, '');
+            function extractMatches(content, regex, set, transform = v => v) {
+                const matches = content.match(regex) || [];
+                matches.forEach(match => set.add(transform(match)));
+            }
 
-    // Initialize sets for unique IOCs
-    const iocs = {
-        url: new Set(),
-        ip: new Set(),
-        subnet: new Set(),
-        domain: new Set(),
-        email: new Set(),
-        hash: new Set()
-    };
+            extractMatches(cleanedText, patterns.url, iocs.url);
+            extractMatches(cleanedText, patterns.ipv4, iocs.ip, v => v.replace(/[\[\]\(\)]/g, ''));
+            extractMatches(cleanedText, patterns.ipv6, iocs.ip, v => v.replace(/[\[\]\(\)]/g, ''));
+            extractMatches(cleanedText, patterns.subnet, iocs.subnet);
+            extractMatches(cleanedText, patterns.email, iocs.email);
 
-    // Helper function to extract and add matches
-    function extractMatches(content, regex, set, transform = v => v) {
-        const matches = content.match(regex) || [];
-        matches.forEach(match => set.add(transform(match)));
-    }
+            extractMatches(cleanedText, patterns.domain, iocs.domain, domain => {
+                const normalized = domain.replace(/\.$/, '');
+                const extension = normalized.toLowerCase().split('.').pop();
+                return (!iocs.ip.has(normalized) && 
+                        !iocs.subnet.has(normalized) && 
+                        !commonFileExtensions.has(extension)) ? normalized : null;
+            });
+            iocs.domain.delete(null);
 
-    // Extract IOCs from headers
-    extractMatches(cleanedText, patterns.url, iocs.url);
-    extractMatches(cleanedText, patterns.ipv4, iocs.ip, v => v.replace(/[\[\]\(\)]/g, ''));
-    extractMatches(cleanedText, patterns.ipv6, iocs.ip, v => v.replace(/[\[\]\(\)]/g, ''));
-    extractMatches(cleanedText, patterns.subnet, iocs.subnet);
-    extractMatches(cleanedText, patterns.email, iocs.email);
+            const messageIds = new Set(cleanedText.match(patterns.messageId) || []);
+            extractMatches(cleanedText, patterns.hash, iocs.hash, hash => {
+                if (messageIds.has(hash)) return null;
+                if (hashRegex.sha256.test(hash)) return JSON.stringify({ value: hash, type: 'SHA256' });
+                if (hashRegex.md5.test(hash)) return JSON.stringify({ value: hash, type: 'MD5' });
+                if (hashRegex.sha1.test(hash)) return JSON.stringify({ value: hash, type: 'SHA1' });
+                return null;
+            });
+            iocs.hash.delete(null);
 
-    // Extract domains, filtering out IPs and file extensions
-    extractMatches(cleanedText, patterns.domain, iocs.domain, domain => {
-        const normalized = domain.replace(/\.$/, '');
-        const extension = normalized.toLowerCase().split('.').pop();
-        return (!iocs.ip.has(normalized) && 
-                !iocs.subnet.has(normalized) && 
-                !commonFileExtensions.has(extension)) ? normalized : null;
-    });
-    iocs.domain.delete(null); // Remove null entries from filtering
+            bodyParts.forEach(part => {
+                let content = part.content;
+                if (part.encoding === 'quoted-printable') {
+                    content = decodeQuotedPrintable(content);
+                }
+                content = content.replace(patterns.timestamp, '');
 
-    // Extract hashes, excluding message IDs
-    const messageIds = new Set(cleanedText.match(patterns.messageId) || []);
-    extractMatches(cleanedText, patterns.hash, iocs.hash, hash => {
-        if (messageIds.has(hash)) return null;
-        if (hashRegex.sha256.test(hash)) return JSON.stringify({ value: hash, type: 'SHA256' });
-        if (hashRegex.md5.test(hash)) return JSON.stringify({ value: hash, type: 'MD5' });
-        if (hashRegex.sha1.test(hash)) return JSON.stringify({ value: hash, type: 'SHA1' });
-        return null;
-    });
-    iocs.hash.delete(null); // Remove null entries
+                extractMatches(content, patterns.url, iocs.url);
+                extractMatches(content, patterns.ipv4, iocs.ip, v => v.replace(/[\[\]\(\)]/g, ''));
+                extractMatches(content, patterns.ipv6, iocs.ip, v => v.replace(/[\[\]\(\)]/g, ''));
+                extractMatches(content, patterns.email, iocs.email);
 
-    // Process body parts
-    bodyParts.forEach(part => {
-        let content = part.content;
-        if (part.encoding === 'quoted-printable') {
-            content = decodeQuotedPrintable(content);
+                extractMatches(content, patterns.domain, iocs.domain, domain => {
+                    const normalized = domain.replace(/\.$/, '');
+                    const extension = normalized.toLowerCase().split('.').pop();
+                    return (!iocs.ip.has(normalized) && 
+                            !iocs.subnet.has(normalized) && 
+                            !commonFileExtensions.has(extension)) ? normalized : null;
+                });
+                iocs.domain.delete(null);
+
+                extractMatches(content, patterns.hash, iocs.hash, hash => {
+                    if (messageIds.has(hash)) return null;
+                    if (hashRegex.sha256.test(hash)) return JSON.stringify({ value: hash, type: 'SHA256' });
+                    if (hashRegex.md5.test(hash)) return JSON.stringify({ value: hash, type: 'MD5' });
+                    if (hashRegex.sha1.test(hash)) return JSON.stringify({ value: hash, type: 'SHA1' });
+                    return null;
+                });
+                iocs.hash.delete(null);
+            });
+
+            const result = [];
+            iocs.url.forEach(value => result.push({ type: 'URL', value }));
+            iocs.ip.forEach(value => result.push({ type: 'IP', value }));
+            iocs.subnet.forEach(value => result.push({ type: 'Subnet', value }));
+            iocs.domain.forEach(value => result.push({ type: 'Domain', value }));
+            iocs.email.forEach(value => result.push({ type: 'Email', value }));
+            iocs.hash.forEach(hash => {
+                const { value, type } = JSON.parse(hash);
+                result.push({ type: `Hash (${type})`, value });
+            });
+
+            return result.sort((a, b) => a.type.localeCompare(b.type));
         }
-        // Remove timestamps from body
-        content = content.replace(patterns.timestamp, '');
-
-        extractMatches(content, patterns.url, iocs.url);
-        extractMatches(content, patterns.ipv4, iocs.ip, v => v.replace(/[\[\]\(\)]/g, ''));
-        extractMatches(content, patterns.ipv6, iocs.ip, v => v.replace(/[\[\]\(\)]/g, ''));
-        extractMatches(content, patterns.email, iocs.email);
-
-        // Extract domains from body
-        extractMatches(content, patterns.domain, iocs.domain, domain => {
-            const normalized = domain.replace(/\.$/, '');
-            const extension = normalized.toLowerCase().split('.').pop();
-            return (!iocs.ip.has(normalized) && 
-                    !iocs.subnet.has(normalized) && 
-                    !commonFileExtensions.has(extension)) ? normalized : null;
-        });
-        iocs.domain.delete(null);
-
-        // Extract hashes from body
-        extractMatches(content, patterns.hash, iocs.hash, hash => {
-            if (messageIds.has(hash)) return null;
-            if (hashRegex.sha256.test(hash)) return JSON.stringify({ value: hash, type: 'SHA256' });
-            if (hashRegex.md5.test(hash)) return JSON.stringify({ value: hash, type: 'MD5' });
-            if (hashRegex.sha1.test(hash)) return JSON.stringify({ value: hash, type: 'SHA1' });
-            return null;
-        });
-        iocs.hash.delete(null);
-    });
-
-    // Compile IOCs into final array
-    const result = [];
-    iocs.url.forEach(value => result.push({ type: 'URL', value }));
-    iocs.ip.forEach(value => result.push({ type: 'IP', value }));
-    iocs.subnet.forEach(value => result.push({ type: 'Subnet', value }));
-    iocs.domain.forEach(value => result.push({ type: 'Domain', value }));
-    iocs.email.forEach(value => result.push({ type: 'Email', value }));
-    iocs.hash.forEach(hash => {
-        const { value, type } = JSON.parse(hash);
-        result.push({ type: `Hash (${type})`, value });
-    });
-
-    // Sort IOCs by type
-    return result.sort((a, b) => a.type.localeCompare(b.type));
-}
 
         function renderIOCs(iocs) {
             const iocResultsDiv = document.getElementById('iocResults');
@@ -631,32 +658,34 @@
             try {
                 // Normalize line endings and split headers from body
                 const normalizedInput = headerInput.replace(/\r\n/g, '\n');
-                const headerEndIndex = normalizedInput.search(/\n\n|\n\s*MIME-Version:/i);
+                const headerEndIndex = normalizedInput.indexOf('\n\n');
                 const headers = headerEndIndex !== -1 ? normalizedInput.substring(0, headerEndIndex) : normalizedInput;
                 const body = headerEndIndex !== -1 ? normalizedInput.substring(headerEndIndex).trim() : '';
                 transactions = [];
 
                 // Regular expressions
-                const receivedRegex = /Received:.*?(?=\n[A-Z]|\n*$)/gis;
-                const fromRegex = /^From:.*?(?=\n|$)/gim;
-                const toRegex = /(?:To|Cc|Bcc):.*?(?=\n[A-Z]|\n*$)/gis;
-                const contentTypeRegex = /Content-Type:.*?(?=\n[A-Z]|\n*$)/gis;
-                const contentEncodingRegex = /Content-Transfer-Encoding:.*?(?=\n[A-Z]|\n*$)/gis;
-                const receivedDateRegex = /;?\s*(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s*0?\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}\s+\d{2}:\d{2}:\d{2}\s*[-+]\d{4}(?:\s*\([A-Za-z]+\))?/i;
-                const serverRegex = /by\s+([a-zA-Z0-9:.-]+)/i;
+                const receivedRegex = /^Received:.*?(?=\n[A-Z-]|$|\n\n)(?:\n\s+.*?(?=\n[A-Z-]|$|\n\n))*/gim;
+                const fromRegex = /^From:.*$/gim;
+                const senderRegex = /^Sender:.*$/gim;
+                const toRegex = /^(?:To|Cc|Bcc):.*?(?=\n[A-Z-]|$)/gim;
+                const contentTypeRegex = /Content-Type:.*?(?=\n[A-Z-]|$)/gis;
+                const contentEncodingRegex = /Content-Transfer-Encoding:.*?(?=\n[A-Z-]|$)/gis;
+                const receivedDateRegex = /;?\s*(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s*)?\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}\s+\d{2}:\d{2}:\d{2}\s*(?:[+-]\d{4}|GMT)?/i;                const serverRegex = /by\s+([a-zA-Z0-9:.-]+)/i;
                 const fromServerRegex = /from\s+([a-zA-Z0-9:.-]+)/i;
-                const receivedRecipientRegex = /for\s+<?([\w.-]+@[\w.-]+\.[a-zA-Z]{2,}(?:,\s*[\w.-]+@[\w.-]+\.[a-zA-Z]{2,})*)>?/i;
-                const emailRegex = /\S+@\S+\.\S+/g;
+                const emailRegex = /[^\s<>,;]+@[^\s<>,;]+\.[^\s<>,;]+/g;
                 const ipRegex = /(?:\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b|\b[0-9a-fA-F]{1,4}(?::[0-9a-fA-F]{1,4}){1,7}\b|\b[0-9a-fA-F]{1,4}::[0-9a-fA-F]{1,4}\b)/;
                 const boundaryRegex = /boundary=["']?([^"'\n;]+)["']?/i;
+                const forRegex = /for\s+<?([^\s>]+@[^\s>]+)>?/i;
 
-                // Extract global sender email and recipients
-                let senderEmail = '';
+                // Extract global sender and recipients
+                let globalSender = '';
                 const fromMatches = headers.match(fromRegex) || [];
                 if (fromMatches.length > 0) {
-                    const fromValue = fromMatches[0].replace(/^From:\s*/i, '').trim();
-                    const emailMatch = fromValue.match(emailRegex);
-                    senderEmail = emailMatch ? emailMatch[0] : '';
+                    globalSender = parseEmailAddress(fromMatches[0].replace(/^From:\s*/i, '').trim());
+                }
+                const senderMatches = headers.match(senderRegex) || [];
+                if (senderMatches.length > 0) {
+                    globalSender = parseEmailAddress(senderMatches[0].replace(/^Sender:\s*/i, '').trim()) || globalSender;
                 }
 
                 let globalRecipients = [];
@@ -667,66 +696,89 @@
                 });
                 globalRecipients = [...new Set(globalRecipients)];
 
-                // Extract Received headers
-                const receivedMatches = headers.match(receivedRegex) || [];
-                receivedMatches.forEach(match => {
+                // Extract Received headers in reverse (chronological order)
+                const receivedMatches = (headers.match(receivedRegex) || []).reverse();
+                receivedMatches.forEach((match, index) => {
                     const rawValue = match.replace(/^Received:\s*/i, '');
                     const cleanedValue = rawValue.replace(/\n\s+/g, ' ').trim();
+                    console.log('Processing Received header:', cleanedValue); // Debug
 
+                    // Extract date
                     let date = '';
                     const dateMatch = rawValue.match(receivedDateRegex);
                     if (dateMatch) {
-                        date = dateMatch[0].replace(/^;\s*/, '').trim();
+                        date = parseDate(dateMatch[0].replace(/^;\s*/, '').trim());
+                    } else {
+                        console.log('No date match for:', rawValue);
                     }
 
-                    let server = '';
-                    const serverMatch = rawValue.match(serverRegex);
-                    if (serverMatch) {
-                        server = serverMatch[1].trim();
-                    }
-
+                    // Extract servers
                     let fromServer = '';
+                    let fromDetails = cleanedValue;
                     const fromServerMatch = rawValue.match(fromServerRegex);
                     if (fromServerMatch) {
                         fromServer = fromServerMatch[1].trim();
+                        fromDetails = `from ${fromServerMatch[0].trim()}`;
                     }
 
-                    let senderIp = '';
-                    let recipientIp = '';
-                    const ipMatches = rawValue.match(ipRegex) || [];
+                    let byServer = '';
+                    let byDetails = cleanedValue;
+                    const byServerMatch = rawValue.match(serverRegex);
+                    if (byServerMatch) {
+                        byServer = byServerMatch[1].trim();
+                        byDetails = `by ${byServerMatch[0].trim()} ${rawValue.substring(rawValue.indexOf('by')).trim()}`;
+                    }
+
+                    // Extract IPs
+                    let fromIp = '';
+                    let byIp = '';
                     const fromClause = fromServerMatch ? rawValue.substring(rawValue.indexOf('from')) : '';
                     const fromIpMatch = fromClause.match(ipRegex);
                     if (fromIpMatch) {
-                        senderIp = fromIpMatch[0];
+                        fromIp = validateIP(fromIpMatch[0]);
                     }
-                    const byClause = serverMatch ? rawValue.substring(rawValue.indexOf('by')) : '';
+                    const byClause = byServerMatch ? rawValue.substring(rawValue.indexOf('by')) : '';
                     const byIpMatch = byClause.match(ipRegex);
                     if (byIpMatch) {
-                        recipientIp = byIpMatch[0];
+                        byIp = validateIP(byIpMatch[0]);
                     }
 
-                    let recipients = globalRecipients.join(', ');
-                    const recipientMatch = rawValue.match(receivedRecipientRegex);
-                    if (recipientMatch) {
-                        const emails = recipientMatch[1].split(',').map(e => e.trim()).filter(e => e.match(emailRegex));
-                        recipients = emails.join(', ');
+                    // Extract recipient email from 'for' clause
+                    let recipientEmail = '';
+                    const forMatch = rawValue.match(forRegex);
+                    if (forMatch) {
+                        recipientEmail = parseEmailAddress(forMatch[1]);
+                    } else {
+                        recipientEmail = globalRecipients[0] || '';
                     }
 
-                    transactions.push({
-                        type: 'Received',
-                        date: date,
-                        senderEmail: senderEmail,
-                        fromServer: fromServer,
-                        senderIp: senderIp,
-                        recipients: recipients,
-                        server: server,
-                        recipientIp: recipientIp,
-                        details: cleanedValue
-                    });
+                    // Create send action (if fromServer exists)
+                    if (fromServer) {
+                        transactions.push({
+                            action: 'Send',
+                            timestamp: date,
+                            server: fromServer,
+                            ip: fromIp,
+                            emailOrDomain: globalSender || fromServer,
+                            details: cleanedValue
+                        });
+                    }
+
+                    // Create receive action (if byServer exists)
+                    if (byServer) {
+                        transactions.push({
+                            action: 'Receive',
+                            timestamp: date,
+                            server: byServer,
+                            ip: byIp,
+                            emailOrDomain: recipientEmail,
+                            details: cleanedValue
+                        });
+                    }
                 });
 
-                // Default sort by date descending
-                sortState = { column: 'date', direction: 'desc' };
+                // Default sort by timestamp ascending (chronological)
+                sortState = { column: 'timestamp', direction: 'asc' };
                 sortTransactions(sortState.column, sortState.direction);
                 renderTable();
 
