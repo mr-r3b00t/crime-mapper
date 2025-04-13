@@ -5,6 +5,107 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Baddie Mapper - Experimental</title>
     <style>
+
+/* Target mx-node class for vis.js nodes */
+.vis-network .vis-node.mx-node {
+    background-color: #60a5fa; /* Blue */
+    border-color: #1e88e5; /* Slightly darker blue border for contrast */
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 2000;
+    overflow: auto;
+}
+
+.modal-content {
+    position: relative;
+    margin: 50px auto;
+    padding: 20px;
+    width: 80%;
+    max-width: 800px;
+    max-height: 60vh; /* Shorter height: 60% of viewport */
+    overflow-y: auto; /* Vertical scroll for content */
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    background: var(--modal-bg, #fff);
+    color: var(--modal-color, #1f2a44);
+    border: 1px solid var(--modal-border, #d1d5db);
+    display: flex;
+    flex-direction: column; /* Stack content vertically */
+}
+
+.dark .modal-content {
+    background: #1f2a44;
+    color: #e2e8f0;
+    border-color: #4b5563;
+}
+
+.close-modal {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 24px;
+    cursor: pointer;
+    color: inherit;
+}
+
+.close-modal:hover {
+    color: #ef4444;
+}
+
+#riskTableContainer {
+    overflow-x: auto; /* Horizontal scroll for wide tables */
+    flex-grow: 1; /* Allow table to take available space */
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+}
+
+th, td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--table-border, #d1d5db);
+    word-wrap: break-word;
+    max-width: 250px;
+}
+
+.dark th, .dark td {
+    border-bottom-color: #4b5563;
+}
+
+th {
+    background: var(--th-bg, #f1f5f9);
+}
+
+.dark th {
+    background: #2d3748;
+}
+
+.print-button {
+    padding: 10px 20px;
+    background: #22c55e;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 10px; /* Space above button */
+    align-self: center; /* Center button horizontally */
+}
+
+.print-button:hover {
+    background: #16a34a;
+}
+
 /* CSS Variables */
 :root {
     --transition: 0.3s;
@@ -415,7 +516,7 @@ button {
 #properties-panel {
     position: fixed;
     top: var(--top-bar-height);
-    right: -310px;
+    right: -350px; /* Ensure it's fully off-screen */
     width: 350px;
     height: calc(100vh - var(--top-bar-height));
     background-color: #fff;
@@ -424,7 +525,13 @@ button {
     padding: 20px;
     overflow-y: auto;
     transition: right var(--transition);
+    display: none; /* Hidden by default */
     box-sizing: border-box;
+}
+
+#properties-panel.active {
+    right: 0;
+    display: block; /* Show when active */
 }
 
 .dark-mode #properties-panel {
@@ -433,9 +540,6 @@ button {
     color: #e2e8f0;
 }
 
-#properties-panel.active {
-    right: 0;
-}
 
 #properties-panel .close-button {
     position: absolute;
@@ -712,7 +816,7 @@ button {
 
 /* Network Visualization */
 #myNetwork .vis-network canvas {
-    overflow: hidden;
+    overflow: visible; /* Change from hidden to visible */
 }
 
 .vis-network .vis-label {
@@ -867,10 +971,12 @@ input[type="checkbox"] {
     display: none;
 }
 </style>
-    <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/dist/vis-network.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastify-js/1.12.0/toastify.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastify-js/1.12.0/toastify.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/dist/vis-network.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastify-js/1.12.0/toastify.min.js"></script>  
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body class="dark-mode">
     <div id="top-bar">
@@ -921,6 +1027,7 @@ input[type="checkbox"] {
                     <option value="device">Device</option>
                     <option value="malware">Malware</option>
                     <option value="vulnerability">Vulnerability</option>
+                    <option value="subnet">Subnet</option> <!-- New option -->
                 </select>
                 <input type="text" id="addVulnNameInput" placeholder="Vulnerability Name" style="display: none;">
                 <input type="text" id="addVulnCVEInput" placeholder="CVE (optional)" style="display: none;">
@@ -930,6 +1037,7 @@ input[type="checkbox"] {
                 <input type="text" id="addIpInput" placeholder="IP Address" style="display: none;">
                 <input type="text" id="addDomainInput" placeholder="Domain" style="display: none;">
                 <input type="text" id="addOrgInput" placeholder="Organization Name" style="display: none;">
+                <input type="text" id="addSubnetInput" placeholder="Subnet (e.g., 192.168.1.0/24)" style="display: none;">
                 <input type="text" id="addPortNumInput" placeholder="Port Number" style="display: none;">
                 <select id="addPortType" style="display: none;">
                     <option value="TCP">TCP</option>
@@ -979,6 +1087,11 @@ input[type="checkbox"] {
                     <option value="malware">Malware</option>
                     <option value="vulnerability">Vulnerability</option>
                 </select>
+                <select id="editEntityType" disabled>
+                    <!-- Existing options -->
+                    <option value="subnet">Subnet</option>
+                </select>
+                <input type="text" id="editSubnetInput" placeholder="Subnet (e.g., 192.168.1.0/24)" style="display: none;">
                 <input type="text" id="editVulnNameInput" placeholder="Vulnerability Name" style="display: none;">
                 <input type="text" id="editVulnCVEInput" placeholder="CVE (optional)" style="display: none;">
                 <input type="text" id="editVulnUrlInput" placeholder="URL (optional)" style="display: none;">
@@ -1045,12 +1158,15 @@ input[type="checkbox"] {
                 <h3>Export/Import</h3>
                 <button onclick="exportGraph()">Export to JSON</button>
                 <button onclick="exportVisibleGraph()">Export Visible to JSON</button>
-                <input type="file" id="importFile" accept=".json">
+                <!-- Removed: <input type="file" id="importFile" accept=".json"> -->
                 <button onclick="importGraph()">Import from JSON</button>
                 <button onclick="clearGraph()">Clear Graph</button>
                 <button id="summary-button" onclick="showGraphSummary()">Graph Summary</button>
                 <button onclick="exportToPNG()">Export to PNG</button>
                 <button onclick="exportToPDF()">Export to PDF</button>
+                <button onclick="exportConfigBackup()">Backup Config</button> <!-- New Button -->
+                <button onclick="importConfig()">Import Config</button> <!-- New Button -->
+                <button onclick="importNMAP()">Import NMAP</button> <!-- New Button -->
             </div>
         </div>
         <div id="api-keys" class="tab-content">
@@ -1123,7 +1239,7 @@ input[type="checkbox"] {
             <div class="input-group">
                 <h3>CORS Proxy URL</h3>
                 <div class="password-container">
-                    <input type="password" id="corsProxyUrl" placeholder="Enter CORS Proxy URL" value="https://cors-anywhere.herokuapp.com/">
+                    <input type="password" id="corsProxyUrl" placeholder="Enter CORS Proxy URL" value="http://localhost:3000/proxy?url=">
                     <button type="button" class="toggle-password" data-target="corsProxyUrl">Show</button>
                 </div>
                 <label class="checkbox-label">
@@ -1149,6 +1265,8 @@ input[type="checkbox"] {
                 <button onclick="enrichAllShodan()">Enrich All IPs with Shodan</button>
                 <button onclick="enrichAllInternetDB()">Enrich All IPs with InternetDB</button>
                 <button onclick="enrichAllGoogleDNS()">Enrich All Domains with Google DNS</button>
+                <button onclick="enrichAllGoogleDNSMX()">Enrich All Domains with Google DNS (MX)</button>
+                <button onclick="enrichAllGoogleDNSTXT()">Enrich All Domains with Google DNS (TXT)</button>
                 <button onclick="enrichAllHudsonRockEmails()">Enrich All Emails with Hudson Rock</button>
                 <button onclick="enrichAllHudsonRockDomains()">Enrich All Domains with Hudson Rock</button>
                 <button onclick="enrichAllGreyNoise()">Enrich All IPs with GreyNoise</button>
@@ -1167,12 +1285,18 @@ input[type="checkbox"] {
             </div>
         </div>
         <div id="search" class="tab-content">
-            
             <div class="input-group" style="margin: 10px 0;">
                 <input type="text" id="search-input" placeholder="Search graph..." style="width: 100%; margin-bottom: 5px;">
                 <button onclick="searchGraph()" style="background-color: #10b981;">Search</button>
             </div>
-        
+            <button onclick="riskAnalysis()">Risk Analysis</button> <!-- New Button -->
+        </div>
+        <div id="riskModal" class="modal">
+            <div class="modal-content">
+                <span class="close-modal">&times;</span>
+                <h2>Risk Analysis</h2>
+                <div id="riskTableContainer"></div>
+            </div>
         </div>
         <div id="layouts" class="tab-content">
             <div class="input-group">
@@ -1236,7 +1360,7 @@ input[type="checkbox"] {
         <!-- Suggested -->
         <footer id="controls-footer"> 
     <p>Created by mrr3b00t (@UK_Daniel_Card)</p>
-    <p>© Xservus Limited - v0.278 experimental</p>
+    <p>© Xservus Limited - v0.288 experimental</p>
 </footer>
     </div>
     <div id="myNetwork"></div>
@@ -1293,7 +1417,7 @@ input[type="checkbox"] {
         const SHODAN_RATE_LIMIT_MS = 1000; // Specific 1-second delay for Shodan
         const SECURITYTRAILS_RATE_LIMIT_MS = 2000; // 1 second delay for SecurityTrails API
         const ipRegex = { ipv4: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/, ipv6: /^([0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}$/ };
-        const domainRegex = /^(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,}$/;
+        const domainRegex = /^(?:[a-zA-Z0-9-_]+\.)*[a-zA-Z0-9-_]+\.[a-zA-Z]{2,}$/;
         const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 
         let selectedNodes = new Set(); // To track multiple selected nodes
@@ -1362,7 +1486,7 @@ function updateTheme() {
     // Apply the options to the network and force a redraw
     network.setOptions(options);
     updateLabelVisibility();
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
     network.setData({ nodes: nodes, edges: edges });  // Force data refresh
     network.redraw();
 }
@@ -1440,7 +1564,7 @@ function searchGraph() {
             easingFunction: 'easeInOutQuad'
         }
     });
-
+    ensureInteractionSettings(); // Ensure panning is enabled after focus
     showToast(`Found ${matchingNodes.length} matching nodes`, 'success');
 }
 
@@ -1600,7 +1724,9 @@ function getNodeColorByType(type) {
         'relay': '#eab308',
         'hosting': '#14b8a6',
         'tag': '#6d28d9',
-        'cpe': '#0d9488'
+        'cpe': '#0d9488',
+        'mx': '#34d399', // Green for MX
+        'txt': '#f59e0b'  // Orange for TXT
     };
     return { background: colorMap[type] || '#ffffff' };
 }
@@ -1845,7 +1971,7 @@ document.getElementById('search-input').addEventListener('keypress', function(ev
     updateNodeSizes();
     updateSelectOptions();
     await stabilizeNetwork();
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
     completeProgressBar();
     showToast(`IPinfo enrichment completed: ${successfulEnrichments}/${totalIPs} IPs enriched`, 'success');
     
@@ -1857,113 +1983,8 @@ document.getElementById('search-input').addEventListener('keypress', function(ev
     }
 }
 
-async function enrichAllGoogleDNS() {
-    showProgressBar();
-    network.setOptions({ physics: { enabled: false } });
-    const domainNodes = nodes.get({ filter: n => n.type === 'domain' && n.domain });
-    const totalDomains = domainNodes.length;
-    let successfulEnrichments = 0;
 
-    if (totalDomains === 0) {
-        showToast('No domains found to enrich', 'info');
-        completeProgressBar();
-        return;
-    }
-
-    console.log(`Found ${totalDomains} domain nodes to enrich with Google DNS`);
-    showToast(`Starting Google DNS enrichment for ${totalDomains} domains`, 'info');
-
-    const batchSize = 50; // Consistent with other bulk enrichment functions
-    const delayBetweenBatches = 200; // Consistent with other bulk functions
-    const totalBatches = Math.ceil(totalDomains / batchSize);
-    const assumedRequestTimeMs = 100; // Estimated time per request
-    const timePerBatchMs = assumedRequestTimeMs * batchSize;
-    const totalBatchDelays = (totalBatches - 1) * delayBetweenBatches;
-    const estimatedTimeMs = (timePerBatchMs * totalBatches) + totalBatchDelays + 1000;
-
-    const estimatedSeconds = Math.ceil(estimatedTimeMs / 1000);
-    const estimatedMinutes = Math.floor(estimatedSeconds / 60);
-    const remainingSeconds = estimatedSeconds % 60;
-    const timeEstimateStr = estimatedMinutes > 0 
-        ? `${estimatedMinutes}m ${remainingSeconds}s` 
-        : `${estimatedSeconds}s`;
-
-    showToast(`Estimated time for Google DNS enrichment: ~${timeEstimateStr}`, 'info');
-    document.getElementById('progress-bar').textContent = `Google DNS Enrichment: 0/${totalDomains} Domains (0%) - Est. ${timeEstimateStr}`;
-
-    async function processBatch(batch) {
-        const promises = batch.map(node => {
-            if (activeTaskController && activeTaskController.signal.aborted) {
-                return Promise.resolve(null);
-            }
-            return throttledEnrichGoogleDNS(node.domain, node.id, true) // isBulk = true
-                .then(() => successfulEnrichments++)
-                .catch(error => {
-                    console.error(`Failed to enrich domain ${node.domain}: ${error.message}`);
-                    showToast(`Failed to enrich domain ${node.domain}: ${error.message}`, 'error');
-                    return null;
-                });
-        });
-        await Promise.all(promises);
-    }
-
-    let lastProgressUpdate = 0;
-    const progressUpdateInterval = 1000;
-    const startTime = Date.now();
-
-    for (let i = 0; i < totalDomains; i += batchSize) {
-        if (activeTaskController && activeTaskController.signal.aborted) {
-            showToast('Google DNS enrichment stopped', 'info');
-            document.getElementById('progress-bar').textContent = `Google DNS Enrichment: Stopped at ${successfulEnrichments}/${totalDomains} Domains`;
-            break;
-        }
-
-        const batch = domainNodes.slice(i, Math.min(i + batchSize, totalDomains));
-        console.log(`Processing batch ${Math.floor(i / batchSize) + 1} of ${totalBatches}, Domains ${i} to ${Math.min(i + batchSize - 1, totalDomains - 1)}`);
-
-        await processBatch(batch);
-
-        const currentTime = Date.now();
-        if (currentTime - lastProgressUpdate >= progressUpdateInterval || i + batchSize >= totalDomains) {
-            const processedDomains = Math.min(i + batchSize, totalDomains);
-            const progress = ((processedDomains / totalDomains) * 100).toFixed(1);
-            const remainingDomains = totalDomains - processedDomains;
-            const remainingTimeMs = Math.max(0, remainingDomains * assumedRequestTimeMs);
-            const remainingSeconds = Math.ceil(remainingTimeMs / 1000);
-            const remainingMinutes = Math.floor(remainingSeconds / 60);
-            const remainingSecondsPart = remainingSeconds % 60;
-            const remainingTimeStr = remainingMinutes > 0 
-                ? `${remainingMinutes}m ${remainingSecondsPart}s` 
-                : `${remainingSeconds}s`;
-
-            document.getElementById('progress-bar').textContent = 
-                `Google DNS Enrichment: ${successfulEnrichments}/${totalDomains} Domains (${progress}%) - Est. ${remainingTimeStr} remaining`;
-            lastProgressUpdate = currentTime;
-            updateSelectOptions();
-        }
-
-        await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
-    }
-
-    updateNodeSizes();
-    updateSelectOptions();
-    await stabilizeNetwork();
-    ensureInteractionSettings();
-
-    if (!(activeTaskController && activeTaskController.signal.aborted)) {
-        completeProgressBar();
-        showToast(`Google DNS enrichment completed: ${successfulEnrichments}/${totalDomains} domains enriched`, 'success');
-    } else {
-        showToast(`Google DNS enrichment stopped: ${successfulEnrichments}/${totalDomains} domains processed`, 'info');
-    }
-
-    if (window.innerWidth <= 768) {
-        const controls = document.getElementById('controls');
-        controls.classList.add('collapsed');
-        document.getElementById('myNetwork').style.display = 'block';
-        network.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
-    }
-}
+//Export to PDF
 
 
 function exportToPDF() {
@@ -2065,6 +2086,7 @@ window.onload = function() {
     }, 60 * 1000);
 };
 
+
 function loadState() {
     const savedState = localStorage.getItem('networkGraphState');
     if (!savedState) {
@@ -2096,19 +2118,16 @@ function loadState() {
         pauseButton.textContent = isPhysicsPaused ? 'Resume Physics' : 'Pause Physics';
         pauseButton.classList.toggle('paused', isPhysicsPaused);
         
-        // Explicitly set all interaction options including dragView
-        network.setOptions({
-            physics: { enabled: !isPhysicsPaused },
-            interaction: {
-                ...baseInteractionOptions,
-                dragView: true,  // Ensure dragView is enabled
-                zoomView: true,
-                dragNodes: true,
-                zoomSpeed: 0.5,
-                multiselect: true,
-                hover: true
-            }
-        });
+         // Ensure interaction settings with dragView
+    network.setOptions({
+        interaction: {
+            ...baseInteractionOptions,
+            dragView: true,  // Explicitly enable dragging
+            zoomView: true,
+            zoomSpeed: 0.5
+        }
+    });
+
         
         // Re-apply wheel event listener (from previous zoom fix)
         container.removeEventListener('wheel', handleWheel);
@@ -2125,77 +2144,27 @@ function loadState() {
 }
 
 
-// Separate wheel handler function for reusability
+// Separate wheel handler function for reusability //removed this as it broke pan
 function handleWheel(event) {
-    event.preventDefault();
-    const scale = event.deltaY > 0 ? 0.9 : 1.1;
-    const currentScale = network.getScale();
-    network.moveTo({
-        scale: currentScale * scale,
-        animation: { duration: 100 }
-    });
+    // event.preventDefault();
+    // const scale = event.deltaY > 0 ? 0.9 : 1.1;
+    // const currentScale = network.getScale();
+    // network.moveTo({
+    //     scale: currentScale * scale,
+    //     animation: { duration: 100 }
+    // });
 }
 
-        function showToast(message, type = 'info') {
-            const toastOptions = {
-                text: message,
-                duration: 6500,
-                position: "center",
-                style: {
-                    background: isDarkMode ? '#2d3748' : '#fff',
-                    color: isDarkMode ? '#e2e8f0' : '#1f2a44',
-                    border: `1px solid ${isDarkMode ? '#4b5563' : '#d1d5db'}`,
-                    boxShadow: isDarkMode ? '0 2px 10px rgba(0, 0, 0, 0.3)' : '0 2px 10px rgba(0, 0, 0, 0.1)',
-                    position: 'fixed',
-                    top: '50px',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    width: 'auto',
-                    maxWidth: '80%',
-                    zIndex: 1000
-                }
+function throttleRequest(fn) {
+            return async function(...args) {
+                const now = Date.now();
+                const timeSinceLast = now - lastRequestTime;
+                if (timeSinceLast < RATE_LIMIT_MS) await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_MS - timeSinceLast));
+                lastRequestTime = now;
+                return fn(...args);
             };
-            switch (type) {
-                case 'success': toastOptions.style.background = isDarkMode ? '#166534' : '#22c55e'; toastOptions.style.color = '#fff'; break;
-                case 'error': toastOptions.style.background = isDarkMode ? '#991b1b' : '#ef4444'; toastOptions.style.color = '#fff'; break;
-            }
-            Toastify(toastOptions).showToast();
         }
 
-        function throttleRequest(fn, rateLimit = RATE_LIMIT_MS) {
-    return async function(...args) {
-        if (activeTaskController) {
-            throw new Error('Another task is already running');
-        }
-        
-        activeTaskController = new AbortController();
-        const stopButton = document.getElementById('stop-task');
-        stopButton.disabled = false;
-        
-        const now = Date.now();
-        const timeSinceLast = now - lastRequestTime;
-        const delay = rateLimit; // Use the provided rate limit (1000ms for Shodan)
-        if (timeSinceLast < delay) await new Promise(resolve => setTimeout(resolve, delay - timeSinceLast));
-        lastRequestTime = now;
-        
-        try {
-            const result = await fn(...args, activeTaskController.signal);
-            activeTaskController = null;
-            stopButton.disabled = true;
-            return result;
-        } catch (error) {
-            if (error.name === 'AbortError') {
-                console.log('Task aborted');
-            } else {
-                throw error;
-            }
-        } finally {
-            if (activeTaskController === null) {
-                stopButton.disabled = true;
-            }
-        }
-    };
-}
 
 const baseInteractionOptions = {
     dragNodes: true,
@@ -2299,7 +2268,7 @@ const baseInteractionOptions = {
     },
     layout: { improvedLayout: true }
 };
-        
+
         let network = new vis.Network(container, data, options);
 
 network.on('selectNode', function(params) {
@@ -2311,8 +2280,6 @@ network.on('deselectNode', function(params) {
     selectedNodes = new Set(params.nodes); // Sync with vis.js selection
     console.log('Nodes deselected, remaining:', [...selectedNodes]);
 });
-
-
 
 function ensureInteractionSettings() {
     network.setOptions({
@@ -2411,11 +2378,9 @@ function finishStabilization(resolve, skipFit) {
     if (!skipFit) network.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } });
     resolve();
 }
+   
 
-
-       
-
-        network.on('init', function() {
+network.on('init', function() {
             container.addEventListener('wheel', function(event) {
                 event.preventDefault();
                 const scale = event.deltaY > 0 ? 0.9 : 1.1;
@@ -2425,9 +2390,11 @@ function finishStabilization(resolve, skipFit) {
                     animation: { duration: 100 }
                 });
             }, { passive: false });
-        });
+}
 
-        network.on('oncontext', function(params) {
+);
+
+network.on('oncontext', function(params) {
     params.event.preventDefault();
     const nodeId = this.getNodeAt(params.pointer.DOM);
     const edgeId = this.getEdgeAt(params.pointer.DOM);
@@ -2458,6 +2425,13 @@ function finishStabilization(resolve, skipFit) {
 });
 
 network.on('click', function(params) {
+
+    if (params.nodes.length === 0) {
+        // Empty space clicked, prevent default zooming
+        params.event.preventDefault();
+        console.log('Empty space clicked, no action taken');
+        return;
+    }
     // Only proceed if exactly one node is selected and not dragging
     if (params.nodes.length !== 1 || params.event.type === 'drag') {
         console.log('Click event ignored:', params);
@@ -2555,6 +2529,9 @@ network.on('click', function(params) {
             nodeData.label = `${node.hashType}: ${node.hash.substring(0, 8)}...`;
             nodeData.title = `File Hash\nType: ${node.hashType}\nValue: ${node.hash}${node.notes ? '\nNotes: ' + node.notes : ''}`;
             nodeData.color.background = node.color?.background || '#f97316';
+            break;
+        case 'txt': // New case for TXT records
+            valueToCopy = node.text;
             break;
         default:
             valueToCopy = node.label.split('\n')[0].split(': ')[1] || node.label.split('\n')[0];
@@ -2679,6 +2656,8 @@ function showContextMenu(x, y, value, nodeIds, type) {
         } else if (type === 'domain') {
             menuHtml += `
                 <button onclick="throttledEnrichGoogleDNSMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via Google DNS</button>
+                <button onclick="throttledEnrichGoogleDNSMXMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via Google DNS (MX)</button>
+                <button onclick="throttledEnrichGoogleDNSTXTMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via Google DNS (TXT)</button>
                 <button onclick="throttledEnrichShodanMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via Shodan</button>
                 <button onclick="throttledEnrichHudsonRockDomainMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], [${nodesArray.map(id => `'${id}'`).join(',')}])">Enrich via Hudson Rock</button>
                 <button onclick="throttledSendHttpsRequestMultiple([${nodesArray.map(id => `'${nodes.get(id).domain}'`).join(',')}], 'domain', 'https')">Send HTTPS Request</button>
@@ -2732,7 +2711,10 @@ function saveState() {
                     originalLabel: node.originalLabel,
                     notes: node.notes // Include notes for all types
                 };
-
+                if (node.type === 'subnet') {
+                nodeData.subnet = node.subnet;
+                nodeData.isPrivate = node.isPrivate;
+            }
                 // Add type-specific properties
                 switch (node.type) {
                     case 'contact':
@@ -2833,6 +2815,9 @@ function saveState() {
                     case 'hash': // Add this case for file hashes
                         nodeData.hash = node.hash;
                         nodeData.hashType = node.hashType;
+                        break;
+                    case 'txt':
+                        nodeData.text = node.text;
                         break;
                     default:
                         console.warn(`Unhandled node type in saveState: ${node.type}`);
@@ -2969,7 +2954,7 @@ const throttledSearchShodanHtmlHash = throttleRequest(async function searchShoda
         updateNodeSizes();
         updateSelectOptions();
         await stabilizeNetwork();
-        ensureInteractionSettings();
+        //ensureInteractionSettings();
 
         completeProgressBar();
         showToast(`Found and added ${successfulAdditions} IPs with HTML Hash ${htmlHash.substring(0, 8)}...`, 'success');
@@ -3086,7 +3071,7 @@ function cancelLinkCreation() {
             showToast('CORS Proxy settings set for this session only', 'success');
         }
     } else {
-        corsProxyUrl = 'https://cors-anywhere.herokuapp.com/';
+        corsProxyUrl = 'http://localhost:3000/proxy?url=';
         routeViaProxy = false;
         ignoreApiKeysViaProxy = false;
         localStorage.removeItem('corsProxyUrl');
@@ -3104,24 +3089,15 @@ function constructUrl(baseUrl, useApiKey = true) {
         // Ensure corsProxyUrl doesn't end with a slash and baseUrl doesn't start with one
         const cleanProxyUrl = corsProxyUrl.replace(/\/+$/, ''); // Remove trailing slashes
         const cleanBaseUrl = baseUrl.replace(/^\/+/, '');      // Remove leading slashes
-        return `${cleanProxyUrl}/${cleanBaseUrl}`;
+        return `${cleanProxyUrl}${cleanBaseUrl}`;
     }
     return useApiKey ? baseUrl : baseUrl.split('?')[0]; // Remove query params if ignoring API keys
 }
 
-        function throttleRequest(fn) {
-            return async function(...args) {
-                const now = Date.now();
-                const timeSinceLast = now - lastRequestTime;
-                if (timeSinceLast < RATE_LIMIT_MS) await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_MS - timeSinceLast));
-                lastRequestTime = now;
-                return fn(...args);
-            };
-        }
-
-        function showToast(message, type = 'info') {
-    const topBarHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--top-bar-height')) || 40; // Default to 40px if variable not found
-    const buffer = 10; // Additional pixels to push toast below top bar
+ function showToast(message, type = 'info') {
+    console.log('Showing toast:', message, type);
+    const topBarHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--top-bar-height')) || 40;
+    const buffer = 20;
     const toastOptions = {
         text: message,
         duration: 6500,
@@ -3132,28 +3108,27 @@ function constructUrl(baseUrl, useApiKey = true) {
             border: `1px solid ${isDarkMode ? '#4b5563' : '#d1d5db'}`,
             boxShadow: isDarkMode ? '0 2px 10px rgba(0, 0, 0, 0.3)' : '0 2px 10px rgba(0, 0, 0, 0.1)',
             position: 'fixed',
-            top: `${topBarHeight + buffer}px`, // Position below top bar with buffer
+            top: `${topBarHeight + buffer}px`,
             left: '50%',
             transform: 'translateX(-50%)',
             width: 'auto',
             maxWidth: '80%',
-            zIndex: 3000 // Increased z-index to ensure it’s above other elements
+            zIndex: 3000
         }
     };
     switch (type) {
-        case 'success': 
-            toastOptions.style.background = isDarkMode ? '#166534' : '#22c55e'; 
-            toastOptions.style.color = '#fff'; 
-            break;
-        case 'error': 
-            toastOptions.style.background = isDarkMode ? '#991b1b' : '#ef4444'; 
-            toastOptions.style.color = '#fff'; 
-            break;
+        case 'success': toastOptions.style.background = isDarkMode ? '#166534' : '#22c55e'; toastOptions.style.color = '#fff'; break;
+        case 'error': toastOptions.style.background = isDarkMode ? '#991b1b' : '#ef4444'; toastOptions.style.color = '#fff'; break;
     }
-    Toastify(toastOptions).showToast();
+    const toast = Toastify(toastOptions);
+    console.log('Toast instance created:', toast);
+    setTimeout(() => {
+        toast.showToast();
+        console.log('Toast should now be visible');
+    }, 100); // Small delay to ensure rendering
 }
 
-        async function stabilizeNetwork(skipFit = false) {
+async function stabilizeNetwork(skipFit = false) {
     return new Promise(resolve => {
         network.setOptions({
             physics: {
@@ -3175,7 +3150,7 @@ function constructUrl(baseUrl, useApiKey = true) {
             interaction: { 
                 ...baseInteractionOptions,
                 zoomView: true,  // Ensure zooming is enabled
-                dragView: true,
+                //dragView: true,
                 zoomSpeed: 0.5
             }
         });
@@ -3190,7 +3165,7 @@ function constructUrl(baseUrl, useApiKey = true) {
                 interaction: { 
                     ...baseInteractionOptions,
                     zoomView: true,
-                    dragView: true,
+                    //dragView: true,
                     zoomSpeed: 0.5
                 }
             });
@@ -3218,106 +3193,14 @@ function constructUrl(baseUrl, useApiKey = true) {
                     });
                 }
                 resolve();
+                
             }, skipFit ? 0 : 550);
+            ensureInteractionSettings(); // Ensure panning is enabled
         });
     });
 }
 
-        function throttleRequest(fn) {
-            return async function(...args) {
-                const now = Date.now();
-                const timeSinceLast = now - lastRequestTime;
-                if (timeSinceLast < RATE_LIMIT_MS) await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_MS - timeSinceLast));
-                lastRequestTime = now;
-                return fn(...args);
-            };
-        }
 
-        function showToast(message, type = 'info') {
-            const toastOptions = {
-                text: message,
-                duration: 6500,
-                position: "center",
-                style: {
-                    background: isDarkMode ? '#2d3748' : '#fff',
-                    color: isDarkMode ? '#e2e8f0' : '#1f2a44',
-                    border: `1px solid ${isDarkMode ? '#4b5563' : '#d1d5db'}`,
-                    boxShadow: isDarkMode ? '0 2px 10px rgba(0, 0, 0, 0.3)' : '0 2px 10px rgba(0, 0, 0, 0.1)',
-                    position: 'fixed',
-                    top: '50px',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    width: 'auto',
-                    maxWidth: '80%',
-                    zIndex: 1000
-                }
-            };
-            switch (type) {
-                case 'success': toastOptions.style.background = isDarkMode ? '#166534' : '#22c55e'; toastOptions.style.color = '#fff'; break;
-                case 'error': toastOptions.style.background = isDarkMode ? '#991b1b' : '#ef4444'; toastOptions.style.color = '#fff'; break;
-            }
-            Toastify(toastOptions).showToast();
-        }
-
-        async function stabilizeNetwork(skipFit = false) {
-    return new Promise(resolve => {
-        network.setOptions({
-            physics: {
-                enabled: true,
-                stabilization: {
-                    enabled: true,
-                    iterations: 200,
-                    updateInterval: 50
-                },
-                barnesHut: {
-                    gravitationalConstant: -8000,
-                    centralGravity: 0.3,
-                    springLength: 150,
-                    avoidOverlap: 1.0,
-                    damping: 0.9
-                }
-            },
-            interaction: { ...baseInteractionOptions, zoomView: true } // Preserve zoom
-        });
-
-        network.stabilize(200);
-        network.once('stabilizationIterationsDone', () => {
-            network.setOptions({
-                physics: {
-                    enabled: !isPhysicsPaused,
-                    stabilization: { enabled: false }
-                },
-                interaction: { ...baseInteractionOptions, zoomView: true } // Re-ensure zoom
-            });
-
-            if (!skipFit) {
-                network.fit({
-                    animation: {
-                        duration: 500,
-                        easingFunction: 'easeInOutQuad'
-                    }
-                });
-            }
-
-            setTimeout(() => {
-                const boundingBox = network.getBoundingBox();
-                if (boundingBox && nodes.length > 0) {
-                    const margin = 50;
-                    nodes.forEach(node => {
-                        const { x, y } = network.getPositions([node.id])[node.id] || { x: 0, y: 0 };
-                        nodes.update({
-                            id: node.id,
-                            x: Math.max(boundingBox.left + margin, Math.min(boundingBox.right - margin, x)),
-                            y: Math.max(boundingBox.top + margin, Math.min(boundingBox.bottom - margin, y))
-                        });
-                    });
-                }
-                ensureInteractionSettings(); // Final check
-                resolve();
-            }, skipFit ? 0 : 550);
-        });
-    });
-}
 
 const throttledEnrichInternetDB = throttleRequest(async function enrichInternetDB(ip, ipNodeId, isBulk = false) {
     network.setOptions({ physics: { enabled: false } });
@@ -3463,7 +3346,7 @@ const throttledEnrichInternetDB = throttleRequest(async function enrichInternetD
         updateNodeSizes();
         updateSelectOptions();
         await stabilizeNetwork();
-        ensureInteractionSettings();
+        //ensureInteractionSettings();
         if (!isBulk) showToast(`IP ${ip} enrichment completed using InternetDB`, 'success');
     } catch (error) {
         console.error(`Error enriching IP ${ip} with InternetDB: ${error.message}`);
@@ -3594,7 +3477,7 @@ async function enrichAllShodan() {
         updateTheme();
         
         await stabilizeNetwork();
-        ensureInteractionSettings();
+        //ensureInteractionSettings();
 
         if (!(activeTaskController && activeTaskController.signal.aborted)) {
             completeProgressBar();
@@ -3843,7 +3726,7 @@ async function enrichAllInternetDB() {
     updateNodeSizes();
     updateSelectOptions();
     await stabilizeNetwork();
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
     completeProgressBar();
     showToast(`InternetDB enrichment completed: ${successfulEnrichments}/${totalIPs} IPs enriched`, 'success');
     
@@ -4044,462 +3927,6 @@ async function importIOCsFromFile() {
     reader.readAsText(file);
 }
 
-async function processIOCs(text) {
-    network.setOptions({ physics: { enabled: false } });
-
-    // Regex patterns
-    const urlRegex = /^(https?:\/\/)([^\s/:]+)(?::(\d{1,5}))?(\/.*)?$/i; // Matches http(s)://<host>[:port][/path]
-    const domainRegex = /^([a-zA-Z0-9-_]+\.)+[a-zA-Z]{2,}$/; // Matches domain with TLD
-    const ipRegex = { 
-        ipv4: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/, 
-        ipv6: /^([0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}$/ 
-    };
-    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-    const hashRegex = {
-        sha256: /^[0-9a-fA-F]{64}$/,
-        md5: /^[0-9a-fA-F]{32}$/,
-        sha1: /^[0-9a-fA-F]{40}$/
-    };
-    const hashPattern = /[0-9a-fA-F]{32,64}/g;
-
-    // Split text into tokens
-    const tokens = text.split(/[\s,\n]+/).filter(token => token.trim().length > 0);
-    console.log('Tokens:', tokens);
-
-    // Extract matches
-    const urlMatches = new Set();
-    const ipMatches = new Set();
-    const domainMatches = new Set();
-    const emailMatches = new Set(tokens.map(token => token.match(emailRegex)?.[0]).filter(Boolean));
-    const hashCandidates = new Set(tokens.map(token => token.match(hashPattern)?.[0]).filter(Boolean));
-
-    // Process each token
-    for (const token of tokens) {
-        const urlMatch = token.match(urlRegex);
-        if (urlMatch) {
-            const [, protocol, host, port, path] = urlMatch;
-            urlMatches.add(token);
-            console.log(`URL Match: ${token}, Protocol: ${protocol}, Host: ${host}, Port: ${port || 'none'}, Path: ${path || 'none'}`);
-
-            // Determine if host is IP or domain
-            if (ipRegex.ipv4.test(host) || ipRegex.ipv6.test(host)) {
-                ipMatches.add(host);
-            } else if (domainRegex.test(host)) {
-                domainMatches.add(host);
-            }
-            continue;
-        }
-
-        // Check for standalone IPs
-        if (ipRegex.ipv4.test(token) || ipRegex.ipv6.test(token)) {
-            ipMatches.add(token);
-            continue;
-        }
-
-        // Check for standalone domains
-        if (domainRegex.test(token) && !urlMatches.has(token)) {
-            domainMatches.add(token);
-            continue;
-        }
-    }
-
-    // Filter hash candidates
-    const hashMatches = new Set();
-    hashCandidates.forEach(hash => {
-        if (hashRegex.sha256.test(hash)) hashMatches.add({ value: hash, type: 'sha256' });
-        else if (hashRegex.md5.test(hash)) hashMatches.add({ value: hash, type: 'md5' });
-        else if (hashRegex.sha1.test(hash)) hashMatches.add({ value: hash, type: 'sha1' });
-    });
-
-    const totalItems = urlMatches.size + ipMatches.size + domainMatches.size + emailMatches.size + hashMatches.size;
-    if (totalItems === 0) {
-        showToast('No IOCs found in text', 'info');
-        return;
-    }
-
-    console.log('URL Matches:', Array.from(urlMatches));
-    console.log('IP Matches:', Array.from(ipMatches));
-    console.log('Domain Matches:', Array.from(domainMatches));
-    console.log('Email Matches:', Array.from(emailMatches));
-    console.log('Hash Matches:', Array.from(hashMatches));
-
-    // Maps for deduplication
-    const existingNodes = new Map();
-    nodes.forEach(node => {
-        if (node.type === 'url' && node.url) existingNodes.set(`url:${node.url}`, node);
-        if (node.type === 'ip' && node.ip) existingNodes.set(`ip:${node.ip}`, node);
-        if (node.type === 'domain' && node.domain) existingNodes.set(`domain:${node.domain}`, node);
-        if (node.type === 'contact' && node.email) existingNodes.set(`email:${node.email}`, node);
-        if (node.type === 'hash' && node.hash) existingNodes.set(`hash:${node.hash}`, node);
-        if (node.type === 'port' && node.portNumber) existingNodes.set(`port:${node.portType}/${node.portNumber}`, node);
-    });
-
-    const newNodes = [];
-    const newEdges = [];
-    let processedCount = 0;
-    const batchSize = 50;
-
-    // Helper function to extract apex domain
-    function getApexDomain(fullDomain) {
-        const parts = fullDomain.split('.');
-        if (parts.length >= 2) {
-            return parts.slice(-2).join('.'); // Last two parts (e.g., "gov.uk")
-        }
-        return fullDomain; // Fallback if no TLD (unlikely)
-    }
-
-    // Process URLs
-    for (const url of urlMatches) {
-        const urlMatch = url.match(urlRegex);
-        if (!urlMatch) continue;
-        const [, protocol, host, port, path] = urlMatch;
-
-        if (!existingNodes.has(`url:${url}`)) {
-            const urlNodeId = nextId++;
-            const label = `URL: ${url.length > 30 ? url.substring(0, 27) + '...' : url}`;
-            newNodes.push({
-                id: urlNodeId,
-                type: 'url',
-                label: label,
-                title: `Full URL: ${url}`,
-                color: { background: '#3b82f6' },
-                url: url,
-                size: 15
-            });
-            existingNodes.set(`url:${url}`, { id: urlNodeId });
-            console.log(`Added URL node: ${url}, ID: ${urlNodeId}`);
-
-            // Handle host (IP or domain)
-            if (ipRegex.ipv4.test(host) || ipRegex.ipv6.test(host)) {
-                if (!existingNodes.has(`ip:${host}`)) {
-                    const ipNodeId = nextId++;
-                    newNodes.push({
-                        id: ipNodeId,
-                        type: 'ip',
-                        label: `IP: ${host}`,
-                        title: `IP Address: ${host}`,
-                        color: { background: '#f87171' },
-                        ip: host,
-                        size: 20
-                    });
-                    existingNodes.set(`ip:${host}`, { id: ipNodeId });
-                    newEdges.push({
-                        id: `edge_${urlNodeId}_${ipNodeId}_${Date.now()}`,
-                        from: urlNodeId,
-                        to: ipNodeId,
-                        label: 'Resolves to'
-                    });
-                    console.log(`Added IP node: ${host}, ID: ${ipNodeId}, Edge to URL: ${urlNodeId}`);
-                } else {
-                    const existingIpNode = existingNodes.get(`ip:${host}`);
-                    newEdges.push({
-                        id: `edge_${urlNodeId}_${existingIpNode.id}_${Date.now()}`,
-                        from: urlNodeId,
-                        to: existingIpNode.id,
-                        label: 'Resolves to'
-                    });
-                    console.log(`Linked URL ${urlNodeId} to existing IP: ${existingIpNode.id}`);
-                }
-            } else if (domainRegex.test(host)) {
-                if (!existingNodes.has(`domain:${host}`)) {
-                    const domainNodeId = nextId++;
-                    newNodes.push({
-                        id: domainNodeId,
-                        type: 'domain',
-                        label: `Domain: ${host}`,
-                        title: `Domain: ${host}`,
-                        color: { background: '#60a5fa' },
-                        domain: host,
-                        size: 20
-                    });
-                    existingNodes.set(`domain:${host}`, { id: domainNodeId });
-                    newEdges.push({
-                        id: `edge_${urlNodeId}_${domainNodeId}_${Date.now()}`,
-                        from: urlNodeId,
-                        to: domainNodeId,
-                        label: 'Belongs to'
-                    });
-                    console.log(`Added Domain node: ${host}, ID: ${domainNodeId}, Edge to URL: ${urlNodeId}`);
-
-                    // Create apex domain
-                    const apexDomain = getApexDomain(host);
-                    if (apexDomain !== host && !existingNodes.has(`domain:${apexDomain}`)) {
-                        const apexNodeId = nextId++;
-                        newNodes.push({
-                            id: apexNodeId,
-                            type: 'domain',
-                            label: `Apex: ${apexDomain}`,
-                            title: `Apex Domain: ${apexDomain}`,
-                            color: { background: '#60a5fa' },
-                            domain: apexDomain,
-                            size: 20
-                        });
-                        existingNodes.set(`domain:${apexDomain}`, { id: apexNodeId });
-                        newEdges.push({
-                            id: `edge_${domainNodeId}_${apexNodeId}_${Date.now()}`,
-                            from: domainNodeId,
-                            to: apexNodeId,
-                            label: 'Apex of'
-                        });
-                        console.log(`Added Apex Domain node: ${apexDomain}, ID: ${apexNodeId}, Edge to Domain: ${domainNodeId}`);
-                    } else if (apexDomain !== host) {
-                        const existingApexNode = existingNodes.get(`domain:${apexDomain}`);
-                        newEdges.push({
-                            id: `edge_${domainNodeId}_${existingApexNode.id}_${Date.now()}`,
-                            from: domainNodeId,
-                            to: existingApexNode.id,
-                            label: 'Apex of'
-                        });
-                        console.log(`Linked Domain ${domainNodeId} to existing Apex: ${existingApexNode.id}`);
-                    }
-                } else {
-                    const existingDomainNode = existingNodes.get(`domain:${host}`);
-                    newEdges.push({
-                        id: `edge_${urlNodeId}_${existingDomainNode.id}_${Date.now()}`,
-                        from: urlNodeId,
-                        to: existingDomainNode.id,
-                        label: 'Belongs to'
-                    });
-                    console.log(`Linked URL ${urlNodeId} to existing Domain: ${existingDomainNode.id}`);
-                }
-            }
-
-            // Handle port
-            if (port && parseInt(port) >= 1 && parseInt(port) <= 65535) {
-                const portKey = `port:TCP/${port}`;
-                if (!existingNodes.has(portKey)) {
-                    const portNodeId = nextId++;
-                    newNodes.push({
-                        id: portNodeId,
-                        type: 'port',
-                        label: `TCP/${port}`,
-                        title: `Port\nType: TCP\nNumber: ${port}`,
-                        color: { background: '#a78bfa' },
-                        portType: 'TCP',
-                        portNumber: port,
-                        size: 10
-                    });
-                    existingNodes.set(portKey, { id: portNodeId });
-                    newEdges.push({
-                        id: `edge_${urlNodeId}_${portNodeId}_${Date.now()}`,
-                        from: urlNodeId,
-                        to: portNodeId,
-                        label: 'Uses port'
-                    });
-                    console.log(`Added Port node: TCP/${port}, ID: ${portNodeId}, Edge to URL: ${urlNodeId}`);
-                } else {
-                    const existingPortNode = existingNodes.get(portKey);
-                    newEdges.push({
-                        id: `edge_${urlNodeId}_${existingPortNode.id}_${Date.now()}`,
-                        from: urlNodeId,
-                        to: existingPortNode.id,
-                        label: 'Uses port'
-                    });
-                    console.log(`Linked URL ${urlNodeId} to existing Port: ${existingPortNode.id}`);
-                }
-            }
-        }
-        processedCount++;
-        if (processedCount % batchSize === 0) {
-            nodes.add(newNodes);
-            edges.add(newEdges);
-            newNodes.length = 0;
-            newEdges.length = 0;
-            await new Promise(resolve => setTimeout(resolve, 0));
-        }
-    }
-
-    // Process standalone IPs
-    for (const ip of ipMatches) {
-        if ((ipRegex.ipv4.test(ip) || ipRegex.ipv6.test(ip)) && !existingNodes.has(`ip:${ip}`)) {
-            const nodeId = nextId++;
-            newNodes.push({
-                id: nodeId,
-                type: 'ip',
-                label: `IP: ${ip}`,
-                title: `IP Address: ${ip}`,
-                color: { background: '#f87171' },
-                ip: ip,
-                size: 20
-            });
-            existingNodes.set(`ip:${ip}`, { id: nodeId });
-            console.log(`Added standalone IP node: ${ip}, ID: ${nodeId}`);
-        }
-        processedCount++;
-        if (processedCount % batchSize === 0) {
-            nodes.add(newNodes);
-            edges.add(newEdges);
-            newNodes.length = 0;
-            newEdges.length = 0;
-            await new Promise(resolve => setTimeout(resolve, 0));
-        }
-    }
-
-    // Process standalone Domains
-    for (const domain of domainMatches) {
-        if (domainRegex.test(domain) && !existingNodes.has(`domain:${domain}`)) {
-            const nodeId = nextId++;
-            newNodes.push({
-                id: nodeId,
-                type: 'domain',
-                label: `Domain: ${domain}`,
-                title: `Domain: ${domain}`,
-                color: { background: '#60a5fa' },
-                domain: domain,
-                size: 20
-            });
-            existingNodes.set(`domain:${domain}`, { id: nodeId });
-            console.log(`Added standalone Domain node: ${domain}, ID: ${nodeId}`);
-
-            // Create apex domain for standalone domains
-            const apexDomain = getApexDomain(domain);
-            if (apexDomain !== domain && !existingNodes.has(`domain:${apexDomain}`)) {
-                const apexNodeId = nextId++;
-                newNodes.push({
-                    id: apexNodeId,
-                    type: 'domain',
-                    label: `Apex: ${apexDomain}`,
-                    title: `Apex Domain: ${apexDomain}`,
-                    color: { background: '#60a5fa' },
-                    domain: apexDomain,
-                    size: 20
-                });
-                existingNodes.set(`domain:${apexDomain}`, { id: apexNodeId });
-                newEdges.push({
-                    id: `edge_${nodeId}_${apexNodeId}_${Date.now()}`,
-                    from: nodeId,
-                    to: apexNodeId,
-                    label: 'Apex of'
-                });
-                console.log(`Added Apex Domain node: ${apexDomain}, ID: ${apexNodeId}, Edge to Domain: ${nodeId}`);
-            }
-        }
-        processedCount++;
-        if (processedCount % batchSize === 0) {
-            nodes.add(newNodes);
-            edges.add(newEdges);
-            newNodes.length = 0;
-            newEdges.length = 0;
-            await new Promise(resolve => setTimeout(resolve, 0));
-        }
-    }
-
-    // Process Emails
-    for (const email of emailMatches) {
-        if (!existingNodes.has(`email:${email}`)) {
-            const emailNodeId = nextId++;
-            const emailDomain = email.split('@')[1];
-            newNodes.push({
-                id: emailNodeId,
-                type: 'contact',
-                label: `Contact: ${email}`,
-                title: `Contact\nEmail: ${email}`,
-                color: { background: '#4ade80' },
-                email: email,
-                name: email.split('@')[0],
-                size: 10
-            });
-            existingNodes.set(`email:${email}`, { id: emailNodeId });
-
-            let domainNode = existingNodes.get(`domain:${emailDomain}`);
-            if (!domainNode && domainRegex.test(emailDomain)) {
-                const domainNodeId = nextId++;
-                newNodes.push({
-                    id: domainNodeId,
-                    type: 'domain',
-                    label: `Domain: ${emailDomain}`,
-                    title: `Domain: ${emailDomain}`,
-                    color: { background: '#60a5fa' },
-                    domain: emailDomain,
-                    size: 20
-                });
-                domainNode = { id: domainNodeId };
-                existingNodes.set(`domain:${emailDomain}`, domainNode);
-
-                // Create apex domain for email domain
-                const apexDomain = getApexDomain(emailDomain);
-                if (apexDomain !== emailDomain && !existingNodes.has(`domain:${apexDomain}`)) {
-                    const apexNodeId = nextId++;
-                    newNodes.push({
-                        id: apexNodeId,
-                        type: 'domain',
-                        label: `Apex: ${apexDomain}`,
-                        title: `Apex Domain: ${apexDomain}`,
-                        color: { background: '#60a5fa' },
-                        domain: apexDomain,
-                        size: 20
-                    });
-                    existingNodes.set(`domain:${apexDomain}`, { id: apexNodeId });
-                    newEdges.push({
-                        id: `edge_${domainNodeId}_${apexNodeId}_${Date.now()}`,
-                        from: domainNodeId,
-                        to: apexNodeId,
-                        label: 'Apex of'
-                    });
-                    console.log(`Added Apex Domain node: ${apexDomain}, ID: ${apexNodeId}, Edge to Domain: ${domainNodeId}`);
-                }
-            }
-            if (domainNode) {
-                newEdges.push({
-                    id: `edge_${emailNodeId}_${domainNode.id}_${Date.now()}`,
-                    from: emailNodeId,
-                    to: domainNode.id,
-                    label: 'Registered with'
-                });
-            }
-            console.log(`Added Email node: ${email}, ID: ${emailNodeId}`);
-        }
-        processedCount++;
-        if (processedCount % batchSize === 0) {
-            nodes.add(newNodes);
-            edges.add(newEdges);
-            newNodes.length = 0;
-            newEdges.length = 0;
-            await new Promise(resolve => setTimeout(resolve, 0));
-        }
-    }
-
-    // Process Hashes
-    for (const hashObj of hashMatches) {
-        const hash = hashObj.value;
-        if (!existingNodes.has(`hash:${hash}`)) {
-            const hashNodeId = nextId++;
-            const hashType = hashObj.type.toUpperCase();
-            newNodes.push({
-                id: hashNodeId,
-                type: 'hash',
-                label: `${hashType}: ${hash.substring(0, 8)}...`,
-                title: `File Hash\nType: ${hashType}\nValue: ${hash}`,
-                color: { background: '#f97316' },
-                hash: hash,
-                hashType: hashType,
-                size: 15
-            });
-            existingNodes.set(`hash:${hash}`, { id: hashNodeId });
-            console.log(`Added Hash node: ${hash}, Type: ${hashType}, ID: ${hashNodeId}`);
-        }
-        processedCount++;
-        if (processedCount % batchSize === 0) {
-            nodes.add(newNodes);
-            edges.add(newEdges);
-            newNodes.length = 0;
-            newEdges.length = 0;
-            await new Promise(resolve => setTimeout(resolve, 0));
-        }
-    }
-
-    // Add remaining items
-    if (newNodes.length > 0) {
-        console.log('Final batch processing:', { newNodes, newEdges });
-        nodes.add(newNodes);
-        edges.add(newEdges);
-    }
-
-    updateNodeSizes();
-    updateSelectOptions();
-    await stabilizeNetwork().catch(err => console.error('Error stabilizing network:', err));
-    showToast(`Imported ${urlMatches.size} URLs, ${ipMatches.size} IPs, ${domainMatches.size} domains, ${emailMatches.size} emails, ${hashMatches.size} hashes`, 'success');
-}
 
 
 
@@ -4535,7 +3962,7 @@ function toggleMode() {
         // Trigger stabilization when resuming physics
         stabilizeNetwork();
     }
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
     }
 
         function resetLayout() {
@@ -4564,7 +3991,7 @@ function toggleMode() {
         },
         layout: { 
             hierarchical: false,
-            improvedLayout: true 
+            improvedLayout: false
         },
         interaction: { ...baseInteractionOptions }
     });
@@ -4585,7 +4012,7 @@ function toggleMode() {
         const pauseButton = document.getElementById('pause-toggle');
         pauseButton.textContent = 'Resume Physics';
         pauseButton.classList.add('paused');
-        ensureInteractionSettings();
+        //ensureInteractionSettings();
     });
 }
 
@@ -4765,6 +4192,7 @@ function setHierarchicalLayout() {
             document.getElementById('addDeviceNameInput').style.display = type === 'device' ? 'block' : 'none';
             document.getElementById('addMalwareNameInput').style.display = type === 'malware' ? 'block' : 'none';
             document.getElementById('addMalwareType').style.display = type === 'malware' ? 'block' : 'none';
+            document.getElementById('addSubnetInput').style.display = type === 'subnet' ? 'block' : 'none';
         });
 
         function createNodeData(type, values) {
@@ -4776,6 +4204,7 @@ function setHierarchicalLayout() {
         heightConstraint: false
     };
     
+    // Define configs for all node types
     const configs = {
         vulnerability: { 
             fields: ['vulnName'], 
@@ -4797,7 +4226,13 @@ function setHierarchicalLayout() {
             color: '#f87171', 
             label: v => `IP: ${v.ip}`, 
             title: v => `IP Address: ${v.ip}${v.notes ? '\nNotes: ' + v.notes : ''}`,
-            validate: v => ipRegex.ipv4.test(v.ip) || ipRegex.ipv6.test(v.ip) 
+            validate: v => {
+                const ipRegex = {
+                    ipv4: /^(?!0\d)(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?!0\d)(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?!0\d)(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?!0\d)(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/,
+                    ipv6: /^((([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4})|(([0-9a-fA-F]{1,4}:){1,7}:)|(::([0-9a-fA-F]{1,4}:){0,5}[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|::)$/i
+                };
+                return ipRegex.ipv4.test(v.ip) || ipRegex.ipv6.test(v.ip);
+            }
         },
         domain: { 
             fields: ['domain'], 
@@ -4855,7 +4290,6 @@ function setHierarchicalLayout() {
             label: v => `Malware: ${v.malwareName}\nType: ${v.malwareType}`, 
             title: v => `Malware\nName: ${v.malwareName}\nType: ${v.malwareType}${v.notes ? '\nNotes: ' + v.notes : ''}` 
         },
-        // Add notes to other types as needed
         favicon: { 
             fields: ['hash'], 
             optionalFields: ['location', 'notes'], 
@@ -4863,7 +4297,33 @@ function setHierarchicalLayout() {
             label: v => `Favicon: ${v.hash.substring(0, 8)}...`, 
             title: v => `Favicon\nHash: ${v.hash}${v.location ? '\nPath: ' + v.location : ''}${v.notes ? '\nNotes: ' + v.notes : ''}` 
         },
-        // ... add 'notes' to optionalFields for all other types similarly ...
+        subnet: { 
+            fields: ['subnet'], 
+            optionalFields: ['notes'],
+            color: '#9333ea',
+            validate: v => {
+                const cidrRegex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\/(\d{1,2})$/;
+                if (!cidrRegex.test(v.subnet)) return false;
+                const [ip, mask] = v.subnet.split('/');
+                const octets = ip.split('.').map(Number);
+                const maskNum = Number(mask);
+                return octets.every(o => o >= 0 && o <= 255) && maskNum >= 0 && maskNum <= 32;
+            }
+        },
+        mx: {
+            fields: ['hostname'],
+            optionalFields: ['notes'],
+            color: '#34d399', // Green for MX records
+            label: v => `MX: ${v.hostname.length > 30 ? v.hostname.substring(0, 27) + '...' : v.hostname}`,
+            title: v => `Mail Exchanger\nHostname: ${v.hostname}${v.notes ? '\nNotes: ' + v.notes : ''}`
+        },
+        txt: {
+            fields: ['text'],
+            optionalFields: ['notes'],
+            color: '#f59e0b', // Orange for TXT records
+            label: v => `TXT: ${v.text.length > 30 ? v.text.substring(0, 27) + '...' : v.text}`,
+            title: v => `TXT Record\nValue: ${v.text}${v.notes ? '\nNotes: ' + v.notes : ''}`
+        }
     };
 
     const config = configs[type];
@@ -4879,15 +4339,51 @@ function setHierarchicalLayout() {
     const allValues = { ...values };
     if (config.optionalFields) config.optionalFields.forEach(f => { if (values[f]) allValues[f] = values[f]; });
     
-    Object.assign(nodeData, { 
-        label: config.label(allValues), 
-        title: config.title(allValues), 
-        color: { background: config.color }, 
-        ...allValues 
-    });
-    
+    // Handle subnet type separately to set label and title directly
+    if (type === 'subnet') {
+        const [ip] = values.subnet.split('/');
+        const isPrivate = isPrivateIP(ip);
+        allValues.isPrivate = isPrivate;
+        nodeData.isPrivate = isPrivate;
+        nodeData.label = `Subnet: ${values.subnet} (${isPrivate ? 'Private' : 'Public'})`;
+        nodeData.title = `Subnet: ${values.subnet}\nType: ${isPrivate ? 'Private' : 'Public'}${values.notes ? '\nNotes: ' + values.notes : ''}`;
+        console.log(`Subnet ${values.subnet} classified as ${isPrivate ? 'Private' : 'Public'}`);
+        console.log(`Label set to: ${nodeData.label}`);
+        console.log(`Title set to: ${nodeData.title}`);
+    } else {
+        // For other types, use the config's label and title functions
+        nodeData.label = config.label ? config.label(allValues) : undefined;
+        nodeData.title = config.title ? config.title(allValues) : undefined;
+    }
+
+    nodeData.color = { background: config.color };
+    Object.assign(nodeData, allValues);
+
+    console.log(`Final nodeData: ${JSON.stringify(nodeData)}`);
     return nodeData;
 }
+
+// Define isPrivateIP if not already defined elsewhere
+function isPrivateIP(ip) {
+    console.log(`isPrivateIP called with: ${ip}`);
+    const octets = ip.split('.').map(Number);
+    console.log(`Parsed octets: ${octets}`);
+    
+    if (octets.length !== 4 || octets.some(o => o < 0 || o > 255)) {
+        console.log(`Invalid IP format: ${ip}`);
+        return false;
+    }
+
+    const isPrivate = (
+        (octets[0] === 10) || // 10.0.0.0/8
+        (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) || // 172.16.0.0/12
+        (octets[0] === 192 && octets[1] === 168) // 192.168.0.0/16
+    );
+    
+    console.log(`IP ${ip} is ${isPrivate ? 'private' : 'public'}`);
+    return isPrivate;
+}
+
 
 function addNode() {
     const type = document.getElementById('addEntityType').value;
@@ -4905,6 +4401,9 @@ function addNode() {
         },
         ip: { 
             ip: document.getElementById('addIpInput').value.trim()
+        },
+        subnet: { 
+            subnet: document.getElementById('addSubnetInput').value.trim()
         },
         domain: { 
             domain: document.getElementById('addDomainInput').value.trim()
@@ -5002,6 +4501,7 @@ function addNode() {
                 malware: { malwareName: document.getElementById('editMalwareNameInput').value, malwareType: document.getElementById('editMalwareType').value },
                 vulnerability: {vulnName: document.getElementById('editVulnNameInput').value.trim(),
             cve: document.getElementById('editVulnCVEInput').value.trim(),
+            subnet: { subnet: document.getElementById('editSubnetInput').value.trim() },
             url: document.getElementById('editVulnUrlInput').value.trim()
             }
             };
@@ -5028,6 +4528,9 @@ function addNode() {
 
             document.getElementById('editEntityType').value = node.type;
             switch (node.type) {
+                case 'subnet':
+            document.getElementById('editSubnetInput').value = node.subnet || '';
+                    break;
                 case 'contact':
                     document.getElementById('editNameInput').value = node.name || '';
                     document.getElementById('editEmailInput').value = node.email || '';
@@ -5089,6 +4592,7 @@ function addNode() {
             document.getElementById('editVulnNameInput').style.display = node.type === 'vulnerability' ? 'block' : 'none';
             document.getElementById('editVulnCVEInput').style.display = node.type === 'vulnerability' ? 'block' : 'none';
             document.getElementById('editVulnUrlInput').style.display = node.type === 'vulnerability' ? 'block' : 'none';
+            document.getElementById('editSubnetInput').style.display = node.type === 'subnet' ? 'block' : 'none';
         }
 
         function clearAddInputs() {
@@ -5109,6 +4613,7 @@ function addNode() {
             document.getElementById('editVulnNameInput').value = '';
             document.getElementById('editVulnCVEInput').value = '';
             document.getElementById('editVulnUrlInput').value = '';
+            document.getElementById('editSubnetInput').value = '';
         }
 
         
@@ -5229,275 +4734,637 @@ function updateNodeSizes(affectedNodeIds = null) {
             URL.revokeObjectURL(url);
         }
 
-        function importGraph() {
-    const fileInput = document.getElementById('importFile');
-    const file = fileInput.files[0];
-    if (!file) {
-        showToast('Please select a JSON file', 'error');
+// Process IOCs
+async function processIOCs(text) {
+    network.setOptions({ physics: { enabled: false } });
+
+    // Regex patterns
+    const urlRegex = /^(https?:\/\/)([^\s/:]+)(?::(\d{1,5}))?(\/.*)?$/i;
+    const domainRegex = /^(?:[a-zA-Z0-9-_]+\.)*[a-zA-Z0-9-_]+\.[a-zA-Z]{2,}(?<!\.(png|jpg|jpeg|gif|bmp|tif|tiff|pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv|zip|rar|7z|exe|dll|sys|bat|sh|mp3|mp4|avi|mkv|mov|wmv|flv|wav|html|css|js|php|asp|aspx|jsp|sql|db|bak|log|tar|gz|tgz))\.?$/i;
+    const ipRegex = { 
+        ipv4: /^(?!0\d)(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?!0\d)(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?!0\d)(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?!0\d)(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/,
+        ipv6: /^((([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4})|(([0-9a-fA-F]{1,4}:){1,7}:)|(::([0-9a-fA-F]{1,4}:){0,5}[0-9a-fA-F]{1,4})|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|::)$/i
+    };
+    const subnetRegex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\/(\d{1,2})$/;
+    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+    const hashRegex = {
+        sha256: /^[0-9a-fA-F]{64}$/,
+        md5: /^[0-9a-fA-F]{32}$/,
+        sha1: /^[0-9a-fA-F]{40}$/
+    };
+    const hashPattern = /[0-9a-fA-F]{32,64}/g;
+    const timestampRegex = /^\d{2}:\d{2}:\d{2}$/;
+
+    // Common file extensions to filter out
+    const commonFileExtensions = new Set([
+        'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tif', 'tiff', 'pdf',
+        'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv',
+        'zip', 'rar', '7z', 'exe', 'dll', 'sys', 'bat', 'sh',
+        'mp3', 'mp4', 'avi', 'mkv', 'mov', 'wmv', 'flv', 'wav',
+        'html', 'css', 'js', 'php', 'asp', 'aspx', 'jsp', 'sql',
+        'db', 'bak', 'log', 'tar', 'gz', 'tgz'
+    ]);
+
+    // Split text into tokens
+    const tokens = text.split(/[\s,\n]+/).filter(token => token.trim().length > 0);
+    console.log('Tokens:', tokens);
+
+    // Extract matches
+    const urlMatches = new Set();
+    const ipMatches = new Set();
+    const subnetMatches = new Set();
+    const domainMatches = new Set();
+    const emailMatches = new Set(tokens.map(token => token.match(emailRegex)?.[0]).filter(Boolean));
+    const hashCandidates = new Set(tokens.map(token => token.match(hashPattern)?.[0]).filter(Boolean));
+
+    // Process each token
+    for (const token of tokens) {
+        // Skip timestamps
+        if (timestampRegex.test(token)) {
+            console.log(`Ignoring timestamp: ${token}`);
+            continue;
+        }
+
+        const urlMatch = token.match(urlRegex);
+        if (urlMatch) {
+            const [, protocol, host, port, path] = urlMatch;
+            urlMatches.add(token);
+            console.log(`URL Match: ${token}, Protocol: ${protocol}, Host: ${host}, Port: ${port || 'none'}, Path: ${path || 'none'}`);
+
+            // Normalize host by removing trailing dot
+            const normalizedHost = host.replace(/\.$/, '');
+            if (subnetRegex.test(normalizedHost)) {
+                subnetMatches.add(normalizedHost);
+            } else if (ipRegex.ipv4.test(normalizedHost) || ipRegex.ipv6.test(normalizedHost)) {
+                ipMatches.add(normalizedHost);
+            } else if (domainRegex.test(normalizedHost)) {
+                domainMatches.add(normalizedHost);
+            }
+            continue;
+        }
+
+        // Check for standalone subnets
+        if (subnetRegex.test(token)) {
+            subnetMatches.add(token);
+            continue;
+        }
+
+        // Check for standalone IPs
+        if (ipRegex.ipv4.test(token) || ipRegex.ipv6.test(token)) {
+            ipMatches.add(token);
+            continue;
+        }
+
+        // Check for standalone domains, excluding file extensions, and normalize
+        const normalizedToken = token.replace(/\.$/, '');
+        const tokenLower = normalizedToken.toLowerCase();
+        const extension = tokenLower.split('.').pop();
+        if (domainRegex.test(normalizedToken) && !urlMatches.has(token) && !commonFileExtensions.has(extension)) {
+            domainMatches.add(normalizedToken);
+            continue;
+        }
+    }
+
+    // Filter hash candidates
+    const hashMatches = new Set();
+    hashCandidates.forEach(hash => {
+        if (hashRegex.sha256.test(hash)) hashMatches.add({ value: hash, type: 'sha256' });
+        else if (hashRegex.md5.test(hash)) hashMatches.add({ value: hash, type: 'md5' });
+        else if (hashRegex.sha1.test(hash)) hashMatches.add({ value: hash, type: 'sha1' });
+    });
+
+    const totalItems = urlMatches.size + ipMatches.size + subnetMatches.size + domainMatches.size + emailMatches.size + hashMatches.size;
+    if (totalItems === 0) {
+        showToast('No IOCs found in text', 'info');
         return;
     }
 
-    const reader = new FileReader();
-    reader.onload = function(event) {
-        try {
-            const importedData = JSON.parse(event.target.result);
-            if (!importedData.nodes || !importedData.edges) {
-                throw new Error('Invalid JSON format: missing nodes or edges');
+    console.log('URL Matches:', Array.from(urlMatches));
+    console.log('IP Matches:', Array.from(ipMatches));
+    console.log('Subnet Matches:', Array.from(subnetMatches));
+    console.log('Domain Matches:', Array.from(domainMatches));
+    console.log('Email Matches:', Array.from(emailMatches));
+    console.log('Hash Matches:', Array.from(hashMatches));
+
+    // Maps for deduplication
+    const existingNodes = new Map();
+    nodes.forEach(node => {
+        if (node.type === 'url' && node.url) existingNodes.set(`url:${node.url}`, node);
+        if (node.type === 'ip' && node.ip) existingNodes.set(`ip:${node.ip}`, node);
+        if (node.type === 'subnet' && node.subnet) existingNodes.set(`subnet:${node.subnet}`, node);
+        if (node.type === 'domain' && node.domain) existingNodes.set(`domain:${node.domain}`, node);
+        if (node.type === 'contact' && node.email) existingNodes.set(`email:${node.email}`, node);
+        if (node.type === 'hash' && node.hash) existingNodes.set(`hash:${node.hash}`, node);
+        if (node.type === 'port' && node.portNumber) existingNodes.set(`port:${node.portType}/${node.portNumber}`, node);
+    });
+
+    const newNodes = [];
+    const newEdges = [];
+    let processedCount = 0;
+    const batchSize = 50;
+
+    // Set to track edges by from-to-label
+    const edgeSet = new Set();
+    edges.forEach(edge => {
+        edgeSet.add(`${edge.from}_${edge.to}_${edge.label}`);
+    });
+
+    // Helper function to extract apex domain
+    function getApexDomain(fullDomain) {
+        const parts = fullDomain.toLowerCase().split('.');
+        if (parts.length < 2) return fullDomain;
+
+        const multiPartTlds = ['co.uk', 'gov.uk', 'ac.uk', 'org.uk', 'com.au', 'co.jp', 'ne.jp', 'go.jp'];
+        for (const tld of multiPartTlds) {
+            const tldParts = tld.split('.');
+            if (parts.slice(-tldParts.length).join('.') === tld) {
+                if (parts.length > tldParts.length) {
+                    return parts.slice(-(tldParts.length + 1)).join('.');
+                }
+                return fullDomain;
             }
+        }
+        return parts.slice(-2).join('.');
+    }
 
-            nodes.clear();
-            edges.clear();
+    // Helper function to get all domain levels
+    function getDomainLevels(domain) {
+        const levels = [];
+        let current = domain;
+        while (current.includes('.')) {
+            levels.push(current);
+            const parts = current.split('.');
+            current = parts.slice(1).join('.');
+            // Stop at apex domain to prevent splitting multi-part TLDs
+            if (current === getApexDomain(domain)) {
+                levels.push(current);
+                break;
+            }
+        }
+        return levels; // Highest level (subdomain) first
+    }
 
-            importedData.nodes.forEach(node => {
-                const nodeData = {
-                    id: node.id,
-                    size: node.size || 10,
-                    type: node.type,
-                    label: node.label,
-                    title: node.title,
-                    color: node.color || { background: '#ffffff' }, // Default color if missing
-                    originalLabel: node.originalLabel,
-                    x: node.x,
-                    y: node.y
-                };
+    // Process URLs
+    for (const url of urlMatches) {
+        const urlMatch = url.match(urlRegex);
+        if (!urlMatch) continue;
+        const [, protocol, host, port, path] = urlMatch;
 
-                // Populate type-specific properties and set defaults
-                switch (node.type) {
-                    case 'contact':
-                        if (!node.name) return;
-                        nodeData.name = node.name;
-                        nodeData.email = node.email;
-                        nodeData.label = `Contact: ${node.email ? `${node.name}\n${node.email}` : node.name}`;
-                        nodeData.title = node.email ? `Contact\nName: ${node.name}\nEmail: ${node.email}` : `Contact\nName: ${node.name}`;
-                        nodeData.color.background = node.color?.background || '#4ade80';
-                        break;
-                    case 'ip':
-                        if (!node.ip) return;
-                        nodeData.ip = node.ip;
-                        nodeData.label = `IP: ${node.ip}`;
-                        nodeData.title = `IP Address: ${node.ip}`;
-                        nodeData.color.background = node.color?.background || '#f87171';
-                        break;
-                    case 'domain':
-                        if (!node.domain) return;
-                        nodeData.domain = node.domain;
-                        nodeData.label = `Domain: ${node.domain}`;
-                        nodeData.title = `Domain: ${node.domain}`;
-                        nodeData.color.background = node.color?.background || '#60a5fa';
-                        break;
-                    case 'organization':
-                        if (!node.organization) return;
-                        nodeData.organization = node.organization;
-                        nodeData.label = `Organization: ${node.organization}`;
-                        nodeData.title = `Organization: ${node.organization}`;
-                        nodeData.color.background = node.color?.background || '#facc15';
-                        break;
-                    case 'port':
-                        if (!node.portNumber || !node.portType) return;
-                        nodeData.portType = node.portType;
-                        nodeData.portNumber = node.portNumber;
-                        nodeData.label = `Port: ${node.portType}/${node.portNumber}`;
-                        nodeData.title = `Port\nType: ${node.portType}\nNumber: ${node.portNumber}`;
-                        nodeData.color.background = node.color?.background || '#a78bfa';
-                        break;
-                    case 'wallet':
-                        if (!node.address) return;
-                        nodeData.address = node.address;
-                        nodeData.label = `Wallet: ${node.address}`;
-                        nodeData.title = `Wallet\nAddress: ${node.address}`;
-                        nodeData.color.background = node.color?.background || '#fb923c';
-                        break;
-                    case 'bank':
-                        if (!node.accountNumber || !node.sortCode) return;
-                        nodeData.accountNumber = node.accountNumber;
-                        nodeData.sortCode = node.sortCode;
-                        nodeData.label = `Bank: ${node.accountNumber}\nSort Code: ${node.sortCode}`;
-                        nodeData.title = `Bank Account\nAccount Number: ${node.accountNumber}\nSort Code: ${node.sortCode}`;
-                        nodeData.color.background = node.color?.background || '#10b981';
-                        break;
-                    case 'technology':
-                        if (!node.techName || !node.techVersion) return;
-                        nodeData.techName = node.techName;
-                        nodeData.techVersion = node.techVersion;
-                        nodeData.label = `Technology: ${node.techName}\nVersion: ${node.techVersion}`;
-                        nodeData.title = `Technology\nName: ${node.techName}\nVersion: ${node.techVersion}`;
-                        nodeData.color.background = node.color?.background || '#ec4899';
-                        break;
-                    case 'device':
-                        if (!node.deviceCategory || !node.deviceName) return;
-                        nodeData.deviceCategory = node.deviceCategory;
-                        nodeData.deviceName = node.deviceName;
-                        nodeData.label = `Device: ${node.deviceName}\nCategory: ${node.deviceCategory}`;
-                        nodeData.title = `Device\nName: ${node.deviceName}\nCategory: ${node.deviceCategory}`;
-                        nodeData.color.background = node.color?.background || '#14b8a6';
-                        break;
-                    case 'malware':
-                        if (!node.malwareName || !node.malwareType) return;
-                        nodeData.malwareName = node.malwareName;
-                        nodeData.malwareType = node.malwareType;
-                        nodeData.label = `Malware: ${node.malwareName}\nType: ${node.malwareType}`;
-                        nodeData.title = `Malware\nName: ${node.malwareName}\nType: ${node.malwareType}`;
-                        nodeData.color.background = node.color?.background || '#ef4444';
-                        break;
-                    case 'vulnerability':
-                        if (!node.vulnName) return;
-                        nodeData.vulnName = node.vulnName;
-                        nodeData.cve = node.cve;
-                        nodeData.url = node.url;
-                        nodeData.label = `Vulnerability: ${node.vulnName}${node.cve ? '\nCVE: ' + node.cve : ''}${node.url ? '\nURL: ' + node.url : ''}`;
-                        nodeData.title = `Vulnerability\nName: ${node.vulnName}${node.cve ? '\nCVE: ' + node.cve : ''}${node.url ? '\nURL: ' + node.url : ''}`;
-                        nodeData.color.background = node.color?.background || '#dc2626';
-                        break;
-                    case 'favicon':
-                        if (!node.hash) return;
-                        nodeData.hash = node.hash;
-                        nodeData.location = node.location;
-                        nodeData.label = `Favicon: ${node.hash.substring(0, 8)}...`;
-                        nodeData.title = `Favicon\nHash: ${node.hash}${node.location ? '\nPath: ' + node.location : ''}`;
-                        nodeData.color.background = node.color?.background || '#22d3ee';
-                        break;
-                    case 'http_hash':
-                        if (!node.hash) return;
-                        nodeData.hash = node.hash;
-                        nodeData.label = `HTTP Hash: ${node.hash.substring(0, 8)}...`;
-                        nodeData.title = `HTTP Headers Hash\nSHA256: ${node.hash}`;
-                        nodeData.color.background = node.color?.background || '#f97316';
-                        break;
-                    case 'html_hash':
-                        if (!node.hash) return;
-                        nodeData.hash = node.hash;
-                        nodeData.label = `HTML Hash: ${node.hash.substring(0, 8)}...`;
-                        nodeData.title = `HTML Hash\nSHA256: ${node.hash}`;
-                        nodeData.color.background = node.color?.background || '#f59e0b';
-                        break;
-                    case 'ssl_hash':
-                        if (!node.hash) return;
-                        nodeData.hash = node.hash;
-                        nodeData.label = `SSL Hash: ${node.hash.substring(0, 8)}...`;
-                        nodeData.title = `SSL Certificate Hash\nSHA256: ${node.hash}`;
-                        nodeData.color.background = node.color?.background || '#8b5cf6';
-                        break;
-                    case 'asn':
-                        if (!node.asn) return;
-                        nodeData.asn = node.asn;
-                        nodeData.label = `ASN: ${node.asn}`;
-                        nodeData.title = `ASN: ${node.asn}`;
-                        nodeData.color.background = node.color?.background || '#a3e635';
-                        break;
-                    case 'city':
-                        if (!node.city) return;
-                        nodeData.city = node.city;
-                        nodeData.label = `City: ${node.city}`;
-                        nodeData.title = `City: ${node.city}`;
-                        nodeData.color.background = node.color?.background || '#f97316';
-                        break;
-                    case 'country':
-                        if (!node.country) return;
-                        nodeData.country = node.country;
-                        nodeData.label = `Country: ${node.country}`;
-                        nodeData.title = `Country: ${node.country}`;
-                        nodeData.color.background = node.color?.background || '#34d399';
-                        break;
-                    case 'os':
-                        if (!node.os) return;
-                        nodeData.os = node.os;
-                        nodeData.label = `OS: ${node.os}`;
-                        nodeData.title = `Operating System: ${node.os}`;
-                        nodeData.color.background = node.color?.background || '#10b981';
-                        break;
-                    case 'product':
-                        if (!node.product) return;
-                        nodeData.product = node.product;
-                        nodeData.label = `Product: ${node.product}`;
-                        nodeData.title = `Product: ${node.product}`;
-                        nodeData.color.background = node.color?.background || '#ec4899';
-                        break;
-                    case 'http_title':
-                        if (!node.title) return;
-                        nodeData.title = node.title; // Already set as base property
-                        nodeData.label = `Title: ${node.title}`;
-                        nodeData.color.background = node.color?.background || '#3b82f6';
-                        break;
-                    case 'vpn':
-                    case 'proxy':
-                    case 'tor':
-                    case 'relay':
-                    case 'hosting':
-                        if (!node.value) return;
-                        nodeData.value = node.value;
-                        nodeData.label = `${node.type.charAt(0).toUpperCase() + node.type.slice(1)}: ${node.value}`;
-                        nodeData.title = `${node.type.charAt(0).toUpperCase() + node.type.slice(1)} for IP: ${node.value}`;
-                        nodeData.color.background = node.color?.background || {
-                            vpn: '#9333ea',
-                            proxy: '#f43f5e',
-                            tor: '#64748b',
-                            relay: '#eab308',
-                            hosting: '#14b8a6'
-                        }[node.type];
-                        break;
-                    default:
-                        console.warn(`Unhandled node type in importGraph: ${node.type}`);
-                        return; // Skip unknown types
-                }
-
-                // Check for duplicates based on key properties
-                if (!nodes.get({ filter: n => 
-                    n.type === nodeData.type && (
-                        (nodeData.ip && n.ip === nodeData.ip) ||
-                        (nodeData.domain && n.domain === nodeData.domain) ||
-                        (nodeData.organization && n.organization === nodeData.organization) ||
-                        (nodeData.portNumber && nodeData.portType && n.portNumber === nodeData.portNumber && n.portType === nodeData.portType) ||
-                        (nodeData.address && n.address === nodeData.address) ||
-                        (nodeData.accountNumber && nodeData.sortCode && n.accountNumber === nodeData.accountNumber && n.sortCode === nodeData.sortCode) ||
-                        (nodeData.techName && nodeData.techVersion && n.techName === nodeData.techName && n.techVersion === nodeData.techVersion) ||
-                        (nodeData.deviceCategory && nodeData.deviceName && n.deviceCategory === nodeData.deviceCategory && n.deviceName === nodeData.deviceName) ||
-                        (nodeData.malwareName && nodeData.malwareType && n.malwareName === nodeData.malwareName && n.malwareType === nodeData.malwareType) ||
-                        (nodeData.vulnName && n.vulnName === nodeData.vulnName && (!nodeData.cve || n.cve === nodeData.cve) && (!nodeData.url || n.url === nodeData.url)) ||
-                        (nodeData.hash && n.hash === nodeData.hash) || // For hash-based nodes
-                        (nodeData.asn && n.asn === nodeData.asn) ||
-                        (nodeData.city && n.city === nodeData.city) ||
-                        (nodeData.country && n.country === nodeData.country) ||
-                        (nodeData.os && n.os === nodeData.os) ||
-                        (nodeData.product && n.product === nodeData.product) ||
-                        (nodeData.value && n.value === nodeData.value)
-                    )
-                }).length) {
-                    nodes.add(nodeData);
-                }
+        if (!existingNodes.has(`url:${url}`)) {
+            const urlNodeId = nextId++;
+            const label = `URL: ${url.length > 30 ? url.substring(0, 27) + '...' : url}`;
+            newNodes.push({
+                id: urlNodeId,
+                type: 'url',
+                label,
+                title: `Full URL: ${url}`,
+                color: { background: '#3b82f6' },
+                url,
+                size: 15
             });
+            existingNodes.set(`url:${url}`, { id: urlNodeId });
+            console.log(`Added URL node: ${url}, ID: ${urlNodeId}`);
 
-            // Import edges
-            importedData.edges.forEach(edge => {
-                if (edge.from && edge.to && nodes.get(edge.from) && nodes.get(edge.to)) { // Ensure nodes exist
-                    if (!edges.get({ filter: e => e.from === edge.from && e.to === edge.to && e.label === (edge.label || undefined) }).length) {
-                        edges.add({
-                            id: edge.id || `edge_${edge.from}_${edge.to}_${Date.now()}`,
-                            from: edge.from,
-                            to: edge.to,
-                            label: edge.label || undefined,
-                            originalLabel: edge.originalLabel
-                        });
+            // Handle host (IP, subnet, or domain)
+            const normalizedHost = host.replace(/\.$/, '');
+            if (subnetRegex.test(normalizedHost)) {
+                if (!existingNodes.has(`subnet:${normalizedHost}`)) {
+                    const subnetNodeData = createNodeData('subnet', { subnet: normalizedHost });
+                    if (subnetNodeData) {
+                        subnetNodeData.id = nextId++;
+                        newNodes.push(subnetNodeData);
+                        existingNodes.set(`subnet:${normalizedHost}`, { id: subnetNodeData.id });
+                        const edgeKey = `${urlNodeId}_${subnetNodeData.id}_Resolves to`;
+                        if (!edgeSet.has(edgeKey)) {
+                            newEdges.push({
+                                id: `edge_${urlNodeId}_${subnetNodeData.id}_${Date.now()}`,
+                                from: urlNodeId,
+                                to: subnetNodeData.id,
+                                label: 'Resolves to'
+                            });
+                            edgeSet.add(edgeKey);
+                            console.log(`Added Subnet node: ${normalizedHost}, ID: ${subnetNodeData.id}`);
+                        }
                     }
                 } else {
-                    console.warn('Skipping edge due to missing nodes:', edge);
+                    const existingSubnetNode = existingNodes.get(`subnet:${normalizedHost}`);
+                    const edgeKey = `${urlNodeId}_${existingSubnetNode.id}_Resolves to`;
+                    if (!edgeSet.has(edgeKey)) {
+                        newEdges.push({
+                            id: `edge_${urlNodeId}_${existingSubnetNode.id}_${Date.now()}`,
+                            from: urlNodeId,
+                            to: existingSubnetNode.id,
+                            label: 'Resolves to'
+                        });
+                        edgeSet.add(edgeKey);
+                    }
                 }
-            });
+            } else if (ipRegex.ipv4.test(normalizedHost) || ipRegex.ipv6.test(normalizedHost)) {
+                if (!existingNodes.has(`ip:${normalizedHost}`)) {
+                    const ipNodeId = nextId++;
+                    newNodes.push({
+                        id: ipNodeId,
+                        type: 'ip',
+                        label: `IP: ${normalizedHost}`,
+                        title: `IP Address: ${normalizedHost}`,
+                        color: { background: '#f87171' },
+                        ip: normalizedHost,
+                        size: 20
+                    });
+                    existingNodes.set(`ip:${normalizedHost}`, { id: ipNodeId });
+                    const edgeKey = `${urlNodeId}_${ipNodeId}_Resolves to`;
+                    if (!edgeSet.has(edgeKey)) {
+                        newEdges.push({
+                            id: `edge_${urlNodeId}_${ipNodeId}_${Date.now()}`,
+                            from: urlNodeId,
+                            to: ipNodeId,
+                            label: 'Resolves to'
+                        });
+                        edgeSet.add(edgeKey);
+                        console.log(`Added IP node: ${normalizedHost}, ID: ${ipNodeId}`);
+                    }
+                } else {
+                    const existingIpNode = existingNodes.get(`ip:${normalizedHost}`);
+                    const edgeKey = `${urlNodeId}_${existingIpNode.id}_Resolves to`;
+                    if (!edgeSet.has(edgeKey)) {
+                        newEdges.push({
+                            id: `edge_${urlNodeId}_${existingIpNode.id}_${Date.now()}`,
+                            from: urlNodeId,
+                            to: existingIpNode.id,
+                            label: 'Resolves to'
+                        });
+                        edgeSet.add(edgeKey);
+                    }
+                }
+            } else if (domainRegex.test(normalizedHost)) {
+                const domainLevels = getDomainLevels(normalizedHost);
+                const domainNodes = [];
 
-            // Update UI and state
-            updateNodeSizes();
-            updateSelectOptions();
-            nextId = Math.max(...importedData.nodes.map(n => n.id)) + 1 || 1;
-            fileInput.value = '';
-            stabilizeNetwork();
-            saveStateAfterOperation();
-            showToast('Graph imported successfully', 'success');
-        } catch (e) {
-            console.error('Error importing JSON:', e);
-            showToast('Error importing JSON: ' + e.message, 'error');
+                // Create or reuse nodes for each domain level
+                for (const level of domainLevels) {
+                    let nodeId;
+                    if (!existingNodes.has(`domain:${level}`)) {
+                        nodeId = nextId++;
+                        const isApex = level === getApexDomain(normalizedHost);
+                        const node = {
+                            id: nodeId,
+                            type: 'domain',
+                            label: isApex ? `Apex: ${level}` : `Domain: ${level}`,
+                            title: isApex ? `Apex Domain: ${level}` : `Domain: ${level}`,
+                            color: { background: '#60a5fa' },
+                            domain: level,
+                            size: 20
+                        };
+                        newNodes.push(node);
+                        existingNodes.set(`domain:${level}`, { id: nodeId });
+                        domainNodes.push(node);
+                        console.log(`Added ${isApex ? 'Apex' : 'Domain'} node: ${level}, ID: ${nodeId}`);
+                    } else {
+                        nodeId = existingNodes.get(`domain:${level}`).id;
+                        domainNodes.push({ id: nodeId, domain: level });
+                    }
+                }
+
+                // Create edges for subdomains
+                for (let i = 0; i < domainNodes.length - 1; i++) {
+                    const fromId = domainNodes[i].id; // Higher level (e.g., test.co.uk)
+                    const toId = domainNodes[i + 1].id; // Lower level (e.g., co.uk)
+                    const edgeKey = `${fromId}_${toId}_Subdomain of`;
+                    if (!edgeSet.has(edgeKey)) {
+                        newEdges.push({
+                            id: `edge_${fromId}_${toId}_subdomain_${Date.now()}`,
+                            from: fromId,
+                            to: toId,
+                            label: 'Subdomain of'
+                        });
+                        edgeSet.add(edgeKey);
+                        console.log(`Linked Domain ${fromId} to Parent: ${toId}`);
+                    }
+                }
+
+                // Link URL to deepest subdomain (highest level)
+                if (domainNodes.length > 0) {
+                    const deepestNode = domainNodes[0];
+                    const edgeKey = `${urlNodeId}_${deepestNode.id}_Belongs to`;
+                    if (!edgeSet.has(edgeKey)) {
+                        newEdges.push({
+                            id: `edge_${urlNodeId}_${deepestNode.id}_belongs_${Date.now()}`,
+                            from: urlNodeId,
+                            to: deepestNode.id,
+                            label: 'Belongs to'
+                        });
+                        edgeSet.add(edgeKey);
+                        console.log(`Linked URL ${urlNodeId} to Domain: ${deepestNode.id}`);
+                    }
+                }
+            }
+
+            // Handle port
+            if (port && parseInt(port) >= 1 && parseInt(port) <= 65535) {
+                const portKey = `port:TCP/${port}`;
+                if (!existingNodes.has(portKey)) {
+                    const portNodeId = nextId++;
+                    newNodes.push({
+                        id: portNodeId,
+                        type: 'port',
+                        label: `TCP/${port}`,
+                        title: `Port\nType: TCP\nNumber: ${port}`,
+                        color: { background: '#a78bfa' },
+                        portType: 'TCP',
+                        portNumber: port,
+                        size: 10
+                    });
+                    existingNodes.set(portKey, { id: portNodeId });
+                    const edgeKey = `${urlNodeId}_${portNodeId}_Uses port`;
+                    if (!edgeSet.has(edgeKey)) {
+                        newEdges.push({
+                            id: `edge_${urlNodeId}_${portNodeId}_${Date.now()}`,
+                            from: urlNodeId,
+                            to: portNodeId,
+                            label: 'Uses port'
+                        });
+                        edgeSet.add(edgeKey);
+                        console.log(`Added Port node: TCP/${port}, ID: ${portNodeId}`);
+                    }
+                } else {
+                    const existingPortNode = existingNodes.get(portKey);
+                    const edgeKey = `${urlNodeId}_${existingPortNode.id}_Uses port`;
+                    if (!edgeSet.has(edgeKey)) {
+                        newEdges.push({
+                            id: `edge_${urlNodeId}_${existingPortNode.id}_${Date.now()}`,
+                            from: urlNodeId,
+                            to: existingPortNode.id,
+                            label: 'Uses port'
+                        });
+                        edgeSet.add(edgeKey);
+                    }
+                }
+            }
         }
-    };
-    reader.readAsText(file);
+        processedCount++;
+        if (processedCount % batchSize === 0) {
+            nodes.add(newNodes);
+            edges.add(newEdges);
+            newNodes.length = 0;
+            newEdges.length = 0;
+            await new Promise(resolve => setTimeout(resolve, 0)).catch(err => console.error('Batch processing error:', err));
+        }
+    }
+
+    // Process standalone Subnets
+    for (const subnet of subnetMatches) {
+        if (subnetRegex.test(subnet) && !existingNodes.has(`subnet:${subnet}`)) {
+            const subnetNodeData = createNodeData('subnet', { subnet });
+            if (subnetNodeData) {
+                subnetNodeData.id = nextId++;
+                newNodes.push(subnetNodeData);
+                existingNodes.set(`subnet:${subnet}`, { id: subnetNodeData.id });
+                console.log(`Added standalone Subnet node: ${subnet}, ID: ${subnetNodeData.id}`);
+            }
+        }
+        processedCount++;
+        if (processedCount % batchSize === 0) {
+            nodes.add(newNodes);
+            edges.add(newEdges);
+            newNodes.length = 0;
+            newEdges.length = 0;
+            await new Promise(resolve => setTimeout(resolve, 0)).catch(err => console.error('Batch processing error:', err));
+        }
+    }
+
+    // Process standalone IPs
+    for (const ip of ipMatches) {
+        if ((ipRegex.ipv4.test(ip) || ipRegex.ipv6.test(ip)) && !existingNodes.has(`ip:${ip}`)) {
+            const nodeId = nextId++;
+            newNodes.push({
+                id: nodeId,
+                type: 'ip',
+                label: `IP: ${ip}`,
+                title: `IP Address: ${ip}`,
+                color: { background: '#f87171' },
+                ip,
+                size: 20
+            });
+            existingNodes.set(`ip:${ip}`, { id: nodeId });
+            console.log(`Added standalone IP node: ${ip}, ID: ${nodeId}`);
+        }
+        processedCount++;
+        if (processedCount % batchSize === 0) {
+            nodes.add(newNodes);
+            edges.add(newEdges);
+            newNodes.length = 0;
+            newEdges.length = 0;
+            await new Promise(resolve => setTimeout(resolve, 0)).catch(err => console.error('Batch processing error:', err));
+        }
+    }
+
+    // Process standalone Domains
+    for (const domain of domainMatches) {
+        const domainLevels = getDomainLevels(domain);
+        const domainNodes = [];
+
+        // Create or reuse nodes for each domain level
+        for (const level of domainLevels) {
+            let nodeId;
+            if (!existingNodes.has(`domain:${level}`)) {
+                nodeId = nextId++;
+                const isApex = level === getApexDomain(domain);
+                const isMX = domain.endsWith('.'); // Heuristic for MX domains
+            const node = {
+                id: nodeId,
+                type: isMX ? 'mx' : 'domain', // Set type to mx if detected
+                label: isApex ? `Apex: ${level}` : `Domain: ${level}`,
+                title: isApex ? `Apex Domain: ${level}` : `Domain: ${level}`,
+                color: { background: isMX ? '#60a5fa' : '#60a5fa' }, // Blue for MX and domains
+                className: isMX ? 'mx-node' : 'domain-node', // Assign className
+                domain: level,
+                size: 20
+            };
+                newNodes.push(node);
+                existingNodes.set(`domain:${level}`, { id: nodeId });
+                domainNodes.push(node);
+                console.log(`Added ${isApex ? 'Apex' : 'Domain'} node: ${level}, ID: ${nodeId}`);
+            } else {
+                nodeId = existingNodes.get(`domain:${level}`).id;
+                domainNodes.push({ id: nodeId, domain: level });
+            }
+        }
+
+        // Create edges for subdomains
+        for (let i = 0; i < domainNodes.length - 1; i++) {
+            const fromId = domainNodes[i].id; // Higher level (e.g., test.co.uk)
+            const toId = domainNodes[i + 1].id; // Lower level (e.g., co.uk)
+            const edgeKey = `${fromId}_${toId}_Subdomain of`;
+            if (!edgeSet.has(edgeKey)) {
+                newEdges.push({
+                    id: `edge_${fromId}_${toId}_subdomain_${Date.now()}`,
+                    from: fromId,
+                    to: toId,
+                    label: 'Subdomain of'
+                });
+                edgeSet.add(edgeKey);
+                console.log(`Linked Domain ${fromId} to Parent: ${toId}`);
+            }
+        }
+        processedCount++;
+        if (processedCount % batchSize === 0) {
+            nodes.add(newNodes);
+            edges.add(newEdges);
+            newNodes.length = 0;
+            newEdges.length = 0;
+            await new Promise(resolve => setTimeout(resolve, 0)).catch(err => console.error('Batch processing error:', err));
+        }
+    }
+
+    // Process Emails
+    for (const email of emailMatches) {
+        if (!existingNodes.has(`email:${email}`)) {
+            const emailNodeId = nextId++;
+            const emailDomain = email.split('@')[1].replace(/\.$/, '');
+            newNodes.push({
+                id: emailNodeId,
+                type: 'contact',
+                label: `Contact: ${email}`,
+                title: `Contact\nEmail: ${email}`,
+                color: { background: '#4ade80' },
+                email,
+                name: email.split('@')[0],
+                size: 10
+            });
+            existingNodes.set(`email:${email}`, { id: emailNodeId });
+
+            if (domainRegex.test(emailDomain)) {
+                // Create or reuse node for the full email domain
+                let emailDomainNodeId;
+                if (!existingNodes.has(`domain:${emailDomain}`)) {
+                    emailDomainNodeId = nextId++;
+                    newNodes.push({
+                        id: emailDomainNodeId,
+                        type: 'domain',
+                        label: `Domain: ${emailDomain}`,
+                        title: `Domain: ${emailDomain}`,
+                        color: { background: '#60a5fa' },
+                        domain: emailDomain,
+                        size: 20
+                    });
+                    existingNodes.set(`domain:${emailDomain}`, { id: emailDomainNodeId });
+                    console.log(`Added Domain node: ${emailDomain}, ID: ${emailDomainNodeId}`);
+                } else {
+                    emailDomainNodeId = existingNodes.get(`domain:${emailDomain}`).id;
+                }
+
+                // Link email to the full email domain
+                const edgeKeyContact = `${emailNodeId}_${emailDomainNodeId}_Registered with`;
+                if (!edgeSet.has(edgeKeyContact)) {
+                    newEdges.push({
+                        id: `edge_${emailNodeId}_${emailDomainNodeId}_registered_${Date.now()}`,
+                        from: emailNodeId,
+                        to: emailDomainNodeId,
+                        label: 'is asociated with: '
+                    });
+                    edgeSet.add(edgeKeyContact);
+                    console.log(`Linked Email ${emailNodeId} to Domain: ${emailDomainNodeId}`);
+                }
+
+                // Create hierarchy for email domain (subdomains and apex)
+                const domainLevels = getDomainLevels(emailDomain);
+                const domainNodes = [];
+
+                // Create or reuse nodes for each domain level
+                for (const level of domainLevels) {
+                    let nodeId;
+                    if (!existingNodes.has(`domain:${level}`)) {
+                        nodeId = nextId++;
+                        const isApex = level === getApexDomain(emailDomain);
+                        const node = {
+                            id: nodeId,
+                            type: 'domain',
+                            label: isApex ? `Apex: ${level}` : `Domain: ${level}`,
+                            title: isApex ? `Apex Domain: ${level}` : `Domain: ${level}`,
+                            color: { background: '#60a5fa' },
+                            domain: level,
+                            size: 20
+                        };
+                        newNodes.push(node);
+                        existingNodes.set(`domain:${level}`, { id: nodeId });
+                        domainNodes.push(node);
+                        console.log(`Added ${isApex ? 'Apex' : 'Domain'} node: ${level}, ID: ${nodeId}`);
+                    } else {
+                        nodeId = existingNodes.get(`domain:${level}`).id;
+                        domainNodes.push({ id: nodeId, domain: level });
+                    }
+                }
+
+                // Create edges for subdomains
+                for (let i = 0; i < domainNodes.length - 1; i++) {
+                    const fromId = domainNodes[i].id; // Higher level (e.g., test.co.uk)
+                    const toId = domainNodes[i + 1].id; // Lower level (e.g., co.uk)
+                    const edgeKey = `${fromId}_${toId}_Subdomain of`;
+                    if (!edgeSet.has(edgeKey)) {
+                        newEdges.push({
+                            id: `edge_${fromId}_${toId}_subdomain_${Date.now()}`,
+                            from: fromId,
+                            to: toId,
+                            label: 'Subdomain of'
+                        });
+                        edgeSet.add(edgeKey);
+                        console.log(`Linked Domain ${fromId} to Parent: ${toId}`);
+                    }
+                }
+            }
+        }
+        processedCount++;
+        if (processedCount % batchSize === 0) {
+            nodes.add(newNodes);
+            edges.add(newEdges);
+            newNodes.length = 0;
+            newEdges.length = 0;
+            await new Promise(resolve => setTimeout(resolve, 0)).catch(err => console.error('Batch processing error:', err));
+        }
+    }
+
+    // Process Hashes
+    for (const hashObj of hashMatches) {
+        const hash = hashObj.value;
+        if (!existingNodes.has(`hash:${hash}`)) {
+            const hashNodeId = nextId++;
+            const hashType = hashObj.type.toUpperCase();
+            newNodes.push({
+                id: hashNodeId,
+                type: 'hash',
+                label: `${hashType}: ${hash.substring(0, 8)}...`,
+                title: `File Hash\nType: ${hashType}\nValue: ${hash}`,
+                color: { background: '#f97316' },
+                hash,
+                hashType,
+                size: 15
+            });
+            existingNodes.set(`hash:${hash}`, { id: hashNodeId });
+            console.log(`Added Hash node: ${hash}, Type: ${hashType}, ID: ${hashNodeId}`);
+        }
+        processedCount++;
+        if (processedCount % batchSize === 0) {
+            nodes.add(newNodes);
+            edges.add(newEdges);
+            newNodes.length = 0;
+            newEdges.length = 0;
+            await new Promise(resolve => setTimeout(resolve, 0)).catch(err => console.error('Batch processing error:', err));
+        }
+    }
+
+    // Add remaining items
+    if (newNodes.length > 0) {
+        console.log('Final batch processing:', { newNodes, newEdges });
+        nodes.add(newNodes);
+        edges.add(newEdges);
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork().catch(err => console.error('Error stabilizing network:', err));
+    showToast(`Imported ${urlMatches.size} URLs, ${ipMatches.size} IPs, ${subnetMatches.size} subnets, ${domainMatches.size} domains, ${emailMatches.size} emails, ${hashMatches.size} hashes`, 'success');
 }
+//End of Process IOCs
 
 
 document.addEventListener('keypress', event => {
@@ -5992,7 +5859,7 @@ const stateLoaded = loadState();
     if (!stateLoaded) {
         console.log('No saved state found or loading failed, applying defaults');
         updateTheme();
-        ensureInteractionSettings();
+        //ensureInteractionSettings();
     } else {
         // Force UI and network update after successful load
         updateSelectOptions();
@@ -6251,79 +6118,7 @@ function toggleMenu() {
     });
 }
 
-const throttledEnrichGoogleDNS = throttleRequest(async function enrichGoogleDNS(domain, domainNodeId, isBulk = false, signal) {
-    network.setOptions({ physics: { enabled: false } });
-    try {
-        const url = constructUrl(`https://dns.google.com/resolve?name=${domain}&type=A`);
-        const response = await fetch(url, { signal });
-        if (!response.ok) throw new Error('Failed to fetch Google DNS data');
-        const data = await response.json();
 
-        if (data.Answer) {
-            data.Answer.forEach(answer => {
-                if (answer.type === 1) { // Type A record (IPv4)
-                    const ip = answer.data;
-                    const existingIP = nodes.get({ filter: n => n.type === 'ip' && n.ip === ip })[0];
-                    const ipId = existingIP ? existingIP.id : nextId++;
-                    if (!existingIP) {
-                        nodes.add({
-                            id: ipId,
-                            type: 'ip',
-                            label: `IP: ${ip}`,
-                            title: `IP Address: ${ip}`,
-                            color: { background: '#f87171' },
-                            ip: ip,
-                            size: 20
-                        });
-                    }
-                    const edgeId = `${domainNodeId}-${ipId}-ResolvesTo`;
-                    if (!edges.get(edgeId)) {
-                        edges.add({
-                            id: edgeId,
-                            from: domainNodeId,
-                            to: ipId,
-                            label: 'Resolves to'
-                        });
-                    }
-                }
-            });
-        }
-
-        updateNodeSizes();
-        updateSelectOptions();
-        await stabilizeNetwork();
-        if (!isBulk) showToast(`Domain ${domain} enrichment completed using Google DNS`, 'success');
-    } catch (error) {
-        if (error.name === 'AbortError') {
-            showToast(`Enrichment of domain ${domain} was cancelled`, 'info');
-            return;
-        }
-        console.error(`Error enriching domain ${domain} with Google DNS: ${error.message}`);
-        showToast(`Error enriching domain ${domain}: ${error.message}`, 'error');
-        await stabilizeNetwork();
-    }
-}, RATE_LIMIT_MS); // Use the default rate limit (500ms)
-
-
-const throttledEnrichGoogleDNSMultiple = throttleRequest(async function enrichGoogleDNSMultiple(domains, nodeIds) {
-    if (!Array.isArray(domains) || !Array.isArray(nodeIds) || domains.length !== nodeIds.length) {
-        showToast('Invalid input for multiple domain enrichment', 'error');
-        return;
-    }
-
-    for (let i = 0; i < domains.length; i++) {
-        if (activeTaskController && activeTaskController.signal.aborted) {
-            showToast('Google DNS enrichment stopped', 'info');
-            break;
-        }
-        await throttledEnrichGoogleDNS(domains[i], nodeIds[i], true); // isBulk = true
-    }
-
-    updateNodeSizes();
-    updateSelectOptions();
-    await stabilizeNetwork();
-    showToast(`Enriched ${domains.length} domains with Google DNS`, 'success');
-}, RATE_LIMIT_MS);
 
 const throttledEnrichIPMultiple = throttleRequest(async function enrichIPMultiple(ips, nodeIds) {
     if (!Array.isArray(ips) || !Array.isArray(nodeIds) || ips.length !== nodeIds.length) {
@@ -6428,7 +6223,7 @@ const throttledEnrichShodanMultiple = throttleRequest(async function enrichShoda
     updateNodeSizes();
     updateSelectOptions();
     await stabilizeNetwork();
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
 
     if (!(activeTaskController && activeTaskController.signal.aborted)) {
         completeProgressBar();
@@ -6535,7 +6330,7 @@ const throttledEnrichInternetDBMultiple = throttleRequest(async function enrichI
     updateNodeSizes();
     updateSelectOptions();
     await stabilizeNetwork();
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
 
     if (!(activeTaskController && activeTaskController.signal.aborted)) {
         completeProgressBar();
@@ -6683,7 +6478,7 @@ const throttledSendHttpsRequestMultiple = throttleRequest(async function sendHtt
     }
 
     await stabilizeNetwork();
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
 
     if (!(activeTaskController && activeTaskController.signal.aborted)) {
         completeProgressBar();
@@ -6921,7 +6716,7 @@ const throttledEnrichHudsonRockMultiple = throttleRequest(async function enrichH
     updateNodeSizes();
     updateSelectOptions();
     await stabilizeNetwork();
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
 
     if (!(activeTaskController && activeTaskController.signal.aborted)) {
         completeProgressBar();
@@ -7115,7 +6910,7 @@ const throttledEnrichHudsonRockDomainMultiple = throttleRequest(async function e
     updateNodeSizes();
     updateSelectOptions();xf
     await stabilizeNetwork();
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
 
     if (!(activeTaskController && activeTaskController.signal.aborted)) {
         completeProgressBar();
@@ -7321,7 +7116,7 @@ async function enrichAllHudsonRockEmails() {
     updateNodeSizes();
     updateSelectOptions();
     await stabilizeNetwork();
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
 
     if (!(activeTaskController && activeTaskController.signal.aborted)) {
         completeProgressBar();
@@ -7429,7 +7224,7 @@ async function enrichAllHudsonRockDomains() {
     updateNodeSizes();
     updateSelectOptions();
     await stabilizeNetwork();
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
 
     if (!(activeTaskController && activeTaskController.signal.aborted)) {
         completeProgressBar();
@@ -7453,7 +7248,7 @@ function initializeApiKeys() {
     urlscanApiKey = localStorage.getItem('urlscanApiKey') || '';
     securitytrailsApiKey = localStorage.getItem('securitytrailsApiKey') || '';
     urlhausApiKey = localStorage.getItem('urlhausApiKey') || '';
-    corsProxyUrl = localStorage.getItem('corsProxyUrl') || 'https://cors-anywhere.herokuapp.com/';
+    corsProxyUrl = localStorage.getItem('corsProxyUrl') || 'http://localhost:3000/proxy?url=';
     routeViaProxy = localStorage.getItem('routeViaProxy') === 'true';
     ignoreApiKeysViaProxy = localStorage.getItem('ignoreApiKeysViaProxy') === 'true';
 
@@ -7474,6 +7269,167 @@ function initializeApiKeys() {
     document.getElementById('storeUrlhausKey').checked = !!localStorage.getItem('urlhausApiKey');
 }
 
+
+//save ipinfo key
+
+function saveIpinfoApiKey() {
+    ipinfoApiKey = document.getElementById('ipinfoApiKey').value.trim();
+    const storeKey = document.getElementById('storeIpinfoKey').checked;
+    if (ipinfoApiKey) {
+        if (storeKey) {
+            localStorage.setItem('ipinfoApiKey', ipinfoApiKey);
+        } else {
+            localStorage.removeItem('ipinfoApiKey');
+        }
+        alert('IPinfo API key saved successfully!');
+    } else {
+        localStorage.removeItem('ipinfoApiKey');
+        alert('Please enter a valid IPinfo API key.');
+    }
+}
+
+//save shodan key
+
+function saveShodanApiKey() {
+    shodanApiKey = document.getElementById('shodanApiKey').value.trim();
+    const storeKey = document.getElementById('storeShodanKey').checked;
+    if (shodanApiKey) {
+        if (storeKey) {
+            localStorage.setItem('shodanApiKey', shodanApiKey);
+        } else {
+            localStorage.removeItem('shodanApiKey');
+        }
+        alert('Shodan API key saved successfully!');
+    } else {
+        localStorage.removeItem('shodanApiKey');
+        alert('Please enter a valid Shodan API key.');
+    }
+}
+
+// function impport graph
+
+function importGraph() {
+            const fileInput = document.getElementById('importFile');
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('Please select a JSON file to import');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const importedData = JSON.parse(event.target.result);
+                    
+                    nodes.clear();
+                    edges.clear();
+
+                    importedData.nodes.forEach(node => {
+                        let nodeData = {
+                            id: node.id,
+                            size: 20,
+                            type: node.type
+                        };
+
+                        if (node.type === 'contact') {
+                            nodeData.label = `${node.name}\n${node.email}`;
+                            nodeData.title = `Contact\nName: ${node.name}\nEmail: ${node.email}`;
+                            nodeData.color = { background: '#4ade80' };
+                            nodeData.name = node.name;
+                            nodeData.email = node.email;
+                        } else if (node.type === 'ip') {
+                            nodeData.label = node.ip;
+                            nodeData.title = `IP Address: ${node.ip}`;
+                            nodeData.color = { background: '#f87171' };
+                            nodeData.ip = node.ip;
+                        } else if (node.type === 'domain') {
+                            nodeData.label = node.domain;
+                            nodeData.title = `Domain: ${node.domain}`;
+                            nodeData.color = { background: '#60a5fa' };
+                            nodeData.domain = node.domain;
+                        } else if (node.type === 'organization') {
+                            nodeData.label = node.organization;
+                            nodeData.title = `Organization: ${node.organization}`;
+                            nodeData.color = { background: '#facc15' };
+                            nodeData.organization = node.organization;
+                        } else if (node.type === 'port') {
+                            nodeData.label = `${node.portType}/${node.portNumber}`;
+                            nodeData.title = `Port\nType: ${node.portType}\nNumber: ${node.portNumber}`;
+                            nodeData.color = { background: '#a78bfa' };
+                            nodeData.portType = node.portType;
+                            nodeData.portNumber = node.portNumber;
+                        } else if (node.type === 'wallet') {
+                            nodeData.label = node.address;
+                            nodeData.title = `Wallet\nAddress: ${node.address}`;
+                            nodeData.color = { background: '#fb923c' };
+                            nodeData.address = node.address;
+                        } else if (node.type === 'bank') {
+                            nodeData.label = `${node.accountNumber}\n${node.sortCode}`;
+                            nodeData.title = `Bank Account\nAccount Number: ${node.accountNumber}\nSort Code: ${node.sortCode}`;
+                            nodeData.color = { background: '#10b981' };
+                            nodeData.accountNumber = node.accountNumber;
+                            nodeData.sortCode = node.sortCode;
+                        } else if (node.type === 'technology') {
+                            nodeData.label = `${node.techName}\n${node.techVersion}`;
+                            nodeData.title = `Technology\nName: ${node.techName}\nVersion: ${node.techVersion}`;
+                            nodeData.color = { background: '#ec4899' };
+                            nodeData.techName = node.techName;
+                            nodeData.techVersion = node.techVersion;
+                        } else if (node.type === 'device') {
+                            nodeData.label = node.deviceCategory;
+                            nodeData.title = `Device\nCategory: ${node.deviceCategory}`;
+                            nodeData.color = { background: '#14b8a6' };
+                            nodeData.deviceCategory = node.deviceCategory;
+                        }
+
+                        let isDuplicate = false;
+                        if (node.type === 'contact') {
+                            isDuplicate = nodes.get({ filter: n => n.type === 'contact' && n.name === nodeData.name && n.email === nodeData.email }).length > 0;
+                        } else if (node.type === 'ip') {
+                            isDuplicate = nodes.get({ filter: n => n.type === 'ip' && n.ip === nodeData.ip }).length > 0;
+                        } else if (node.type === 'domain') {
+                            isDuplicate = nodes.get({ filter: n => n.type === 'domain' && n.domain === nodeData.domain }).length > 0;
+                        } else if (node.type === 'organization') {
+                            isDuplicate = nodes.get({ filter: n => n.type === 'organization' && n.organization === nodeData.organization }).length > 0;
+                        } else if (node.type === 'port') {
+                            isDuplicate = nodes.get({ filter: n => n.type === 'port' && n.portNumber === nodeData.portNumber && n.portType === nodeData.portType }).length > 0;
+                        } else if (node.type === 'wallet') {
+                            isDuplicate = nodes.get({ filter: n => n.type === 'wallet' && n.address === nodeData.address }).length > 0;
+                        } else if (node.type === 'bank') {
+                            isDuplicate = nodes.get({ filter: n => n.type === 'bank' && n.accountNumber === nodeData.accountNumber && n.sortCode === nodeData.sortCode }).length > 0;
+                        } else if (node.type === 'technology') {
+                            isDuplicate = nodes.get({ filter: n => n.type === 'technology' && n.techName === nodeData.techName && n.techVersion === nodeData.techVersion }).length > 0;
+                        } else if (node.type === 'device') {
+                            isDuplicate = nodes.get({ filter: n => n.type === 'device' && n.deviceCategory === nodeData.deviceCategory }).length > 0;
+                        }
+
+                        if (!isDuplicate) {
+                            nodes.add(nodeData);
+                        }
+                    });
+
+                    importedData.edges.forEach(edge => {
+                        edges.add({ 
+                            id: edge.id || `edge_${edge.from}_${edge.to}_${Date.now()}`,
+                            from: edge.from, 
+                            to: edge.to,
+                            label: edge.label || undefined
+                        });
+                    });
+
+                    updateNodeSizes();
+                    updateSelectOptions();
+                    updateEdgeSelectOptions();
+                    network.setData({ nodes: nodes, edges: edges });
+                    nextId = Math.max(...importedData.nodes.map(n => n.id)) + 1;
+
+                    fileInput.value = '';
+                } catch (e) {
+                    alert('Error importing JSON: ' + e.message);
+                }
+            };
+            reader.readAsText(file);
+        }
 
 // Save GreyNoise API Key
 function saveGreynoiseApiKey() {
@@ -7698,7 +7654,7 @@ const throttledEnrichGreyNoiseMultiple = throttleRequest(async function enrichGr
     updateNodeSizes();
     updateSelectOptions();
     await stabilizeNetwork();
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
 
     if (!(activeTaskController && activeTaskController.signal.aborted)) {
         completeProgressBar();
@@ -7782,23 +7738,6 @@ function saveUrlscanApiKey() {
         localStorage.removeItem('urlscanApiKey');
         showToast('Please enter a valid URLscan.io API key.', 'error');
     }
-}
-
-
-
-// Helper function to avoid duplicate nodes
-function addOrGetNode(type, value, newNodes, properties) {
-    const existing = nodes.get({ filter: n => n.type === type && n[type] === value })[0];
-    if (existing) return existing.id;
-    
-    const nodeId = nextId++;
-    newNodes.push({
-        id: nodeId,
-        type: type,
-        [type]: value,
-        ...properties
-    });
-    return nodeId;
 }
 
 // Single URL enrichment
@@ -8036,7 +7975,7 @@ async function enrichAllURLscan() {
     updateNodeSizes();
     updateSelectOptions();
     await stabilizeNetwork();
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
     completeProgressBar();
     showToast(`URLscan.io enrichment completed: ${successfulEnrichments}/${totalURLs} URLs enriched${!urlscanApiKey ? ' (API key may improve results)' : ''}`, 'success');
 }
@@ -8303,7 +8242,7 @@ async function enrichAllSecurityTrails() {
     updateNodeSizes();
     updateSelectOptions();
     await stabilizeNetwork();
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
     completeProgressBar();
     showToast(`SecurityTrails enrichment completed: ${successfulEnrichments}/${totalDomains} domains enriched`, 'success');
 }
@@ -8931,12 +8870,1209 @@ async function enrichAllURLhaus() {
     updateNodeSizes();
     updateSelectOptions();
     await stabilizeNetwork();
-    ensureInteractionSettings();
+    //ensureInteractionSettings();
     completeProgressBar();
     showToast(`URLhaus enrichment completed: ${successfulEnrichments}/${totalURLs} URLs enriched`, 'success');
 }
 
 
+// Replace the existing isPrivateIP function (for completeness)
+function isPrivateIP(ip) {
+    console.log(`isPrivateIP called with: ${ip}`);
+    const octets = ip.split('.').map(Number);
+    console.log(`Parsed octets: ${octets}`);
+    
+    if (octets.length !== 4 || octets.some(o => o < 0 || o > 255)) {
+        console.log(`Invalid IP format: ${ip}`);
+        return false;
+    }
+
+    const isPrivate = (
+        (octets[0] === 10) || // 10.0.0.0/8
+        (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) || // 172.16.0.0/12
+        (octets[0] === 192 && octets[1] === 168) // 192.168.0.0/16
+    );
+    
+    console.log(`IP ${ip} is ${isPrivate ? 'private' : 'public'}`);
+    return isPrivate;
+}
+
+
+function exportConfigBackup() {
+    // Collect API keys and proxy config from localStorage
+    const configData = {
+        ipinfoApiKey: localStorage.getItem('ipinfoApiKey') || '',
+        shodanApiKey: localStorage.getItem('shodanApiKey') || '',
+        greynoiseApiKey: localStorage.getItem('greynoiseApiKey') || '',
+        urlscanApiKey: localStorage.getItem('urlscanApiKey') || '',
+        securitytrailsApiKey: localStorage.getItem('securitytrailsApiKey') || '',
+        urlhausApiKey: localStorage.getItem('urlhausApiKey') || '',
+        corsProxyUrl: localStorage.getItem('corsProxyUrl') || '',
+        routeViaProxy: localStorage.getItem('routeViaProxy') === 'true',
+        ignoreApiKeysViaProxy: localStorage.getItem('ignoreApiKeysViaProxy') === 'true'
+    };
+
+    // Convert to JSON
+    const json = JSON.stringify(configData, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'configuration_backup.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showToast('Configuration backup exported successfully', 'success');
+}
+
+function importConfig() {
+    // Create a temporary file input element
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+
+    input.onchange = function(event) {
+        const file = event.target.files[0];
+        if (!file) {
+            showToast('No file selected', 'error');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const configData = JSON.parse(e.target.result);
+
+                // Validate the imported data
+                const expectedKeys = [
+                    'ipinfoApiKey', 'shodanApiKey', 'greynoiseApiKey', 'urlscanApiKey', 
+                    'securitytrailsApiKey', 'urlhausApiKey', 'corsProxyUrl', 
+                    'routeViaProxy', 'ignoreApiKeysViaProxy'
+                ];
+                const hasValidKeys = expectedKeys.every(key => key in configData);
+                if (!hasValidKeys) {
+                    throw new Error('Invalid configuration file: missing required keys');
+                }
+
+                // Update localStorage and global variables
+                ipinfoApiKey = configData.ipinfoApiKey || '';
+                shodanApiKey = configData.shodanApiKey || '';
+                greynoiseApiKey = configData.greynoiseApiKey || '';
+                urlscanApiKey = configData.urlscanApiKey || '';
+                securitytrailsApiKey = configData.securitytrailsApiKey || '';
+                urlhausApiKey = configData.urlhausApiKey || '';
+                corsProxyUrl = configData.corsProxyUrl || 'http://localhost:3000/proxy?url=';
+                routeViaProxy = !!configData.routeViaProxy;
+                ignoreApiKeysViaProxy = !!configData.ignoreApiKeysViaProxy;
+
+                // Persist to localStorage
+                localStorage.setItem('ipinfoApiKey', ipinfoApiKey);
+                localStorage.setItem('shodanApiKey', shodanApiKey);
+                localStorage.setItem('greynoiseApiKey', greynoiseApiKey);
+                localStorage.setItem('urlscanApiKey', urlscanApiKey);
+                localStorage.setItem('securitytrailsApiKey', securitytrailsApiKey);
+                localStorage.setItem('urlhausApiKey', urlhausApiKey);
+                localStorage.setItem('corsProxyUrl', corsProxyUrl);
+                localStorage.setItem('routeViaProxy', routeViaProxy.toString());
+                localStorage.setItem('ignoreApiKeysViaProxy', ignoreApiKeysViaProxy.toString());
+
+                // Update UI elements
+                document.getElementById('ipinfoApiKey').value = ipinfoApiKey;
+                document.getElementById('shodanApiKey').value = shodanApiKey;
+                document.getElementById('greynoiseApiKey').value = greynoiseApiKey;
+                document.getElementById('urlscanApiKey').value = urlscanApiKey;
+                document.getElementById('securitytrailsApiKey').value = securitytrailsApiKey;
+                document.getElementById('urlhausApiKey').value = urlhausApiKey;
+                document.getElementById('corsProxyUrl').value = corsProxyUrl;
+                document.getElementById('routeViaProxy').checked = routeViaProxy;
+                document.getElementById('ignoreApiKeysViaProxy').checked = ignoreApiKeysViaProxy;
+
+                // Update checkbox states based on whether keys are stored
+                document.getElementById('storeIpinfoKey').checked = !!ipinfoApiKey;
+                document.getElementById('storeShodanKey').checked = !!shodanApiKey;
+                document.getElementById('storeGreynoiseKey').checked = !!greynoiseApiKey;
+                document.getElementById('storeUrlscanKey').checked = !!urlscanApiKey;
+                document.getElementById('storeSecuritytrailsKey').checked = !!securitytrailsApiKey;
+                document.getElementById('storeUrlhausKey').checked = !!urlhausApiKey;
+                document.getElementById('storeCorsProxy').checked = !!corsProxyUrl;
+
+                showToast('Configuration imported successfully', 'success');
+            } catch (error) {
+                console.error('Error importing config:', error);
+                showToast(`Failed to import configuration: ${error.message}`, 'error');
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    // Trigger file selection
+    input.click();
+}
+
+// IMport from NMAP XML Function
+
+async function importNMAP() {
+    // Create a temporary file input element
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.xml';
+
+    input.onchange = async function(event) {
+        const file = event.target.files[0];
+        if (!file) {
+            showToast('No file selected', 'error');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            try {
+                let xmlText = e.target.result;
+                console.log('Raw XML Text:', xmlText); // Log raw input for debugging
+
+                // Extract valid XML content between <?xml and </nmaprun>
+                const xmlStart = xmlText.indexOf('<?xml');
+                const xmlEnd = xmlText.lastIndexOf('</nmaprun>') + '</nmaprun>'.length;
+                if (xmlStart === -1 || xmlEnd === -1) {
+                    throw new Error('Could not find valid XML content in file');
+                }
+                xmlText = xmlText.substring(xmlStart, xmlEnd);
+                console.log('Extracted XML Text:', xmlText); // Log extracted XML
+
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlText, 'application/xml');
+
+                // Check for XML parsing errors
+                const parserError = xmlDoc.querySelector('parsererror');
+                if (parserError) {
+                    console.error('Parser Error Details:', parserError.textContent);
+                    throw new Error('Invalid Nmap XML file: ' + parserError.textContent);
+                }
+
+                console.log('Parsed XML Document:', xmlDoc); // Log parsed doc for debugging
+
+                // Maps for deduplication
+                const existingNodes = new Map();
+                nodes.forEach(node => {
+                    if (node.type === 'ip' && node.ip) existingNodes.set(`ip:${node.ip}`, node);
+                    if (node.type === 'domain' && node.domain) existingNodes.set(`domain:${node.domain.toLowerCase()}`, node);
+                    if (node.type === 'port' && node.portNumber) existingNodes.set(`port:${node.portType}/${node.portNumber}`, node);
+                    if (node.type === 'service' && node.serviceName) existingNodes.set(`service:${node.serviceName.toLowerCase()}_${node.portType}/${node.portNumber}`, node);
+                    if (node.type === 'os' && node.os) existingNodes.set(`os:${node.os}`, node);
+                    if (node.type === 'cpe' && node.cpe) existingNodes.set(`cpe:${node.cpe}`, node);
+                    if (node.type === 'hop' && node.ipaddr) existingNodes.set(`hop:${node.ipaddr}`, node);
+                    if (node.type === 'mac' && node.mac) existingNodes.set(`mac:${node.mac.toLowerCase()}`, node);
+                });
+
+                const newNodes = [];
+                const newEdges = [];
+                let processedCount = 0;
+                const batchSize = 50;
+
+                // Process each host
+                const hosts = xmlDoc.getElementsByTagName('host');
+                if (hosts.length === 0) {
+                    throw new Error('No hosts found in Nmap XML');
+                }
+
+                for (const host of hosts) {
+                    // Extract IP address
+                    const ipAddr = host.querySelector('address[addrtype="ipv4"]');
+                    const ip = ipAddr ? ipAddr.getAttribute('addr') : null;
+                    if (!ip) continue;
+
+                    let ipNodeId;
+                    if (!existingNodes.has(`ip:${ip}`)) {
+                        ipNodeId = nextId++;
+                        newNodes.push({
+                            id: ipNodeId,
+                            type: 'ip',
+                            label: `IP: ${ip}`,
+                            title: `IP Address: ${ip}`,
+                            color: { background: '#f87171' },
+                            ip: ip,
+                            size: 20
+                        });
+                        existingNodes.set(`ip:${ip}`, { id: ipNodeId });
+                        console.log(`Added IP node: ${ip}, ID: ${ipNodeId}`);
+                    } else {
+                        ipNodeId = existingNodes.get(`ip:${ip}`).id;
+                    }
+
+                    // Extract MAC address
+                    const macAddr = host.querySelector('address[addrtype="mac"]');
+                    const mac = macAddr ? macAddr.getAttribute('addr') : null;
+                    if (mac) {
+                        const macKey = `mac:${mac.toLowerCase()}`;
+                        let macNodeId;
+                        if (!existingNodes.has(macKey)) {
+                            macNodeId = nextId++;
+                            newNodes.push({
+                                id: macNodeId,
+                                type: 'mac',
+                                label: `MAC: ${mac}`,
+                                title: `MAC Address: ${mac}`,
+                                color: { background: '#8b5cf6' },
+                                mac: mac,
+                                size: 15
+                            });
+                            existingNodes.set(macKey, { id: macNodeId });
+                            console.log(`Added MAC node: ${mac}, ID: ${macNodeId}`);
+                        } else {
+                            macNodeId = existingNodes.get(macKey).id;
+                        }
+                        newEdges.push({
+                            id: `edge_${ipNodeId}_${macNodeId}_${Date.now()}`,
+                            from: ipNodeId,
+                            to: macNodeId,
+                            label: 'Has MAC'
+                        });
+                        console.log(`Linked IP ${ipNodeId} to MAC: ${macNodeId}`);
+                    }
+
+                    // Extract hostnames
+                    const hostnames = host.getElementsByTagName('hostname');
+                    for (const hostname of hostnames) {
+                        const domain = hostname.getAttribute('name');
+                        if (domain && !existingNodes.has(`domain:${domain.toLowerCase()}`)) {
+                            const domainNodeId = nextId++;
+                            newNodes.push({
+                                id: domainNodeId,
+                                type: 'domain',
+                                label: `Domain: ${domain}`,
+                                title: `Domain: ${domain}\nType: ${hostname.getAttribute('type')}`,
+                                color: { background: '#60a5fa' },
+                                domain: domain,
+                                size: 20
+                            });
+                            existingNodes.set(`domain:${domain.toLowerCase()}`, { id: domainNodeId });
+                            newEdges.push({
+                                id: `edge_${ipNodeId}_${domainNodeId}_${Date.now()}`,
+                                from: ipNodeId,
+                                to: domainNodeId,
+                                label: 'Resolves to'
+                            });
+                            console.log(`Added Domain node: ${domain}, ID: ${domainNodeId}, Edge to IP: ${ipNodeId}`);
+                        } else if (domain) {
+                            const existingDomainNode = existingNodes.get(`domain:${domain.toLowerCase()}`);
+                            if (!newEdges.some(e => e.from === ipNodeId && e.to === existingDomainNode.id)) {
+                                newEdges.push({
+                                    id: `edge_${ipNodeId}_${existingDomainNode.id}_${Date.now()}`,
+                                    from: ipNodeId,
+                                    to: existingDomainNode.id,
+                                    label: 'Resolves to'
+                                });
+                                console.log(`Linked IP ${ipNodeId} to existing Domain: ${existingDomainNode.id}`);
+                            }
+                        }
+                    }
+
+                    // Extract ports, services, and certificate domains
+                    const ports = host.getElementsByTagName('port');
+                    for (const port of ports) {
+                        const protocol = port.getAttribute('protocol');
+                        const portNumber = port.getAttribute('portid');
+                        const state = port.querySelector('state')?.getAttribute('state') || 'unknown';
+                        const service = port.querySelector('service');
+                        const serviceName = service?.getAttribute('name') || 'unknown';
+                        const product = service?.getAttribute('product') || '';
+                        const version = service?.getAttribute('version') || '';
+                        const extrainfo = service?.getAttribute('extrainfo') || '';
+
+                        const portKey = `port:${protocol.toUpperCase()}/${portNumber}`;
+                        let portNodeId;
+                        if (!existingNodes.has(portKey)) {
+                            portNodeId = nextId++;
+                            newNodes.push({
+                                id: portNodeId,
+                                type: 'port',
+                                label: `${protocol.toUpperCase()}/${portNumber} (${state})`,
+                                title: `Port\nType: ${protocol.toUpperCase()}\nNumber: ${portNumber}\nState: ${state}`,
+                                color: { background: state === 'open' ? '#a78bfa' : '#d1d5db' },
+                                portType: protocol.toUpperCase(),
+                                portNumber: portNumber,
+                                size: 10
+                            });
+                            existingNodes.set(portKey, { id: portNodeId });
+                            console.log(`Added Port node: ${protocol}/${portNumber}, State: ${state}, ID: ${portNodeId}`);
+                        } else {
+                            portNodeId = existingNodes.get(portKey).id;
+                        }
+
+                        newEdges.push({
+                            id: `edge_${ipNodeId}_${portNodeId}_${Date.now()}`,
+                            from: ipNodeId,
+                            to: portNodeId,
+                            label: 'Has port'
+                        });
+                        console.log(`Linked IP ${ipNodeId} to Port: ${portNodeId}`);
+
+                        // Service entity linked to port
+                        const serviceKey = `service:${serviceName.toLowerCase()}_${protocol.toUpperCase()}/${portNumber}`;
+                        let serviceNodeId;
+                        if (serviceName !== 'unknown' && !existingNodes.has(serviceKey)) {
+                            serviceNodeId = nextId++;
+                            newNodes.push({
+                                id: serviceNodeId,
+                                type: 'service',
+                                label: `Service: ${serviceName}`,
+                                title: `Service\nName: ${serviceName}${product ? `\nProduct: ${product}` : ''}${version ? `\nVersion: ${version}` : ''}${extrainfo ? `\nExtra Info: ${extrainfo}` : ''}`,
+                                color: { background: '#ec4899' },
+                                serviceName: serviceName,
+                                portType: protocol.toUpperCase(),
+                                portNumber: portNumber,
+                                size: 15
+                            });
+                            existingNodes.set(serviceKey, { id: serviceNodeId });
+                            newEdges.push({
+                                id: `edge_${portNodeId}_${serviceNodeId}_${Date.now()}`,
+                                from: portNodeId,
+                                to: serviceNodeId,
+                                label: 'Runs'
+                            });
+                            console.log(`Added Service node: ${serviceName}, ID: ${serviceNodeId}, Edge to Port: ${portNodeId}`);
+                        } else if (serviceName !== 'unknown') {
+                            serviceNodeId = existingNodes.get(serviceKey).id;
+                            if (!newEdges.some(e => e.from === portNodeId && e.to === serviceNodeId)) {
+                                newEdges.push({
+                                    id: `edge_${portNodeId}_${serviceNodeId}_${Date.now()}`,
+                                    from: portNodeId,
+                                    to: serviceNodeId,
+                                    label: 'Runs'
+                                });
+                                console.log(`Linked Port ${portNodeId} to existing Service: ${serviceNodeId}`);
+                            }
+                        }
+
+                        // CPE entities from service
+                        const cpes = service ? service.getElementsByTagName('cpe') : [];
+                        for (const cpe of cpes) {
+                            const cpeValue = cpe.textContent;
+                            if (cpeValue && !existingNodes.has(`cpe:${cpeValue}`)) {
+                                const cpeNodeId = nextId++;
+                                newNodes.push({
+                                    id: cpeNodeId,
+                                    type: 'cpe',
+                                    label: `CPE: ${cpeValue.split(':').slice(2).join(':')}`,
+                                    title: `CPE: ${cpeValue}`,
+                                    color: { background: '#f59e0b' },
+                                    cpe: cpeValue,
+                                    size: 12
+                                });
+                                existingNodes.set(`cpe:${cpeValue}`, { id: cpeNodeId });
+                                newEdges.push({
+                                    id: `edge_${serviceNodeId || portNodeId}_${cpeNodeId}_${Date.now()}`,
+                                    from: serviceNodeId || portNodeId,
+                                    to: cpeNodeId,
+                                    label: 'Identifies'
+                                });
+                                console.log(`Added CPE node: ${cpeValue}, ID: ${cpeNodeId}, Edge to ${serviceNodeId ? 'Service' : 'Port'}: ${serviceNodeId || portNodeId}`);
+                            }
+                        }
+
+                        // Extract certificate domains (SANs) from ssl-cert script
+                        const sslCertScript = port.querySelector('script[id="ssl-cert"]');
+                        if (sslCertScript) {
+                            const output = sslCertScript.getAttribute('output') || '';
+                            // Match SANs like "DNS:example.com" or "DNS:*.example.com"
+                            const sanMatches = output.match(/DNS:[^\s,]+/g) || [];
+                            for (const san of sanMatches) {
+                                const domain = san.replace('DNS:', '').trim();
+                                if (domain && !existingNodes.has(`domain:${domain.toLowerCase()}`)) {
+                                    const domainNodeId = nextId++;
+                                    newNodes.push({
+                                        id: domainNodeId,
+                                        type: 'domain',
+                                        label: `Domain: ${domain}`,
+                                        title: `Domain: ${domain}\nSource: SSL Certificate SAN`,
+                                        color: { background: '#60a5fa' },
+                                        domain: domain,
+                                        size: 20
+                                    });
+                                    existingNodes.set(`domain:${domain.toLowerCase()}`, { id: domainNodeId });
+                                    newEdges.push({
+                                        id: `edge_${ipNodeId}_${domainNodeId}_${Date.now()}`,
+                                        from: ipNodeId,
+                                        to: domainNodeId,
+                                        label: 'Certificate Domain'
+                                    });
+                                    console.log(`Added SAN Domain node: ${domain}, ID: ${domainNodeId}, Edge to IP: ${ipNodeId}`);
+                                } else if (domain) {
+                                    const existingDomainNode = existingNodes.get(`domain:${domain.toLowerCase()}`);
+                                    if (!newEdges.some(e => e.from === ipNodeId && e.to === existingDomainNode.id && e.label === 'Certificate Domain')) {
+                                        newEdges.push({
+                                            id: `edge_${ipNodeId}_${existingDomainNode.id}_${Date.now()}`,
+                                            from: ipNodeId,
+                                            to: existingDomainNode.id,
+                                            label: 'Certificate Domain'
+                                        });
+                                        console.log(`Linked IP ${ipNodeId} to existing SAN Domain: ${existingDomainNode.id}`);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Extract OS
+                    const osMatch = host.querySelector('osmatch');
+                    if (osMatch) {
+                        const osName = osMatch.getAttribute('name');
+                        const osKey = `os:${osName}`;
+                        let osNodeId;
+                        if (!existingNodes.has(osKey)) {
+                            osNodeId = nextId++;
+                            newNodes.push({
+                                id: osNodeId,
+                                type: 'os',
+                                label: `OS: ${osName}`,
+                                title: `Operating System: ${osName}\nAccuracy: ${osMatch.getAttribute('accuracy')}%`,
+                                color: { background: '#10b981' },
+                                os: osName,
+                                size: 15
+                            });
+                            existingNodes.set(osKey, { id: osNodeId });
+                            newEdges.push({
+                                id: `edge_${ipNodeId}_${osNodeId}_${Date.now()}`,
+                                from: ipNodeId,
+                                to: osNodeId,
+                                label: 'Runs'
+                            });
+                            console.log(`Added OS node: ${osName}, ID: ${osNodeId}, Edge to IP: ${ipNodeId}`);
+                        } else {
+                            osNodeId = existingNodes.get(osKey).id;
+                            if (!newEdges.some(e => e.from === ipNodeId && e.to === osNodeId)) {
+                                newEdges.push({
+                                    id: `edge_${ipNodeId}_${osNodeId}_${Date.now()}`,
+                                    from: ipNodeId,
+                                    to: osNodeId,
+                                    label: 'Runs'
+                                });
+                                console.log(`Linked IP ${ipNodeId} to existing OS: ${osNodeId}`);
+                            }
+                        }
+
+                        // CPE entities from OS
+                        const osCpes = host.querySelectorAll('osclass > cpe');
+                        for (const cpe of osCpes) {
+                            const cpeValue = cpe.textContent;
+                            if (cpeValue && !existingNodes.has(`cpe:${cpeValue}`)) {
+                                const cpeNodeId = nextId++;
+                                newNodes.push({
+                                    id: cpeNodeId,
+                                    type: 'cpe',
+                                    label: `CPE: ${cpeValue.split(':').slice(2).join(':')}`,
+                                    title: `CPE: ${cpeValue}`,
+                                    color: { background: '#f59e0b' },
+                                    cpe: cpeValue,
+                                    size: 12
+                                });
+                                existingNodes.set(`cpe:${cpeValue}`, { id: cpeNodeId });
+                                newEdges.push({
+                                    id: `edge_${osNodeId}_${cpeNodeId}_${Date.now()}`,
+                                    from: osNodeId,
+                                    to: cpeNodeId,
+                                    label: 'Identifies'
+                                });
+                                console.log(`Added CPE node: ${cpeValue}, ID: ${cpeNodeId}, Edge to OS: ${osNodeId}`);
+                            }
+                        }
+                    }
+
+                    // Extract trace hops
+                    const trace = host.querySelector('trace');
+                    if (trace) {
+                        const hops = trace.getElementsByTagName('hop');
+                        for (const hop of hops) {
+                            const hopIp = hop.getAttribute('ipaddr');
+                            if (hopIp && !existingNodes.has(`hop:${hopIp}`)) {
+                                const hopNodeId = nextId++;
+                                newNodes.push({
+                                    id: hopNodeId,
+                                    type: 'hop',
+                                    label: `Hop: ${hopIp}`,
+                                    title: `Trace Hop\nIP: ${hopIp}\nTTL: ${hop.getAttribute('ttl')}\nRTT: ${hop.getAttribute('rtt') || 'unknown'} ms\nHost: ${hop.getAttribute('host') || 'unknown'}`,
+                                    color: { background: '#14b8a6' },
+                                    ipaddr: hopIp,
+                                    size: 12
+                                });
+                                existingNodes.set(`hop:${hopIp}`, { id: hopNodeId });
+                                newEdges.push({
+                                    id: `edge_${ipNodeId}_${hopNodeId}_${Date.now()}`,
+                                    from: ipNodeId,
+                                    to: hopNodeId,
+                                    label: 'Reachable via'
+                                });
+                                console.log(`Added Hop node: ${hopIp}, ID: ${hopNodeId}, Edge to IP: ${ipNodeId}`);
+                            }
+                        }
+                    }
+
+                    processedCount++;
+                    if (processedCount % batchSize === 0) {
+                        nodes.add(newNodes);
+                        edges.add(newEdges);
+                        newNodes.length = 0;
+                        newEdges.length = 0;
+                        await new Promise(resolve => setTimeout(resolve, 0));
+                    }
+                }
+
+                // Add remaining items
+                if (newNodes.length > 0) {
+                    nodes.add(newNodes);
+                    edges.add(newEdges);
+                }
+
+                updateNodeSizes();
+                updateSelectOptions();
+                await stabilizeNetwork().catch(err => console.error('Error stabilizing network:', err));
+                showToast(`Imported ${hosts.length} hosts from Nmap XML`, 'success');
+            } catch (error) {
+                console.error('Error importing Nmap XML:', error);
+                showToast(`Failed to import Nmap XML: ${error.message}`, 'error');
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    // Trigger file selection
+    input.click();
+}
+
+// Risk analysis
+
+function riskAnalysis() {
+    const riskyPorts = {
+        'TCP/3389': 'RDP (Remote Desktop Protocol)',
+        'TCP/5985': 'WinRM (Windows Remote Management)',
+        'TCP/5986': 'WinRM (Windows Remote Management HTTPS)',
+        'TCP/1433': 'MSSQL (Microsoft SQL Server)',
+        'TCP/21': 'FTP (File Transfer Protocol)',
+        'TCP/389': 'LDAP (Lightweight Directory Access Protocol)',
+        'TCP/445': 'SMB (Server Message Block)',
+        'TCP/443': 'HTTPS (Hypertext Transfer Protocol Secure)',
+        'TCP/80': 'HTTP (Hypertext Transfer Protocol)',
+        'TCP/53': 'DNS (Domain Name System)'
+    };
+
+    const risks = [];
+    const ipNodes = new Map();
+
+    // Collect IP nodes
+    nodes.forEach(node => {
+        if ((node.type || '').toLowerCase() === 'ip' && node.ip) {
+            ipNodes.set(node.ip, { id: node.id, domains: new Set(), riskyPorts: new Set() });
+        }
+    });
+
+    // Link domains to IPs
+    edges.forEach(edge => {
+        const label = (edge.label || '').toLowerCase();
+        if (label === 'resolves to' || label === 'certificate domain') {
+            const fromNode = nodes.get(edge.from);
+            const toNode = nodes.get(edge.to);
+            if (fromNode?.type.toLowerCase() === 'ip' && toNode?.type.toLowerCase() === 'domain' && fromNode.ip && toNode.domain) {
+                ipNodes.get(fromNode.ip).domains.add(toNode.domain);
+            }
+        }
+    });
+
+    // Identify risky ports
+    nodes.forEach(node => {
+        if ((node.type || '').toLowerCase() === 'port') {
+            const portType = (node.portType || '').toUpperCase();
+            const portNumber = String(node.portNumber || '');
+            const portKey = `${portType}/${portNumber}`;
+            let state = (node.state || '').toLowerCase();
+            if (!state && node.label) {
+                const stateMatch = node.label.match(/\((open|closed|filtered)\)/i);
+                if (stateMatch) state = stateMatch[1].toLowerCase();
+            }
+
+            if (riskyPorts[portKey] && state === 'open') {
+                edges.forEach(edge => {
+                    const edgeLabel = (edge.label || '').toLowerCase();
+                    if (edge.to === node.id && edgeLabel === 'has port') {
+                        const ipNode = nodes.get(edge.from);
+                        if (ipNode?.type.toLowerCase() === 'ip' && ipNode.ip) {
+                            ipNodes.get(ipNode.ip).riskyPorts.add(portKey);
+                        }
+                    }
+                });
+            }
+        }
+    });
+
+    // Build risks
+    ipNodes.forEach((data, ip) => {
+        if (data.riskyPorts.size > 0) {
+            risks.push({
+                ip: ip,
+                domains: Array.from(data.domains),
+                riskyPorts: Array.from(data.riskyPorts).map(port => ({
+                    port: port,
+                    name: riskyPorts[port]
+                }))
+            });
+        }
+    });
+
+    // Display results
+    const modal = document.getElementById('riskModal');
+    if (risks.length === 0) {
+        modal.style.display = 'none';
+        showToast('No risky elements found in the graph', 'info');
+        return;
+    }
+
+    const tableContainer = document.getElementById('riskTableContainer');
+    let tableHtml = `
+        <table>
+            <thead>
+                <tr>
+                    <th>IP Address</th>
+                    <th>Domain Names</th>
+                    <th>Risky Ports</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    risks.forEach(risk => {
+        tableHtml += `
+            <tr>
+                <td>${risk.ip}</td>
+                <td>${risk.domains.length > 0 ? risk.domains.join(', ') : 'None'}</td>
+                <td>${risk.riskyPorts.map(p => `${p.name} (${p.port})`).join(', ')}</td>
+            </tr>
+        `;
+    });
+
+    tableHtml += `
+            </tbody>
+        </table>
+        <button class="print-button" onclick="printRiskTableToPDF()">Print to PDF</button>
+        <button class="export-button" onclick="exportToExcel()">Export to Excel</button>
+    `;
+
+    tableContainer.innerHTML = tableHtml;
+    modal.style.display = 'block';
+
+    // Modal close functionality
+    const closeModal = modal.querySelector('.close-modal');
+    closeModal.onclick = () => modal.style.display = 'none';
+    modal.onclick = (e) => {
+        if (e.target === modal) modal.style.display = 'none';
+    };
+}
+
+
+// Add event listener to close modal when clicking outside
+window.onclick = function(event) {
+    const modal = document.getElementById('riskModal');
+    if (event.target === modal) {
+        modal.style.display = 'none';
+    }
+};
+
+
+
+// Save Risk Assessment to PDF
+function printRiskTableToPDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const table = document.querySelector('#riskTableContainer table');
+
+    if (!table) {
+        showToast('No risk table found to print', 'error');
+        return;
+    }
+
+    // Add title
+    doc.setFontSize(16);
+    doc.text('Risk Analysis Report', 10, 10);
+
+    // Convert table to PDF with light mode styling
+    doc.autoTable({
+        html: table,
+        startY: 20,
+        styles: {
+            fillColor: [255, 255, 255], // White background for all cells
+            textColor: [31, 42, 68],    // Dark text (#1f2a44)
+            lineColor: [209, 213, 219], // Light gray border (#d1d5db)
+            lineWidth: 0.1
+        },
+        headStyles: {
+            fillColor: [241, 245, 249], // Light gray header (#f1f5f9)
+            textColor: [31, 42, 68]     // Dark text for header
+        },
+        alternateRowStyles: {
+            fillColor: [255, 255, 255]  // No striping, all rows white
+        }
+    });
+
+    // Save the PDF
+    doc.save('risk_analysis.pdf');
+}
+
+function exportToExcel() {
+    // Check if XLSX is available
+    if (typeof XLSX === 'undefined') {
+        showToast('Excel export library not loaded', 'error');
+        return;
+    }
+
+    const table = document.querySelector('#riskTableContainer table');
+    if (!table) {
+        showToast('No risk table found to export', 'error');
+        return;
+    }
+
+    // Prepare data for Excel
+    const data = [];
+    const headers = ['IP Address', 'Domain Names', 'Risky Ports'];
+    data.push(headers);
+
+    const rows = table.querySelectorAll('tbody tr');
+    rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        const rowData = [
+            cells[0].textContent, // IP Address
+            cells[1].textContent, // Domain Names
+            cells[2].textContent  // Risky Ports
+        ];
+        data.push(rowData);
+    });
+
+    // Create workbook and worksheet
+    const ws = XLSX.utils.aoa_to_sheet(data); // Array of arrays to sheet
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Risk Analysis');
+
+    // Style headers (optional, basic bolding)
+    ws['!cols'] = [{ wch: 15 }, { wch: 30 }, { wch: 50 }]; // Set column widths
+    for (let i = 0; i < headers.length; i++) {
+        const cellRef = XLSX.utils.encode_cell({ r: 0, c: i });
+        ws[cellRef].s = { font: { bold: true } };
+    }
+
+    // Export to file
+    XLSX.writeFile(wb, 'risk_analysis.xlsx');
+}
+
+
+
+//GOOGLE DNS
+
+const throttledEnrichGoogleDNS = throttleRequest(async function enrichGoogleDNS(domain, domainNodeId, isBulk = false, signal) {
+    if (!isBulk) network.setOptions({ physics: { enabled: false } });
+    try {
+        const baseUrl = `https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=A`;
+        const url = constructUrl(baseUrl, false); // No API key needed for Google DNS
+        console.log(`Fetching A records for ${domain}: ${url}`); // Debug log
+        const response = await fetch(url, { signal });
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Failed to fetch DNS data: ${response.status} ${response.statusText} - ${errorText}`);
+        }
+        const data = await response.json();
+        
+        if (data.Status !== 0) {
+            throw new Error(`Google DNS error: Status ${data.Status}${data.Comment ? ` (${data.Comment})` : ''}`);
+        }
+        
+        if (data.Answer) {
+            data.Answer.forEach(answer => {
+                if (answer.type === 1) { // Type 1 is A record (IPv4)
+                    const ip = answer.data;
+                    const existingIP = nodes.get({ filter: n => n.type === 'ip' && n.ip === ip })[0];
+                    const ipId = existingIP ? existingIP.id : nextId++;
+                    if (!existingIP) {
+                        nodes.add({
+                            id: ipId,
+                            type: 'ip',
+                            label: `IP: ${ip}`,
+                            title: `IP Address: ${ip}`,
+                            color: { background: '#f87171' },
+                            ip: ip,
+                            size: 20
+                        });
+                    }
+                    const edgeId = `${domainNodeId}-${ipId}-ResolvesTo`;
+                    if (!edges.get(edgeId)) {
+                        edges.add({ id: edgeId, from: domainNodeId, to: ipId, label: 'Resolves to' });
+                    }
+                }
+            });
+        } else {
+            if (!isBulk) showToast(`No A records found for ${domain}`, 'info');
+        }
+        
+        updateNodeSizes();
+        updateSelectOptions();
+        if (!isBulk) {
+            await stabilizeNetwork();
+            showToast(`Domain ${domain} enrichment completed using Google DNS`, 'success');
+        }
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            showToast(`A record enrichment of domain ${domain} cancelled`, 'info');
+            return;
+        }
+        console.error(`Error enriching domain ${domain} with Google DNS: ${error.message}`);
+        showToast(`Error enriching domain ${domain} with Google DNS: ${error.message}`, 'error');
+        if (!isBulk) await stabilizeNetwork();
+    }
+}, RATE_LIMIT_MS);
+
+// Multiple Google DNS Node Enrichment
+
+const throttledEnrichGoogleDNSMultiple = throttleRequest(async function enrichGoogleDNSMultiple(domains, nodeIds) {
+    if (!Array.isArray(domains) || !Array.isArray(nodeIds) || domains.length !== nodeIds.length) {
+        showToast('Invalid input for multiple domain enrichment', 'error');
+        return;
+    }
+
+    for (let i = 0; i < domains.length; i++) {
+        if (activeTaskController && activeTaskController.signal.aborted) {
+            showToast('Google DNS enrichment stopped', 'info');
+            break;
+        }
+        await throttledEnrichGoogleDNS(domains[i], nodeIds[i], true); // isBulk = true
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    showToast(`Enriched ${domains.length} domains with Google DNS`, 'success');
+}, RATE_LIMIT_MS);
+
+
+
+// Google Bulk Enrichment
+
+async function enrichAllGoogleDNS() {
+            network.setOptions({ physics: { enabled: false } });
+            const domainNodes = nodes.get({ filter: n => n.type === 'domain' });
+            for (const node of domainNodes) await throttledEnrichGoogleDNS(node.domain, node.id, true);
+            await stabilizeNetwork();
+            showToast('Bulk Google DNS enrichment completed', 'success');
+        }
+
+
+// GOOGLE MX and TXT Enrichment
+
+// Single MX Record Enrichment
+const throttledEnrichGoogleDNSMX = throttleRequest(async function enrichGoogleDNSMX(domain, domainNodeId, isBulk = false, signal) {
+    if (!isBulk) network.setOptions({ physics: { enabled: false } });
+    try {
+        const baseUrl = `https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=MX`;
+        const url = constructUrl(baseUrl);
+        console.log(`Fetching MX records for ${domain}: ${url}`); // Debug log
+        const response = await fetch(url, { signal });
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Failed to fetch MX DNS data: ${response.status} ${response.statusText} - ${errorText}`);
+        }
+        const data = await response.json();
+        
+        if (data.Status !== 0) {
+            throw new Error(`Google DNS error: Status ${data.Status}${data.Comment ? ` (${data.Comment})` : ''}`);
+        }
+        
+        if (data.Answer) {
+            const existingMXNodes = new Map(nodes.get({ filter: n => n.type === 'mx' && n.hostname }).map(n => [n.hostname.toLowerCase(), n.id]));
+            data.Answer.forEach(answer => {
+                if (answer.type === 15) { // Type 15 is MX record
+                    const [priority, hostname] = answer.data.trim().split(' ');
+                    if (hostname && hostname !== '.') {
+                        let mxId = existingMXNodes.get(hostname.toLowerCase());
+                        if (!mxId) {
+                            mxId = nextId++;
+                            nodes.add({
+                                id: mxId,
+                                type: 'domain',
+                                label: `MX: ${hostname.length > 30 ? hostname.substring(0, 27) + '...' : hostname}`,
+                                title: `Mail Exchanger\nHostname: ${hostname}\nPriority: ${priority}`,
+                                color: { background: '#1e88e5' },
+                                hostname: hostname,
+                                size: 15
+                            });
+                            existingMXNodes.set(hostname.toLowerCase(), mxId);
+                        }
+                        const edgeId = `${domainNodeId}-${mxId}-MXFor`;
+                        if (!edges.get(edgeId)) {
+                            edges.add({ id: edgeId, from: domainNodeId, to: mxId, label: 'MX for' });
+                        }
+                    }
+                }
+            });
+        } else {
+            if (!isBulk) showToast(`No MX records found for ${domain}`, 'info');
+        }
+        
+        updateNodeSizes();
+        updateSelectOptions();
+        if (!isBulk) {
+            await stabilizeNetwork();
+            showToast(`Domain ${domain} MX enrichment completed using Google DNS`, 'success');
+        }
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            showToast(`MX enrichment of domain ${domain} cancelled`, 'info');
+            return;
+        }
+        console.error(`Error enriching domain ${domain} MX with Google DNS: ${error.message}`);
+        showToast(`Error enriching domain ${domain} MX: ${error.message}`, 'error');
+        if (!isBulk) await stabilizeNetwork();
+    }
+}, RATE_LIMIT_MS);
+
+// Multiple MX Record Enrichment
+const throttledEnrichGoogleDNSMXMultiple = throttleRequest(async function enrichGoogleDNSMXMultiple(domains, nodeIds) {
+    if (!Array.isArray(domains) || !Array.isArray(nodeIds) || domains.length !== nodeIds.length) {
+        showToast('Invalid input for multiple MX enrichment', 'error');
+        return;
+    }
+
+    showProgressBar();
+    network.setOptions({ physics: { enabled: false } });
+    const totalDomains = domains.length;
+    let successfulEnrichments = 0;
+
+    for (let i = 0; i < totalDomains; i++) {
+        if (activeTaskController && activeTaskController.signal.aborted) {
+            showToast('Google DNS MX enrichment stopped', 'info');
+            document.getElementById('progress-bar').textContent = `Google DNS MX Enrichment: Stopped at ${successfulEnrichments}/${totalDomains} Domains`;
+            break;
+        }
+        await throttledEnrichGoogleDNSMX(domains[i], nodeIds[i], true);
+        successfulEnrichments++;
+        const progress = ((successfulEnrichments / totalDomains) * 100).toFixed(1);
+        document.getElementById('progress-bar').textContent = `Google DNS MX Enrichment: ${successfulEnrichments}/${totalDomains} Domains (${progress}%)`;
+        await new Promise(resolve => setTimeout(resolve, 200)); // Small delay
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    completeProgressBar();
+    showToast(`Enriched ${successfulEnrichments}/${totalDomains} domains with Google DNS MX records`, 'success');
+}, RATE_LIMIT_MS);
+
+// Bulk MX Enrichment
+async function enrichAllGoogleDNSMX() {
+    showProgressBar();
+    network.setOptions({ physics: { enabled: false } });
+    const domainNodes = nodes.get({ filter: n => n.type === 'domain' && n.domain });
+    const totalDomains = domainNodes.length;
+    let successfulEnrichments = 0;
+
+    if (totalDomains === 0) {
+        showToast('No domain nodes found to enrich', 'info');
+        completeProgressBar();
+        return;
+    }
+
+    const batchSize = 50;
+    const delayBetweenBatches = 200;
+    const totalBatches = Math.ceil(totalDomains / batchSize);
+    const estimatedTimeMs = (totalDomains * RATE_LIMIT_MS) + (totalBatches - 1) * delayBetweenBatches;
+    const estimatedSeconds = Math.ceil(estimatedTimeMs / 1000);
+    const timeEstimateStr = estimatedSeconds > 60 
+        ? `${Math.floor(estimatedSeconds / 60)}m ${estimatedSeconds % 60}s` 
+        : `${estimatedSeconds}s`;
+
+    document.getElementById('progress-bar').textContent = `Google DNS MX Enrichment: 0/${totalDomains} Domains (0%) - Est. ${timeEstimateStr}`;
+
+    for (let i = 0; i < totalDomains; i += batchSize) {
+        if (activeTaskController && activeTaskController.signal.aborted) {
+            showToast('Google DNS MX enrichment stopped', 'info');
+            break;
+        }
+
+        const batch = domainNodes.slice(i, Math.min(i + batchSize, totalDomains));
+        const batchPromises = batch.map(node => 
+            throttledEnrichGoogleDNSMX(node.domain, node.id, true)
+                .then(() => successfulEnrichments++)
+                .catch(error => console.error(`Failed to enrich ${node.domain}: ${error.message}`))
+        );
+
+        await Promise.all(batchPromises);
+
+        const progress = ((successfulEnrichments / totalDomains) * 100).toFixed(1);
+        document.getElementById('progress-bar').textContent = 
+            `Google DNS MX Enrichment: ${successfulEnrichments}/${totalDomains} Domains (${progress}%)`;
+        
+        await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    completeProgressBar();
+    showToast(`Google DNS MX enrichment completed: ${successfulEnrichments}/${totalDomains} domains enriched`, 'success');
+}
+
+// Single TXT Record Enrichment
+
+const throttledEnrichGoogleDNSTXT = throttleRequest(async function enrichGoogleDNSTXT(domain, domainNodeId, isBulk = false, signal) {
+    if (!isBulk) network.setOptions({ physics: { enabled: false } });
+    try {
+        const baseUrl = `https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=TXT`;
+        const url = constructUrl(baseUrl);
+        console.log(`Fetching TXT records for ${domain}: ${url}`);
+        const response = await fetch(url, { signal });
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Failed to fetch TXT DNS data: ${response.status} ${response.statusText} - ${errorText}`);
+        }
+        const data = await response.json();
+        
+        if (data.Status !== 0) {
+            throw new Error(`Google DNS error: Status ${data.Status}${data.Comment ? ` (${data.Comment})` : ''}`);
+        }
+        
+        if (data.Answer) {
+            let foundTXT = false;
+            const existingTXTNodes = new Map(nodes.get({ filter: n => n.type === 'txt' && n.text }).map(n => [n.text, n.id]));
+            data.Answer.forEach(answer => {
+                if (answer.type === 16) { // Type 16 is TXT record
+                    foundTXT = true;
+                    const text = answer.data.replace(/^"|"$/g, '').trim();
+                    if (text) {
+                        let txtId = existingTXTNodes.get(text);
+                        if (!txtId) {
+                            txtId = nextId++;
+                            nodes.add({
+                                id: txtId,
+                                type: 'txt',
+                                label: `TXT: ${text.length > 30 ? text.substring(0, 27) + '...' : text}`,
+                                title: `TXT Record\nValue: ${text}`,
+                                color: { background: '#f59e0b' },
+                                text: text,
+                                size: 15
+                            });
+                            existingTXTNodes.set(text, txtId);
+                        }
+                        const edgeId = `${domainNodeId}-${txtId}-TXTFor`;
+                        if (!edges.get(edgeId)) {
+                            edges.add({ id: edgeId, from: domainNodeId, to: txtId, label: 'TXT for' });
+                        }
+                    }
+                }
+            });
+            if (!foundTXT && !isBulk) {
+                showToast(`No TXT records found for ${domain}; received unexpected record types`, 'warning');
+            }
+        } else {
+            if (!isBulk) showToast(`No TXT records found for ${domain}`, 'info');
+        }
+        
+        updateNodeSizes();
+        updateSelectOptions();
+        if (!isBulk) {
+            await stabilizeNetwork();
+            showToast(`Domain ${domain} TXT enrichment completed using Google DNS`, 'success');
+        }
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            showToast(`TXT enrichment of domain ${domain} cancelled`, 'info');
+            return;
+        }
+        console.error(`Error enriching domain ${domain} TXT with Google DNS: ${error.message}`);
+        showToast(`Error enriching domain ${domain} TXT: ${error.message}`, 'error');
+        if (!isBulk) await stabilizeNetwork();
+    }
+}, RATE_LIMIT_MS);
+
+// Multiple TXT Record Enrichment
+const throttledEnrichGoogleDNSTXTMultiple = throttleRequest(async function enrichGoogleDNSTXTMultiple(domains, nodeIds) {
+    if (!Array.isArray(domains) || !Array.isArray(nodeIds) || domains.length !== nodeIds.length) {
+        showToast('Invalid input for multiple TXT enrichment', 'error');
+        return;
+    }
+
+    showProgressBar();
+    network.setOptions({ physics: { enabled: false } });
+    const totalDomains = domains.length;
+    let successfulEnrichments = 0;
+
+    for (let i = 0; i < totalDomains; i++) {
+        if (activeTaskController && activeTaskController.signal.aborted) {
+            showToast('Google DNS TXT enrichment stopped', 'info');
+            document.getElementById('progress-bar').textContent = `Google DNS TXT Enrichment: Stopped at ${successfulEnrichments}/${totalDomains} Domains`;
+            break;
+        }
+        await throttledEnrichGoogleDNSTXT(domains[i], nodeIds[i], true);
+        successfulEnrichments++;
+        const progress = ((successfulEnrichments / totalDomains) * 100).toFixed(1);
+        document.getElementById('progress-bar').textContent = `Google DNS TXT Enrichment: ${successfulEnrichments}/${totalDomains} Domains (${progress}%)`;
+        await new Promise(resolve => setTimeout(resolve, 200)); // Small delay
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    completeProgressBar();
+    showToast(`Enriched ${successfulEnrichments}/${totalDomains} domains with Google DNS TXT records`, 'success');
+}, RATE_LIMIT_MS);
+
+// Bulk TXT Enrichment
+async function enrichAllGoogleDNSTXT() {
+    showProgressBar();
+    network.setOptions({ physics: { enabled: false } });
+    const domainNodes = nodes.get({ filter: n => n.type === 'domain' && n.domain });
+    const totalDomains = domainNodes.length;
+    let successfulEnrichments = 0;
+
+    if (totalDomains === 0) {
+        showToast('No domain nodes found to enrich', 'info');
+        completeProgressBar();
+        return;
+    }
+
+    const batchSize = 50;
+    const delayBetweenBatches = 200;
+    const totalBatches = Math.ceil(totalDomains / batchSize);
+    const estimatedTimeMs = (totalDomains * RATE_LIMIT_MS) + (totalBatches - 1) * delayBetweenBatches;
+    const estimatedSeconds = Math.ceil(estimatedTimeMs / 1000);
+    const timeEstimateStr = estimatedSeconds > 60 
+        ? `${Math.floor(estimatedSeconds / 60)}m ${estimatedSeconds % 60}s` 
+        : `${estimatedSeconds}s`;
+
+    document.getElementById('progress-bar').textContent = `Google DNS TXT Enrichment: 0/${totalDomains} Domains (0%) - Est. ${timeEstimateStr}`;
+
+    for (let i = 0; i < totalDomains; i += batchSize) {
+        if (activeTaskController && activeTaskController.signal.aborted) {
+            showToast('Google DNS TXT enrichment stopped', 'info');
+            break;
+        }
+
+        const batch = domainNodes.slice(i, Math.min(i + batchSize, totalDomains));
+        const batchPromises = batch.map(node => 
+            throttledEnrichGoogleDNSTXT(node.domain, node.id, true)
+                .then(() => successfulEnrichments++)
+                .catch(error => console.error(`Failed to enrich ${node.domain}: ${error.message}`))
+        );
+
+        await Promise.all(batchPromises);
+
+        const progress = ((successfulEnrichments / totalDomains) * 100).toFixed(1);
+        document.getElementById('progress-bar').textContent = 
+            `Google DNS TXT Enrichment: ${successfulEnrichments}/${totalDomains} Domains (${progress}%)`;
+        
+        await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+    }
+
+    updateNodeSizes();
+    updateSelectOptions();
+    await stabilizeNetwork();
+    completeProgressBar();
+    showToast(`Google DNS TXT enrichment completed: ${successfulEnrichments}/${totalDomains} domains enriched`, 'success');
+}
 
 // Add this at the end of the script section
 window.addEventListener('beforeunload', function() {

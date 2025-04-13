@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Experimental Mapper</title>
+    <!-- toastify-js CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastify-js/1.12.0/toastify.min.css">
+    <!-- Application styles -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app-container">
+        <div id="top-bar">
+            <h1>Experimental Mapper</h1>
+            <p>Version 1.0.0</p>
+            <div>
+                <a href="#" onclick="alert('Theme toggle not implemented');">Toggle Theme</a>
+                <a href="#" onclick="alert('Help not implemented');">Help</a>
+            </div>
+        </div>
+        <div id="main-content">
+            <div id="controls-panel">
+                <h2>Controls</h2>
+                <div class="tabs">
+                    <button class="tab active" onclick="switchTab('nodes')">Nodes</button>
+                    <button class="tab" onclick="switchTab('edges')">Edges</button>
+                    <button class="tab" onclick="switchTab('layout')">Layout</button>
+                    <button class="tab" onclick="switchTab('data')">Data</button>
+                    <button class="tab" onclick="switchTab('config')">Config</button>
+                </div>
+                <div id="nodes-panel" class="panel active">
+                    <button onclick="alert('Add Node functionality not implemented');">Add Node</button>
+                    <button onclick="alert('Edit Node functionality not implemented');">Edit Node</button>
+                    <button onclick="alert('Delete Node functionality not implemented');">Delete Node</button>
+                </div>
+                <div id="edges-panel" class="panel" style="display: none;">
+                    <button onclick="alert('Add Edge functionality not implemented');">Add Edge</button>
+                    <button onclick="alert('Edit Edge functionality not implemented');">Edit Edge</button>
+                    <button onclick="alert('Delete Edge functionality not implemented');">Delete Edge</button>
+                </div>
+                <div id="layout-panel" class="panel" style="display: none;">
+                    <button onclick="alert('Organic Layout functionality not implemented');">Organic Layout</button>
+                    <button onclick="alert('Hierarchical Layout functionality not implemented');">Hierarchical Layout</button>
+                    <button onclick="alert('Toggle Physics functionality not implemented');">Toggle Physics</button>
+                </div>
+                <div id="data-panel" class="panel" style="display: none;">
+                    <button onclick="alert('Export JSON functionality not implemented');">Export JSON</button>
+                    <button onclick="alert('Import JSON functionality not implemented');">Import JSON</button>
+                    <button onclick="alert('Import Nmap functionality not implemented');">Import Nmap</button>
+                    <button onclick="alert('Clear All functionality not implemented');">Clear All</button>
+                </div>
+                <div id="config-panel" class="panel" style="display: none;">
+                    <button onclick="alert('Enrich All functionality not implemented');">Enrich All</button>
+                    <button onclick="alert('API Keys functionality not implemented');">API Keys</button>
+                    <button onclick="alert('Proxy Settings functionality not implemented');">Proxy Settings</button>
+                </div>
+            </div>
+            <div id="network-container">
+                <!-- Network visualization will be populated by NetworkContainerComponent -->
+                <p style="color: red; font-weight: bold;">Loading Experimental Mapper... If this message persists, there might be an issue with JavaScript initialization.</p>
+            </div>
+            <div id="properties-panel">
+                <h2>Properties</h2>
+                <p>No node selected. Click on a node to view properties.</p>
+            </div>
+        </div>
+        <div id="modal-container">
+            <!-- Modals will be populated by ModalComponent -->
+        </div>
+        <div id="context-menu">
+            <!-- Context menu will be populated by ContextMenuComponent -->
+        </div>
+        <div id="progress-bar">
+            <!-- Progress bar will be populated by ProgressBarComponent -->
+        </div>
+    </div>
+
+    <!-- vis.js from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/dist/vis-network.min.js"></script>
+    <!-- toastify-js from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastify-js/1.12.0/toastify.min.js"></script>
+    <!-- jspdf from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- jspdf-autotable from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
+    <!-- xlsx from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Application entry point -->
+    <script type="module" src="js/main.js"></script>
+    <!-- Inline script for basic tab switching functionality -->
+    <script>
+        function switchTab(tabId) {
+            // Hide all panels
+            document.querySelectorAll('.panel').forEach(panel => {
+                panel.style.display = 'none';
+                panel.classList.remove('active');
+            });
+            // Show selected panel
+            const selectedPanel = document.getElementById(tabId + '-panel');
+            if (selectedPanel) {
+                selectedPanel.style.display = 'block';
+                selectedPanel.classList.add('active');
+            }
+            // Update active tab
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelector(`[onclick="switchTab('${tabId}')"]`).classList.add('active');
+        }
+    </script>
+</body>
+</html> 
