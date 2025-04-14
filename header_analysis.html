@@ -177,6 +177,15 @@
             border-radius: 5px;
         }
 
+        .body-content-container {
+            display: none;
+            margin-top: 10px;
+        }
+
+        .body-content-container.expanded {
+            display: block;
+        }
+
         .ioc-section {
             background-color: #ffffff;
             padding: 20px;
@@ -292,7 +301,7 @@
             display: block;
         }
 
-        .toggle-spf-arrow, .toggle-forefront-arrow {
+        .toggle-spf-arrow, .toggle-forefront-arrow, .toggle-header-arrow, .toggle-body-arrow {
             cursor: pointer;
             font-size: 14px;
             margin-left: 10px;
@@ -301,13 +310,18 @@
             transition: color 0.3s;
         }
 
-        .toggle-spf-arrow:hover, .toggle-forefront-arrow:hover {
+        .toggle-spf-arrow:hover, .toggle-forefront-arrow:hover, .toggle-header-arrow:hover, .toggle-body-arrow:hover {
             color: #007bff;
         }
 
-        .spf-status-container, .forefront-status-container {
+        .spf-status-container, .forefront-status-container, .header-table-container, .body-content-toggle {
             display: flex;
             align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .header-table-toggle {
+            text-align: center;
             margin-bottom: 10px;
         }
 
@@ -461,6 +475,8 @@
         let sortState = { column: 'order', direction: 'asc' };
         let transactions = [];
         let headerFields = {};
+        let isHeaderTableExpanded = false;
+        let isBodyContentExpanded = false;
         let lastSpfResult = {
             status: 'N/A',
             fields: {
@@ -869,6 +885,30 @@
             }
         }
 
+        function toggleHeaderTable() {
+            isHeaderTableExpanded = !isHeaderTableExpanded;
+            renderTable(lastSpfResult, lastBclResult, lastForefrontResult);
+        }
+
+        function toggleBodyContent() {
+            isBodyContentExpanded = !isBodyContentExpanded;
+            const bodyResultsDiv = document.getElementById('bodyResults');
+            if (!bodyResultsDiv) return;
+
+            let bodyHtml = '';
+            if (lastBodyContent) {
+                bodyHtml += `<div class="body-content-toggle">
+                    <span class="toggle-body-arrow" onclick="toggleBodyContent()">${isBodyContentExpanded ? '▲' : '▼'}</span>
+                </div>
+                <div class="body-content-container${isBodyContentExpanded ? ' expanded' : ''}" id="body-content">
+                    ${lastBodyContent}
+                </div>`;
+            } else {
+                bodyHtml = '<p>No body content provided.</p>';
+            }
+            bodyResultsDiv.innerHTML = bodyHtml;
+        }
+
         function renderEmailDetails(headerFields) {
             let html = '<div class="email-details" style="margin-bottom: 20px;">';
             html += '<p><strong>From:</strong> ' + (headerFields.from ? escapeHtml(headerFields.from) : 'Not provided') + '</p>';
@@ -879,6 +919,8 @@
             html += '</div>';
             return html;
         }
+
+        let lastBodyContent = '';
 
         function renderTable(spfResult, bclResult, forefrontResult) {
             const headerResultsDiv = document.getElementById('headerResults');
@@ -913,7 +955,8 @@
                     <tbody>
             `;
 
-            transactions.forEach(transaction => {
+            const displayTransactions = isHeaderTableExpanded ? transactions : transactions.slice(0, 5);
+            displayTransactions.forEach(transaction => {
                 tableHtml += `
                     <tr>
                         <td data-label="Order">${transaction.order || ''}</td>
@@ -928,6 +971,15 @@
             });
 
             tableHtml += '</tbody></table>';
+
+            if (transactions.length > 5) {
+                tableHtml += `
+                    <div class="header-table-toggle">
+                        <span class="toggle-header-arrow" onclick="toggleHeaderTable()">${isHeaderTableExpanded ? '▲' : '▼'}</span>
+                    </div>
+                `;
+            }
+
             headerResultsDiv.innerHTML = tableHtml;
         }
 
@@ -1112,6 +1164,9 @@
             if (iocResultsDiv) iocResultsDiv.innerHTML = '';
             transactions = [];
             headerFields = {};
+            isHeaderTableExpanded = false;
+            isBodyContentExpanded = false;
+            lastBodyContent = '';
             lastSpfResult = {
                 status: 'N/A',
                 fields: {
@@ -1354,11 +1409,10 @@
                 renderTable(lastSpfResult, lastBclResult, lastForefrontResult);
 
                 // Process body
-                let bodyHtml = '';
                 const bodyParts = [];
                 try {
                     if (!body) {
-                        bodyHtml = '<p>No body content provided.</p>';
+                        lastBodyContent = '<p>No body content provided.</p>';
                     } else {
                         const contentTypeMatch = headers.match(contentTypeRegex) || [];
                         let boundary = '';
@@ -1372,7 +1426,7 @@
 
                         if (boundary) {
                             const parts = body.split(`--${boundary}`).filter(part => part.trim() && !part.startsWith('--'));
-                            bodyHtml = parts.map(part => {
+                            lastBodyContent = parts.map(part => {
                                 const lines = part.trim().split('\n');
                                 let contentType = '';
                                 let encoding = '7bit';
@@ -1402,13 +1456,26 @@
                                 return '';
                             }).filter(part => part).join('');
                         } else {
-                            bodyHtml = `<h4>Plain Text</h4><pre>${escapeHtml(body)}</pre>`;
+                            lastBodyContent = `<h4>Plain Text</h4><pre>${escapeHtml(body)}</pre>`;
                             bodyParts.push({ content: body, encoding: '7bit' });
                         }
+                    }
+
+                    let bodyHtml = '';
+                    if (lastBodyContent && lastBodyContent !== '<p>No body content provided.</p>') {
+                        bodyHtml += `<div class="body-content-toggle">
+                            <span class="toggle-body-arrow" onclick="toggleBodyContent()">${isBodyContentExpanded ? '▲' : '▼'}</span>
+                        </div>
+                        <div class="body-content-container${isBodyContentExpanded ? ' expanded' : ''}" id="body-content">
+                            ${lastBodyContent}
+                        </div>`;
+                    } else {
+                        bodyHtml = '<p>No body content provided.</p>';
                     }
                     bodyResultsDiv.innerHTML = bodyHtml;
                 } catch (e) {
                     console.error('Error rendering body:', e);
+                    lastBodyContent = '<p>Error rendering body content.</p>';
                     bodyResultsDiv.innerHTML = '<p>Error rendering body content.</p>';
                 }
 
