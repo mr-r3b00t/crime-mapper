@@ -233,6 +233,19 @@
             background-color: #dc3545;
         }
 
+        .bcl-section {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .bcl-section h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+
         .bcl-status {
             padding: 10px;
             margin-bottom: 10px;
@@ -240,6 +253,8 @@
             color: white;
             font-weight: bold;
             text-align: center;
+            display: inline-block;
+            width: calc(100% - 30px);
         }
 
         .bcl-low {
@@ -250,8 +265,17 @@
             background-color: #ffc107;
         }
 
-        .bcl-high {
+        .bcl-high, .bcl-na {
             background-color: #dc3545;
+        }
+
+        .bcl-details-container {
+            display: none;
+            margin-top: 10px;
+        }
+
+        .bcl-details-container.expanded {
+            display: block;
         }
 
         .forefront-section {
@@ -287,7 +311,7 @@
             background-color: #dc3545;
         }
 
-        .spf-details, .forefront-details {
+        .spf-details, .forefront-details, .bcl-details {
             white-space: pre-wrap;
             word-wrap: break-word;
         }
@@ -301,7 +325,7 @@
             display: block;
         }
 
-        .toggle-spf-arrow, .toggle-forefront-arrow, .toggle-header-arrow, .toggle-body-arrow {
+        .toggle-spf-arrow, .toggle-forefront-arrow, .toggle-header-arrow, .toggle-body-arrow, .toggle-bcl-arrow {
             cursor: pointer;
             font-size: 14px;
             margin-left: 10px;
@@ -310,11 +334,11 @@
             transition: color 0.3s;
         }
 
-        .toggle-spf-arrow:hover, .toggle-forefront-arrow:hover, .toggle-header-arrow:hover, .toggle-body-arrow:hover {
+        .toggle-spf-arrow:hover, .toggle-forefront-arrow:hover, .toggle-header-arrow:hover, .toggle-body-arrow:hover, .toggle-bcl-arrow:hover {
             color: #007bff;
         }
 
-        .spf-status-container, .forefront-status-container, .header-table-container, .body-content-toggle {
+        .spf-status-container, .forefront-status-container, .header-table-container, .body-content-toggle, .bcl-status-container {
             display: flex;
             align-items: center;
             margin-bottom: 10px;
@@ -403,7 +427,7 @@
                 width: 30%;
             }
 
-            .spf-status, .forefront-status {
+            .spf-status, .forefront-status, .bcl-status {
                 width: calc(100% - 20px);
             }
         }
@@ -477,6 +501,7 @@
         let headerFields = {};
         let isHeaderTableExpanded = false;
         let isBodyContentExpanded = false;
+        let isBclDetailsExpanded = false;
         let lastSpfResult = {
             status: 'N/A',
             fields: {
@@ -494,6 +519,7 @@
             },
             details: ''
         };
+        let lastBodyContent = '';
 
         function escapeHtml(text) {
             if (typeof text !== 'string') return '';
@@ -818,12 +844,17 @@
                 </div>
             `;
             html += `
-                <div class="bcl-status ${bclResult.status === 'LOW' ? 'bcl-low' : bclResult.status === 'MEDIUM' ? 'bcl-medium' : 'bcl-high'}">
-                    X-Microsoft-Antispam Bulk Complaint Level = ${escapeHtml(bclResult.value || 'N/A')}
-                </div>
-                <div style="margin-bottom: 10px;">
-                    <p><strong>BCL Message:</strong> ${escapeHtml(bclResult.message)}</p>
-                    <p><strong>BCL Details:</strong> ${escapeHtml(bclResult.details)}</p>
+                <div class="bcl-section">
+                    <div class="bcl-status-container">
+                        <div class="bcl-status ${bclResult.status === 'LOW' ? 'bcl-low' : bclResult.status === 'MEDIUM' ? 'bcl-medium' : 'bcl-' + bclResult.status.toLowerCase()}">
+                            X-Microsoft-Antispam: ${escapeHtml(bclResult.status || 'N/A')}
+                        </div>
+                        <span class="toggle-bcl-arrow" onclick="toggleBclDetails()">▼</span>
+                    </div>
+                    <div class="bcl-details-container${isBclDetailsExpanded ? ' expanded' : ''}" id="bcl-details">
+                        <p><strong>BCL Message:</strong> ${escapeHtml(bclResult.message)}</p>
+                        <p><strong>BCL Details:</strong> ${escapeHtml(bclResult.details)}</p>
+                    </div>
                 </div>
             `;
             html += `
@@ -885,6 +916,16 @@
             }
         }
 
+        function toggleBclDetails() {
+            isBclDetailsExpanded = !isBclDetailsExpanded;
+            const bclDetails = document.getElementById('bcl-details');
+            const toggleArrow = document.querySelector('.toggle-bcl-arrow');
+            if (bclDetails && toggleArrow) {
+                bclDetails.classList.toggle('expanded');
+                toggleArrow.textContent = bclDetails.classList.contains('expanded') ? '▲' : '▼';
+            }
+        }
+
         function toggleHeaderTable() {
             isHeaderTableExpanded = !isHeaderTableExpanded;
             renderTable(lastSpfResult, lastBclResult, lastForefrontResult);
@@ -919,8 +960,6 @@
             html += '</div>';
             return html;
         }
-
-        let lastBodyContent = '';
 
         function renderTable(spfResult, bclResult, forefrontResult) {
             const headerResultsDiv = document.getElementById('headerResults');
@@ -1166,6 +1205,7 @@
             headerFields = {};
             isHeaderTableExpanded = false;
             isBodyContentExpanded = false;
+            isBclDetailsExpanded = false;
             lastBodyContent = '';
             lastSpfResult = {
                 status: 'N/A',
