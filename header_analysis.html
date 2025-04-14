@@ -212,6 +212,8 @@
             color: white;
             font-weight: bold;
             text-align: center;
+            display: inline-block;
+            width: calc(100% - 30px);
         }
 
         .spf-pass {
@@ -258,6 +260,55 @@
 
         .forefront-section table {
             margin-bottom: 0;
+        }
+
+        .forefront-status {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            color: white;
+            font-weight: bold;
+            text-align: center;
+            display: inline-block;
+            width: calc(100% - 30px);
+            background-color: #17a2b8;
+        }
+
+        .forefront-status.na {
+            background-color: #dc3545;
+        }
+
+        .spf-details, .forefront-details {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .spf-details-container, .forefront-details-container {
+            display: none;
+            margin-top: 10px;
+        }
+
+        .spf-details-container.expanded, .forefront-details-container.expanded {
+            display: block;
+        }
+
+        .toggle-spf-arrow, .toggle-forefront-arrow {
+            cursor: pointer;
+            font-size: 14px;
+            margin-left: 10px;
+            vertical-align: middle;
+            color: #333;
+            transition: color 0.3s;
+        }
+
+        .toggle-spf-arrow:hover, .toggle-forefront-arrow:hover {
+            color: #007bff;
+        }
+
+        .spf-status-container, .forefront-status-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
         }
 
         /* Adjust column widths for header table */
@@ -336,6 +387,10 @@
                 font-weight: normal;
                 display: inline-block;
                 width: 30%;
+            }
+
+            .spf-status, .forefront-status {
+                width: calc(100% - 20px);
             }
         }
     </style>
@@ -564,10 +619,10 @@
                 };
             }
 
-            const spfHeader = spfMatches[0].replace(/^Received-SPF:\s*/i, '');
+            const spfHeader = spfMatches[0].trim();
             console.log('Captured SPF header:', spfHeader);
             const fields = {
-                Result: (spfHeader.match(/^(\w+)/i) || [])[1] || '',
+                Result: (spfHeader.match(/^Received-SPF: (\w+)/i) || [])[1] || '',
                 Receiver: (spfHeader.match(/receiver=([^;]+)/i) || [])[1] || '',
                 ClientIP: (spfHeader.match(/client-ip=([^;]+)/i) || [])[1] || '',
                 EnvelopeFrom: (spfHeader.match(/envelope-from=([^;]+)/i) || 
@@ -715,30 +770,35 @@
             html += `
                 <div class="spf-section">
                     ${spfResult.status === 'N/A' ? 
-                        '<div class="spf-status spf-fail">SPF: N/A</div><p>No SPF record found.</p>' : 
-                        `<div class="spf-status ${spfResult.status === 'PASS' ? 'spf-pass' : 'spf-fail'}">
-                            SPF: ${escapeHtml(spfResult.fields.Result || 'N/A')}
+                        '<div class="spf-status-container"><div class="spf-status spf-fail">SPF: N/A</div></div><p>No SPF record found.</p>' : 
+                        `<div class="spf-status-container">
+                            <div class="spf-status ${spfResult.status === 'PASS' ? 'spf-pass' : 'spf-fail'}">
+                                SPF: ${escapeHtml(spfResult.fields.Result || 'N/A')}
+                            </div>
+                            <span class="toggle-spf-arrow" onclick="toggleSpfDetails()">▼</span>
                         </div>
-                        <h3>SPF Analysis</h3>
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th data-label="Field">Field</th>
-                                    <th data-label="Value">Value</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr><td data-label="Result">Result</td><td data-label="Value">${escapeHtml(spfResult.fields.Result || 'N/A')}</td></tr>
-                                <tr><td data-label="Receiver">Receiver</td><td data-label="Value">${escapeHtml(spfResult.fields.Receiver || 'N/A')}</td></tr>
-                                <tr><td data-label="Client IP">Client IP</td><td data-label="Value">${escapeHtml(spfResult.fields.ClientIP || 'N/A')}</td></tr>
-                                <tr><td data-label="Envelope From">Envelope From</td><td data-label="Value">${escapeHtml(spfResult.fields.EnvelopeFrom || 'N/A')}</td></tr>
-                                <tr><td data-label="HELO">HELO</td><td data-label="Value">${escapeHtml(spfResult.fields.HELO || 'N/A')}</td></tr>
-                                <tr><td data-label="Mechanism">Mechanism</td><td data-label="Value">${escapeHtml(spfResult.fields.Mechanism || 'N/A')}</td></tr>
-                                <tr><td data-label="Priority/Protocol">Priority/Protocol</td><td data-label="Value">${escapeHtml(spfResult.fields.PriorityProtocol || 'N/A')}</td></tr>
-                            </tbody>
-                        </table>`
+                        <div class="spf-details-container" id="spf-details">
+                            <h3>SPF Analysis</h3>
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th data-label="Field">Field</th>
+                                        <th data-label="Value">Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td data-label="Result">Result</td><td data-label="Value">${escapeHtml(spfResult.fields.Result || 'N/A')}</td></tr>
+                                    <tr><td data-label="Receiver">Receiver</td><td data-label="Value">${escapeHtml(spfResult.fields.Receiver || 'N/A')}</td></tr>
+                                    <tr><td data-label="Client IP">Client IP</td><td data-label="Value">${escapeHtml(spfResult.fields.ClientIP || 'N/A')}</td></tr>
+                                    <tr><td data-label="Envelope From">Envelope From</td><td data-label="Value">${escapeHtml(spfResult.fields.EnvelopeFrom || 'N/A')}</td></tr>
+                                    <tr><td data-label="HELO">HELO</td><td data-label="Value">${escapeHtml(spfResult.fields.HELO || 'N/A')}</td></tr>
+                                    <tr><td data-label="Mechanism">Mechanism</td><td data-label="Value">${escapeHtml(spfResult.fields.Mechanism || 'N/A')}</td></tr>
+                                    <tr><td data-label="Priority/Protocol">Priority/Protocol</td><td data-label="Value">${escapeHtml(spfResult.fields.PriorityProtocol || 'N/A')}</td></tr>
+                                </tbody>
+                            </table>
+                            <p style="margin-top: 10px;" class="spf-details"><strong>Full Details:</strong> ${escapeHtml(spfResult.details)}</p>
+                        </div>`
                     }
-                    <p style="margin-top: 10px; word-break: break-all;"><strong>Full Details:</strong> ${escapeHtml(spfResult.details)}</p>
                 </div>
             `;
             html += `
@@ -752,40 +812,65 @@
             `;
             html += `
                 <div class="forefront-section">
-                    <h3>X-Forefront-Antispam-Report Analysis</h3>
                     ${forefrontResult.status === 'N/A' ? 
-                        '<p>No X-Forefront-Antispam-Report header found.</p>' : 
-                        `<table>
-                            <thead>
-                                <tr>
-                                    <th data-label="Field">Field</th>
-                                    <th data-label="Value">Value</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr><td data-label="Language">Language</td><td data-label="Value">${escapeHtml(forefrontResult.fields.LANG || 'N/A')}</td></tr>
-                                <tr><td data-label="Spam Confidence Level">Spam Confidence Level</td><td data-label="Value">${escapeHtml(forefrontResult.fields.SCL || 'N/A')}</td></tr>
-                                <tr><td data-label="Spam Filtering Verdict">Spam Filtering Verdict</td><td data-label="Value">${escapeHtml(forefrontResult.fields.SFV || 'N/A')}</td></tr>
-                                <tr><td data-label="IP Filter Verdict">IP Filter Verdict</td><td data-label="Value">${escapeHtml(forefrontResult.fields.IPV || 'N/A')}</td></tr>
-                                <tr><td data-label="HELO/EHLO">HELO/EHLO</td><td data-label="Value">${escapeHtml(forefrontResult.fields.H || 'N/A')}</td></tr>
-                                <tr><td data-label="PTR Record">PTR Record</td><td data-label="Value">${escapeHtml(forefrontResult.fields.PTR || 'N/A')}</td></tr>
-                                <tr><td data-label="Connecting IP Address">Connecting IP Address</td><td data-label="Value">${escapeHtml(forefrontResult.fields.CIP || 'N/A')}</td></tr>
-                                <tr><td data-label="Protection Policy Category">Protection Policy Category</td><td data-label="Value">${escapeHtml(forefrontResult.fields.CAT || 'N/A')}</td></tr>
-                                <tr><td data-label="Spam Rules">Spam Rules</td><td data-label="Value">${escapeHtml(forefrontResult.fields.SFS || 'N/A')}</td></tr>
-                                <tr><td data-label="Source Header">Source Header</td><td data-label="Value">${escapeHtml(forefrontResult.fields.SRV || 'N/A')}</td></tr>
-                                <tr><td data-label="Direction">Direction</td><td data-label="Value">${escapeHtml(forefrontResult.fields.DIR || 'N/A')}</td></tr>
-                            </tbody>
-                        </table>`
+                        '<div class="forefront-status-container"><div class="forefront-status na">X-Forefront-Antispam-Report: N/A</div></div><p>No X-Forefront-Antispam-Report header found.</p>' : 
+                        `<div class="forefront-status-container">
+                            <div class="forefront-status">
+                                X-Forefront-Antispam-Report: ${escapeHtml(forefrontResult.status)}
+                            </div>
+                            <span class="toggle-forefront-arrow" onclick="toggleForefrontDetails()">▼</span>
+                        </div>
+                        <div class="forefront-details-container" id="forefront-details">
+                            <h3>X-Forefront-Antispam-Report Analysis</h3>
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th data-label="Field">Field</th>
+                                        <th data-label="Value">Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td data-label="Language">Language</td><td data-label="Value">${escapeHtml(forefrontResult.fields.LANG || 'N/A')}</td></tr>
+                                    <tr><td data-label="Spam Confidence Level">Spam Confidence Level</td><td data-label="Value">${escapeHtml(forefrontResult.fields.SCL || 'N/A')}</td></tr>
+                                    <tr><td data-label="Spam Filtering Verdict">Spam Filtering Verdict</td><td data-label="Value">${escapeHtml(forefrontResult.fields.SFV || 'N/A')}</td></tr>
+                                    <tr><td data-label="IP Filter Verdict">IP Filter Verdict</td><td data-label="Value">${escapeHtml(forefrontResult.fields.IPV || 'N/A')}</td></tr>
+                                    <tr><td data-label="HELO/EHLO">HELO/EHLO</td><td data-label="Value">${escapeHtml(forefrontResult.fields.H || 'N/A')}</td></tr>
+                                    <tr><td data-label="PTR Record">PTR Record</td><td data-label="Value">${escapeHtml(forefrontResult.fields.PTR || 'N/A')}</td></tr>
+                                    <tr><td data-label="Connecting IP Address">Connecting IP Address</td><td data-label="Value">${escapeHtml(forefrontResult.fields.CIP || 'N/A')}</td></tr>
+                                    <tr><td data-label="Protection Policy Category">Protection Policy Category</td><td data-label="Value">${escapeHtml(forefrontResult.fields.CAT || 'N/A')}</td></tr>
+                                    <tr><td data-label="Spam Rules">Spam Rules</td><td data-label="Value">${escapeHtml(forefrontResult.fields.SFS || 'N/A')}</td></tr>
+                                    <tr><td data-label="Source Header">Source Header</td><td data-label="Value">${escapeHtml(forefrontResult.fields.SRV || 'N/A')}</td></tr>
+                                    <tr><td data-label="Direction">Direction</td><td data-label="Value">${escapeHtml(forefrontResult.fields.DIR || 'N/A')}</td></tr>
+                                </tbody>
+                            </table>
+                            <p style="margin-top: 10px;" class="forefront-details"><strong>Full Details:</strong> ${escapeHtml(forefrontResult.details)}</p>
+                        </div>`
                     }
-                    <p style="margin-top: 10px;"><strong>Full Details:</strong> ${escapeHtml(forefrontResult.details)}</p>
                 </div>
             `;
             return html;
         }
 
+        function toggleSpfDetails() {
+            const spfDetails = document.getElementById('spf-details');
+            const toggleArrow = document.querySelector('.toggle-spf-arrow');
+            if (spfDetails && toggleArrow) {
+                spfDetails.classList.toggle('expanded');
+                toggleArrow.textContent = spfDetails.classList.contains('expanded') ? '▲' : '▼';
+            }
+        }
+
+        function toggleForefrontDetails() {
+            const forefrontDetails = document.getElementById('forefront-details');
+            const toggleArrow = document.querySelector('.toggle-forefront-arrow');
+            if (forefrontDetails && toggleArrow) {
+                forefrontDetails.classList.toggle('expanded');
+                toggleArrow.textContent = forefrontDetails.classList.contains('expanded') ? '▲' : '▼';
+            }
+        }
+
         function renderEmailDetails(headerFields) {
             let html = '<div class="email-details" style="margin-bottom: 20px;">';
-            html += '<h3>Email Details</h3>';
             html += '<p><strong>From:</strong> ' + (headerFields.from ? escapeHtml(headerFields.from) : 'Not provided') + '</p>';
             html += '<p><strong>To:</strong> ' + (headerFields.to.length ? escapeHtml(headerFields.to.join(', ')) : 'Not provided') + '</p>';
             html += '<p><strong>Cc:</strong> ' + (headerFields.cc.length ? escapeHtml(headerFields.cc.join(', ')) : 'Not provided') + '</p>';
