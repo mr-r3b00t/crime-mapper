@@ -311,6 +311,18 @@
             background-color: #dc3545;
         }
 
+        .header-section {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .header-section table {
+            margin-bottom: 0;
+        }
+
         .spf-details, .forefront-details, .bcl-details {
             white-space: pre-wrap;
             word-wrap: break-word;
@@ -979,19 +991,20 @@
             }
 
             tableHtml += `
-                <table>
-                    <thead>
-                        <tr>
-                            <th data-column="order" class="${sortState.column === 'order' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('order')">Order</th>
-                            <th data-column="action" class="${sortState.column === 'action' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('action')">Action</th>
-                            <th data-column="timestamp" class="${sortState.column === 'timestamp' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('timestamp')">Timestamp</th>
-                            <th data-column="server" class="${sortState.column === 'server' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('server')">Server</th>
-                            <th data-column="ip" class="${sortState.column === 'ip' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('ip')">IP</th>
-                            <th data-column="emailOrDomain" class="${sortState.column === 'emailOrDomain' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('emailOrDomain')">Email/Domain</th>
-                            <th data-column="details" class="${sortState.column === 'details' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('details')">Details</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+                <div class="header-section">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th data-column="order" class="${sortState.column === 'order' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('order')">Order</th>
+                                <th data-column="action" class="${sortState.column === 'action' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('action')">Action</th>
+                                <th data-column="timestamp" class="${sortState.column === 'timestamp' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('timestamp')">Timestamp</th>
+                                <th data-column="server" class="${sortState.column === 'server' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('server')">Server</th>
+                                <th data-column="ip" class="${sortState.column === 'ip' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('ip')">IP</th>
+                                <th data-column="emailOrDomain" class="${sortState.column === 'emailOrDomain' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('emailOrDomain')">Email/Domain</th>
+                                <th data-column="details" class="${sortState.column === 'details' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('details')">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
             `;
 
             const displayTransactions = isHeaderTableExpanded ? transactions : transactions.slice(0, 5);
@@ -1018,6 +1031,8 @@
                     </div>
                 `;
             }
+
+            tableHtml += '</div>';
 
             headerResultsDiv.innerHTML = tableHtml;
         }
