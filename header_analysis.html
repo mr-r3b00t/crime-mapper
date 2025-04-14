@@ -186,6 +186,38 @@
             display: block;
         }
 
+        .attachments-section {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+        }
+
+        .attachments-section h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .attachments-section table {
+            margin-bottom: 0;
+        }
+
+        .attachments-section .download-btn {
+            display: inline-block;
+            padding: 8px 12px;
+            background-color: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-size: 13px;
+            transition: background-color 0.3s;
+        }
+
+        .attachments-section .download-btn:hover {
+            background-color: #0056b3;
+        }
+
         .ioc-section {
             background-color: #ffffff;
             padding: 20px;
@@ -282,7 +314,7 @@
             background-color: #ffffff;
             padding: 20px;
             border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0, 00, 0, 0.1);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
             margin-bottom: 20px;
         }
 
@@ -384,16 +416,21 @@
             width: 15%;
         }
 
-        /* Adjust column widths for IOC, SPF, and Forefront tables */
+        /* Adjust column widths for IOC, SPF, Forefront, and Attachments tables */
         .ioc-section th:nth-child(1), .ioc-section td:nth-child(1),
         .spf-section th:nth-child(1), .spf-section td:nth-child(1),
-        .forefront-section th:nth-child(1), .forefront-section td:nth-child(1) { /* Type/Field */
+        .forefront-section th:nth-child(1), .forefront-section td:nth-child(1),
+        .attachments-section th:nth-child(1), .attachments-section td:nth-child(1) { /* Type/Field/Name */
             width: 40%;
         }
         .ioc-section th:nth-child(2), .ioc-section td:nth-child(2),
         .spf-section th:nth-child(2), .spf-section td:nth-child(2),
-        .forefront-section th:nth-child(2), .forefront-section td:nth-child(2) { /* Value */
-            width: 60%;
+        .forefront-section th:nth-child(2), .forefront-section td:nth-child(2),
+        .attachments-section th:nth-child(2), .attachments-section td:nth-child(2) { /* Value/Type */
+            width: 30%;
+        }
+        .attachments-section th:nth-child(3), .attachments-section td:nth-child(3) { /* Download */
+            width: 30%;
         }
 
         @media (max-width: 768px) {
@@ -457,7 +494,7 @@
                     <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;">
                 </a>
                 <p>© Xservus Limited</p>
-                <p>Version 0.2</p>
+                <p>Version 0.3</p>
             </footer>
         </div>
         <div class="resize-handle"></div>
@@ -469,6 +506,8 @@
         <div id="headerResults"></div>
         <h3>Body Content</h3>
         <div id="bodyResults" class="body-section"></div>
+        <h3>Attachments</h3>
+        <div id="attachmentResults" class="attachments-section"></div>
         <h2>IOCs</h2>
         <div id="iocResults" class="ioc-section"></div>
     </div>
@@ -532,6 +571,7 @@
             details: ''
         };
         let lastBodyContent = '';
+        let attachments = [];
 
         function escapeHtml(text) {
             if (typeof text !== 'string') return '';
@@ -560,7 +600,10 @@
                         if (name.startsWith('on') || value.includes('javascript:') || value.includes('data:')) {
                             el.removeAttribute(attr.name);
                         }
-                        if (['src', 'href'].includes(name) && (value.startsWith('http') || value.startsWith('//'))) {
+                        // Allow safe image URLs from trusted domains
+                        if (['src'].includes(name) && value.match(/^(https?:\/\/)?[\w.-]*(mzstatic\.com|apple\.com)\//)) {
+                            // Keep original src
+                        } else if (['src', 'href'].includes(name) && (value.startsWith('http') || value.startsWith('//'))) {
                             el.setAttribute(attr.name, '#');
                         }
                     });
@@ -575,26 +618,43 @@
 
         function decodeQuotedPrintable(text) {
             if (typeof text !== 'string') return '';
-            return text.replace(/=([0-9A-F]{2})/g, (match, hex) => String.fromCharCode(parseInt(hex, 16)))
-                       .replace(/=\r?\n/g, '');
+            let bytes = [];
+            text = text.replace(/=\r?\n/g, '');
+            let i = 0;
+            while (i < text.length) {
+                if (text[i] === '=' && i + 2 < text.length) {
+                    const hex = text.slice(i + 1, i + 3);
+                    if (/[0-9A-F]{2}/i.test(hex)) {
+                        bytes.push(parseInt(hex, 16));
+                        i += 3;
+                    } else {
+                        bytes.push(text.charCodeAt(i));
+                        i++;
+                    }
+                } else {
+                    bytes.push(text.charCodeAt(i));
+                    i++;
+                }
+            }
+            try {
+                return new TextDecoder('utf-8').decode(new Uint8Array(bytes));
+            } catch (e) {
+                console.warn('UTF-8 decoding failed:', e);
+                return text;
+            }
         }
 
         function decodeBase64(text) {
             if (typeof text !== 'string') return '';
             try {
-                // Remove whitespace and validate base64 format
                 const cleanedText = text.replace(/\s+/g, '');
                 const base64Regex = /^[A-Za-z0-9+/=]+$/;
                 if (!base64Regex.test(cleanedText)) {
                     console.warn('Invalid base64 string detected:', cleanedText.substring(0, 50) + '...');
                     return '';
                 }
-
-                // Ensure proper padding
                 const paddingNeeded = (4 - (cleanedText.length % 4)) % 4;
                 const paddedText = cleanedText + '='.repeat(paddingNeeded);
-
-                // Decode
                 const decoded = atob(paddedText);
                 return decoded;
             } catch (e) {
@@ -605,7 +665,7 @@
 
         function parseEmailAddress(emailStr) {
             if (typeof emailStr !== 'string') return '';
-            const match = emailStr.match(/<([^>]+)>|[^\s<>,;]+@[^\s<>,;]+\.[^\s<>,;]+/);
+            const match = emailStr.match(/<([^>]+)>|[^\s<>,;]+@[^\s<>,;]+/);
             return match ? match[1] || match[0] : '';
         }
 
@@ -617,24 +677,17 @@
         function validateIP(ip) {
             if (typeof ip !== 'string') return '';
             const ipv4Regex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
-            const ipv6Regex = /^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$/;
-            return ipv4Regex.test(ip) || ipv6Regex.test(ip) ? ip : '';
+            const ipv6Regex = /^[0-9a-fA-F:]+$/;
+            return ipv4Regex.test(ip) || (ipv6Regex.test(ip) && ip.includes(':')) ? ip : '';
         }
 
         function parseDate(dateStr) {
             if (!dateStr || typeof dateStr !== 'string') return '';
             let cleanedDate = dateStr.replace(/^;?\s*|\s*;?\s*$/g, '').replace(/\s+/g, ' ').trim();
-            console.log('Parsing date:', cleanedDate);
-
             const parts = cleanedDate.match(/(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s*)?(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})\s+(\d{2}:\d{2}:\d{2})\s*(?:(?:[+-]\d{4}|GMT|UTC|Z|\w+)?)?/i);
-            if (!parts) {
-                console.log('Date regex failed for:', cleanedDate);
-                return '';
-            }
+            if (!parts) return '';
 
             let [, day, month, year, time, tz] = parts;
-            console.log('Date parts:', { day, month, year, time, tz });
-
             const months = {
                 'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
                 'may': '05', 'jun': '06', 'jul': '07', 'aug': '08',
@@ -643,10 +696,7 @@
 
             day = day.padStart(2, '0');
             month = months[month.toLowerCase()];
-            if (!month) {
-                console.log('Invalid month:', month);
-                return '';
-            }
+            if (!month) return '';
 
             tz = tz ? tz.trim() : '+0000';
             if (['GMT', 'UTC', 'Z'].includes(tz.toUpperCase())) {
@@ -658,15 +708,9 @@
             }
 
             const dateString = `${year}-${month}-${day}T${time}${tz}`;
-            console.log('Constructed date:', dateString);
-
             try {
                 const date = new Date(dateString);
-                if (isNaN(date.getTime())) {
-                    console.log('Invalid date:', dateString);
-                    return '';
-                }
-                return date.toISOString();
+                return isNaN(date.getTime()) ? '' : date.toISOString();
             } catch (e) {
                 console.error('Date parsing error:', e, dateString);
                 return '';
@@ -698,7 +742,6 @@
             }
 
             const spfHeader = spfMatches[0].trim();
-            console.log('Captured SPF header:', spfHeader);
             const fields = {
                 Result: (spfHeader.match(/^Received-SPF: (\w+)/i) || [])[1] || '',
                 Receiver: (spfHeader.match(/receiver=([^;]+)/i) || [])[1] || '',
@@ -1061,6 +1104,44 @@
             headerResultsDiv.innerHTML = tableHtml;
         }
 
+        function renderAttachments() {
+            const attachmentResultsDiv = document.getElementById('attachmentResults');
+            if (!attachmentResultsDiv) {
+                console.error('Attachment results div not found');
+                return;
+            }
+
+            if (!Array.isArray(attachments) || attachments.length === 0) {
+                attachmentResultsDiv.innerHTML = '<p>No attachments found.</p>';
+                return;
+            }
+
+            let tableHtml = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th data-label="Name">Name</th>
+                            <th data-label="Type">Type</th>
+                            <th data-label="Download">Download</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            attachments.forEach((attachment, index) => {
+                tableHtml += `
+                    <tr>
+                        <td data-label="Name">${escapeHtml(attachment.name)}</td>
+                        <td data-label="Type">${escapeHtml(attachment.type)}</td>
+                        <td data-label="Download"><a href="${attachment.dataUrl}" download="${escapeHtml(attachment.name)}" class="download-btn">Download</a></td>
+                    </tr>
+                `;
+            });
+
+            tableHtml += '</tbody></table>';
+            attachmentResultsDiv.innerHTML = tableHtml;
+        }
+
         function sortColumn(column) {
             if (sortState.column === column) {
                 sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
@@ -1235,12 +1316,14 @@
             const headerResultsDiv = document.getElementById('headerResults');
             const emailDetailsDiv = document.getElementById('emailDetails');
             const bodyResultsDiv = document.getElementById('bodyResults');
+            const attachmentResultsDiv = document.getElementById('attachmentResults');
             const iocResultsDiv = document.getElementById('iocResults');
 
             if (headerInput) headerInput.value = '';
             if (headerResultsDiv) headerResultsDiv.innerHTML = '';
             if (emailDetailsDiv) emailDetailsDiv.innerHTML = '';
             if (bodyResultsDiv) bodyResultsDiv.innerHTML = '';
+            if (attachmentResultsDiv) attachmentResultsDiv.innerHTML = '';
             if (iocResultsDiv) iocResultsDiv.innerHTML = '';
             transactions = [];
             headerFields = {};
@@ -1248,6 +1331,7 @@
             isBodyContentExpanded = false;
             isBclDetailsExpanded = false;
             lastBodyContent = '';
+            attachments = [];
             lastSpfResult = {
                 status: 'N/A',
                 fields: {
@@ -1272,9 +1356,10 @@
             const headerResultsDiv = document.getElementById('headerResults');
             const emailDetailsDiv = document.getElementById('emailDetails');
             const bodyResultsDiv = document.getElementById('bodyResults');
+            const attachmentResultsDiv = document.getElementById('attachmentResults');
             const iocResultsDiv = document.getElementById('iocResults');
 
-            if (!headerInput || !headerResultsDiv || !emailDetailsDiv || !bodyResultsDiv || !iocResultsDiv) {
+            if (!headerInput || !headerResultsDiv || !emailDetailsDiv || !bodyResultsDiv || !attachmentResultsDiv || !iocResultsDiv) {
                 console.error('Required DOM elements missing');
                 return;
             }
@@ -1284,6 +1369,7 @@
                 emailDetailsDiv.innerHTML = '<p>Please enter email headers to analyse.</p>';
                 headerResultsDiv.innerHTML = '<p>Please enter email headers to analyse.</p>';
                 bodyResultsDiv.innerHTML = '<p>No body content provided.</p>';
+                attachmentResultsDiv.innerHTML = '<p>No attachments found.</p>';
                 iocResultsDiv.innerHTML = '<p>No IOCs found.</p>';
                 return;
             }
@@ -1293,9 +1379,10 @@
                 const normalizedInput = input.replace(/\r\n/g, '\n');
                 const headerEndIndex = normalizedInput.indexOf('\n\n');
                 const headers = headerEndIndex !== -1 ? normalizedInput.substring(0, headerEndIndex) : normalizedInput;
-                const body = headerEndIndex !== -1 ? normalizedInput.substring(headerEndIndex).trim() : '';
+                const body = headerEndIndex !== -1 ? normalizedInput.substring(headerEndIndex + 2).trim() : '';
                 transactions = [];
                 headerFields = { from: '', to: [], cc: [], subject: '', date: '' };
+                attachments = [];
 
                 // Perform analyses
                 lastSpfResult = analyseSPFRecord(headers);
@@ -1312,6 +1399,7 @@
                 const emailRegex = /[^\s<>,;]+@[^\s<>,;]+\.[^\s<>,;]+/g;
                 const contentTypeRegex = /Content-Type:.*?(?=\n[A-Z-]|$)/gis;
                 const contentEncodingRegex = /Content-Transfer-Encoding:.*?(?=\n[A-Z-]|$)/gis;
+                const contentDispositionRegex = /Content-Disposition:.*?(?=\n[A-Z-]|$)/gis;
                 const receivedRegex = /^Received:.*?(?=\n[A-Z-]|$|\n\n)(?:\n\s+.*?(?=\n[A-Z-]|$|\n\n))*/gim;
                 const receivedDateRegex = /;?\s*(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s*)?\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}\s+\d{2}:\d{2}:\d{2}\s*(?:[+-]\d{4}|GMT)?/i;
                 const serverRegex = /by\s+([a-zA-Z0-9:.-]+)/i;
@@ -1319,6 +1407,7 @@
                 const ipRegex = /\[(?:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})|([0-9a-fA-F:]+))\]/;
                 const boundaryRegex = /boundary=["']?([^"'\n;]+)["']?/i;
                 const forRegex = /for\s+<?([^\s>]+@[^\s>]+)>?/i;
+                const filenameRegex = /filename=["']?([^"'\n;]+)["']?/i;
 
                 // Extract header fields
                 const fromMatches = headers.match(fromRegex) || [];
@@ -1352,9 +1441,7 @@
 
                 const dateMatches = headers.match(dateRegex) || [];
                 if (dateMatches.length > 0) {
-                    const dateValue = dateMatches[0].replace(/^Date:\s*/i, '').trim();
-                    console.log('Raw date header:', dateValue);
-                    headerFields.date = parseDate(dateValue);
+                    headerFields.date = parseDate(dateMatches[0].replace(/^Date:\s*/i, '').trim());
                 }
 
                 // Extract global sender and recipients
@@ -1368,7 +1455,6 @@
                 let currentValue = [];
                 const allHeaders = [];
 
-                // Combine multi-line headers
                 headerLines.forEach(line => {
                     if (/^[A-Za-z0-9-]+:/.test(line)) {
                         if (currentHeader) {
@@ -1393,7 +1479,6 @@
                     });
                 }
 
-                // Process headers
                 allHeaders.forEach(header => {
                     const headerName = header.name;
                     const headerValue = header.value;
@@ -1422,22 +1507,9 @@
 
                         let fromIp = '';
                         let byIp = '';
-                        if (fromServer) {
-                            const fromIpMatch = rawValue.match(new RegExp(`\\[${escapeRegex(fromServer)}\\s*\\[([\\d.:a-fA-F]+)\\]\\]`)) || 
-                                               rawValue.match(new RegExp(`from\\s+${escapeRegex(fromServer)}\\s*\\[([\\d.:a-fA-F]+)\\]`));
-                            if (fromIpMatch) {
-                                fromIp = validateIP(fromIpMatch[1].trim());
-                            }
-                        }
-
-                        if (byServer) {
-                            const byIpMatch = rawValue.match(new RegExp(`by\\s+${escapeRegex(byServer)}\\s*\\[([\\d.:a-fA-F]+)\\]`)) || 
-                                             rawValue.match(new RegExp(`\\[${escapeRegex(byServer)}\\s*\\[([\\d.:a-fA-F]+)\\]\\]`));
-                            if (byIpMatch) {
-                                byIp = validateIP(byIpMatch[1].trim());
-                            } else {
-                                byIp = fromIp;
-                            }
+                        const ipMatch = rawValue.match(ipRegex);
+                        if (ipMatch) {
+                            fromIp = validateIP(ipMatch[1] || ipMatch[2]);
                         }
 
                         let recipientEmail = '';
@@ -1466,7 +1538,7 @@
                                 action: 'Receive',
                                 timestamp: date,
                                 server: byServer,
-                                ip: byIp,
+                                ip: fromIp,
                                 emailOrDomain: recipientEmail,
                                 details: cleanedValue
                             });
@@ -1487,117 +1559,138 @@
                 // Default sort
                 sortState = { column: 'order', direction: 'asc' };
                 sortTransactions(sortState.column, sortState.direction);
-                renderTable(lastSpfResult, lastBclResult, lastForefrontResult);
 
                 // Process body
                 const bodyParts = [];
-                try {
-                    if (!body) {
-                        lastBodyContent = '<p>No body content provided.</p>';
-                    } else {
-                        const contentTypeMatch = headers.match(contentTypeRegex) || [];
-                        let boundary = '';
-                        for (let match of contentTypeMatch) {
-                            const boundaryMatch = match.match(boundaryRegex);
-                            if (boundaryMatch) {
-                                boundary = boundaryMatch[1];
-                                break;
+                if (!body) {
+                    lastBodyContent = '<p>No body content provided.</p>';
+                    attachmentResultsDiv.innerHTML = '<p>No attachments found.</p>';
+                } else {
+                    const contentTypeMatch = headers.match(contentTypeRegex) || [];
+                    let boundary = '';
+                    for (let match of contentTypeMatch) {
+                        const boundaryMatch = match.match(boundaryRegex);
+                        if (boundaryMatch) {
+                            boundary = boundaryMatch[1];
+                            break;
+                        }
+                    }
+
+                    if (boundary) {
+                        const parts = body.split(`--${boundary}`).filter(part => part.trim() && !part.startsWith('--'));
+                        lastBodyContent = parts.map((part, index) => {
+                            const lines = part.trim().split('\n');
+                            let contentType = '';
+                            let encoding = '7bit';
+                            let charset = 'utf-8';
+                            let contentDisposition = '';
+                            let content = '';
+                            let inContent = false;
+                            let filename = '';
+
+                            for (let line of lines) {
+                                if (!inContent && line.match(/^Content-Type:/i)) {
+                                    contentType = line.replace(/^Content-Type:\s*/i, '').trim();
+                                    const charsetMatch = contentType.match(/charset=["']?([^"'\s;]+)["']?/i);
+                                    if (charsetMatch) {
+                                        charset = charsetMatch[1].toLowerCase();
+                                    }
+                                } else if (!inContent && line.match(/^Content-Transfer-Encoding:/i)) {
+                                    encoding = line.replace(/^Content-Transfer-Encoding:\s*/i, '').trim().toLowerCase();
+                                } else if (!inContent && line.match(/^Content-Disposition:/i)) {
+                                    contentDisposition = line.replace(/^Content-Disposition:\s*/i, '').trim().toLowerCase();
+                                    const filenameMatch = line.match(filenameRegex);
+                                    if (filenameMatch) {
+                                        filename = filenameMatch[1];
+                                    }
+                                } else if (!inContent && line.trim() === '') {
+                                    inContent = true;
+                                } else if (inContent) {
+                                    content += line + '\n';
+                                }
                             }
-                        }
 
-                        if (boundary) {
-                            const parts = body.split(`--${boundary}`).filter(part => part.trim() && !part.startsWith('--'));
-                            lastBodyContent = parts.map(part => {
-                                const lines = part.trim().split('\n');
-                                let contentType = '';
-                                let encoding = '7bit';
-                                let charset = 'utf-8';
-                                let content = '';
-                                let inContent = false;
+                            content = content.trim();
+                            const isAttachment = contentDisposition.includes('attachment') ||
+                                contentType.match(/^(application|image|audio|video)\//i) ||
+                                (filename && !contentType.includes('text/'));
 
-                                for (let line of lines) {
-                                    if (!inContent && line.match(/^Content-Type:/i)) {
-                                        contentType = line.replace(/^Content-Type:\s*/i, '').trim();
-                                        const charsetMatch = contentType.match(/charset=["']?([^"'\s;]+)["']?/i);
-                                        if (charsetMatch) {
-                                            charset = charsetMatch[1].toLowerCase();
-                                        }
-                                    } else if (!inContent && line.match(/^Content-Transfer-Encoding:/i)) {
-                                        encoding = line.replace(/^Content-Transfer-Encoding:\s*/i, '').trim().toLowerCase();
-                                    } else if (!inContent && line.trim() === '') {
-                                        inContent = true;
-                                    } else if (inContent) {
-                                        content += line + '\n';
-                                    }
-                                }
+                            if (isAttachment && content && filename) {
+                                let decodedContent = content;
+                                let binaryContent;
 
-                                content = content.trim();
                                 if (encoding === 'base64') {
-                                    content = decodeBase64(content);
-                                    if (content === '') {
-                                        return `<p>Failed to decode base64 content.</p>`;
+                                    decodedContent = decodeBase64(content);
+                                    if (decodedContent === '') {
+                                        console.warn(`Failed to decode attachment: ${filename}`);
+                                        return '';
                                     }
-                                    // Attempt to handle charset if specified
-                                    if (charset !== 'utf-8') {
-                                        try {
-                                            // Note: JavaScript's atob returns ASCII, so charset conversion is limited
-                                            // For simplicity, assume UTF-8 or ASCII-compatible charsets
-                                            content = decodeURIComponent(escape(content));
-                                        } catch (e) {
-                                            console.warn('Charset conversion not fully supported:', charset, e);
-                                        }
-                                    }
+                                    binaryContent = new Uint8Array(decodedContent.split('').map(char => char.charCodeAt(0)));
                                 } else if (encoding === 'quoted-printable') {
-                                    content = decodeQuotedPrintable(content);
+                                    decodedContent = decodeQuotedPrintable(content);
+                                    binaryContent = new Uint8Array(decodedContent.split('').map(char => char.charCodeAt(0)));
+                                } else {
+                                    binaryContent = new Uint8Array(content.split('').map(char => char.charCodeAt(0)));
                                 }
 
-                                bodyParts.push({ content, encoding });
+                                try {
+                                    const blob = new Blob([binaryContent], { type: contentType.split(';')[0] });
+                                    const dataUrl = URL.createObjectURL(blob);
 
-                                if (contentType.includes('text/plain')) {
-                                    return `<h4>Plain Text</h4><pre>${escapeHtml(content)}</pre>`;
-                                } else if (contentType.includes('text/html')) {
-                                    return `<h4>HTML Content</h4><div class="html-content">${sanitizeHtml(content)}</div>`;
+                                    attachments.push({
+                                        name: filename,
+                                        type: contentType.split(';')[0] || 'application/octet-stream',
+                                        dataUrl: dataUrl
+                                    });
+                                } catch (e) {
+                                    console.warn(`Failed to create attachment for ${filename}:`, e);
                                 }
+
                                 return '';
-                            }).filter(part => part).join('');
-                        } else {
-                            lastBodyContent = `<h4>Plain Text</h4><pre>${escapeHtml(body)}</pre>`;
-                            bodyParts.push({ content: body, encoding: '7bit' });
+                            }
+
+                            if (encoding === 'base64') {
+                                content = decodeBase64(content);
+                                if (content === '') {
+                                    return `<p>Failed to decode base64 content for part ${index + 1}.</p>`;
+                                }
+                            } else if (encoding === 'quoted-printable') {
+                                content = decodeQuotedPrintable(content);
+                            }
+
+                            bodyParts.push({ content, encoding });
+
+                            if (contentType.includes('text/plain')) {
+                                return `<h4>Plain Text</h4><pre>${escapeHtml(content)}</pre>`;
+                            } else if (contentType.includes('text/html')) {
+                                return `<h4>HTML Content</h4><div class="html-content">${sanitizeHtml(content)}</div>`;
+                            }
+                            return '';
+                        }).filter(part => part).join('');
+
+                        if (!lastBodyContent) {
+                            lastBodyContent = '<p>No displayable body content provided.</p>';
                         }
-                    }
-
-                    let bodyHtml = '';
-                    if (lastBodyContent && lastBodyContent !== '<p>No body content provided.</p>') {
-                        bodyHtml += `<div class="body-content-toggle">
-                            <span class="toggle-body-arrow" onclick="toggleBodyContent()">${isBodyContentExpanded ? '▲' : '▼'}</span>
-                        </div>
-                        <div class="body-content-container${isBodyContentExpanded ? ' expanded' : ''}" id="body-content">
-                            ${lastBodyContent}
-                        </div>`;
                     } else {
-                        bodyHtml = '<p>No body content provided.</p>';
+                        lastBodyContent = `<h4>Plain Text</h4><pre>${escapeHtml(body)}</pre>`;
+                        bodyParts.push({ content: body, encoding: '7bit' });
                     }
-                    bodyResultsDiv.innerHTML = bodyHtml;
-                } catch (e) {
-                    console.error('Error rendering body:', e);
-                    lastBodyContent = '<p>Error rendering body content.</p>';
-                    bodyResultsDiv.innerHTML = '<p>Error rendering body content.</p>';
                 }
 
-                // Process IOCs
-                try {
-                    const iocs = processIOCs(input, bodyParts);
-                    renderIOCs(iocs);
-                } catch (e) {
-                    console.error('Error processing IOCs:', e);
-                    iocResultsDiv.innerHTML = '<p>Error processing IOCs.</p>';
-                }
+                renderTable(lastSpfResult, lastBclResult, lastForefrontResult);
+                toggleBodyContent();
+                renderAttachments();
+
+                const iocs = processIOCs(headers, bodyParts);
+                renderIOCs(iocs);
+
             } catch (e) {
-                console.error('Error processing email:', e);
-                emailDetailsDiv.innerHTML = '<p>Error analysing headers.</p>';
-                headerResultsDiv.innerHTML = '<p>Error analysing headers.</p>';
-                bodyResultsDiv.innerHTML = '<p>Error rendering body content.</p>';
-                iocResultsDiv.innerHTML = '<p>Error processing IOCs.</p>';
+                console.error('Analysis failed:', e);
+                emailDetailsDiv.innerHTML = '<p>Error analysing email: ' + escapeHtml(e.message) + '</p>';
+                headerResultsDiv.innerHTML = '';
+                bodyResultsDiv.innerHTML = '<p>Error processing body content.</p>';
+                attachmentResultsDiv.innerHTML = '<p>No attachments found.</p>';
+                iocResultsDiv.innerHTML = '<p>No IOCs found.</p>';
             }
         }
     </script>
