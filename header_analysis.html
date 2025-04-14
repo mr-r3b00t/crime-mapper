@@ -282,7 +282,7 @@
             background-color: #ffffff;
             padding: 20px;
             border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 2px 5px rgba(0, 00, 0, 0.1);
             margin-bottom: 20px;
         }
 
@@ -577,6 +577,30 @@
             if (typeof text !== 'string') return '';
             return text.replace(/=([0-9A-F]{2})/g, (match, hex) => String.fromCharCode(parseInt(hex, 16)))
                        .replace(/=\r?\n/g, '');
+        }
+
+        function decodeBase64(text) {
+            if (typeof text !== 'string') return '';
+            try {
+                // Remove whitespace and validate base64 format
+                const cleanedText = text.replace(/\s+/g, '');
+                const base64Regex = /^[A-Za-z0-9+/=]+$/;
+                if (!base64Regex.test(cleanedText)) {
+                    console.warn('Invalid base64 string detected:', cleanedText.substring(0, 50) + '...');
+                    return '';
+                }
+
+                // Ensure proper padding
+                const paddingNeeded = (4 - (cleanedText.length % 4)) % 4;
+                const paddedText = cleanedText + '='.repeat(paddingNeeded);
+
+                // Decode
+                const decoded = atob(paddedText);
+                return decoded;
+            } catch (e) {
+                console.warn('Failed to decode base64 string:', e.message);
+                return '';
+            }
         }
 
         function parseEmailAddress(emailStr) {
@@ -1126,8 +1150,10 @@
                 let content = part.content;
                 if (part.encoding === 'quoted-printable') {
                     content = decodeQuotedPrintable(content);
+                } else if (part.encoding === 'base64') {
+                    content = decodeBase64(content);
                 }
-                if (typeof content !== 'string') return;
+                if (typeof content !== 'string' || content === '') return;
                 content = content.replace(patterns.timestamp, '');
 
                 extractMatches(content, patterns.url, iocs.url);
@@ -1485,12 +1511,17 @@
                                 const lines = part.trim().split('\n');
                                 let contentType = '';
                                 let encoding = '7bit';
+                                let charset = 'utf-8';
                                 let content = '';
                                 let inContent = false;
 
                                 for (let line of lines) {
                                     if (!inContent && line.match(/^Content-Type:/i)) {
                                         contentType = line.replace(/^Content-Type:\s*/i, '').trim();
+                                        const charsetMatch = contentType.match(/charset=["']?([^"'\s;]+)["']?/i);
+                                        if (charsetMatch) {
+                                            charset = charsetMatch[1].toLowerCase();
+                                        }
                                     } else if (!inContent && line.match(/^Content-Transfer-Encoding:/i)) {
                                         encoding = line.replace(/^Content-Transfer-Encoding:\s*/i, '').trim().toLowerCase();
                                     } else if (!inContent && line.trim() === '') {
@@ -1501,6 +1532,25 @@
                                 }
 
                                 content = content.trim();
+                                if (encoding === 'base64') {
+                                    content = decodeBase64(content);
+                                    if (content === '') {
+                                        return `<p>Failed to decode base64 content.</p>`;
+                                    }
+                                    // Attempt to handle charset if specified
+                                    if (charset !== 'utf-8') {
+                                        try {
+                                            // Note: JavaScript's atob returns ASCII, so charset conversion is limited
+                                            // For simplicity, assume UTF-8 or ASCII-compatible charsets
+                                            content = decodeURIComponent(escape(content));
+                                        } catch (e) {
+                                            console.warn('Charset conversion not fully supported:', charset, e);
+                                        }
+                                    }
+                                } else if (encoding === 'quoted-printable') {
+                                    content = decodeQuotedPrintable(content);
+                                }
+
                                 bodyParts.push({ content, encoding });
 
                                 if (contentType.includes('text/plain')) {
