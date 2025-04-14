@@ -10,479 +10,525 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Email Analyser</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-
-        body {
-            font-size: 12px;
-            display: flex;
-            min-height: 100vh;
-            background-color: #f0f2f5;
-        }
-
-        .sidebar-container {
-            display: flex;
-            position: relative;
-        }
-
-        .sidebar {
-            width: 300px;
-            background-color: #ffffff;
-            padding: 20px;
-            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            min-width: 200px;
-            max-width: 500px;
-        }
-
-        .sidebar h2 {
-            color: #333;
-            font-size: 1.3em;
-            margin-bottom: 10px;
-        }
-
-        .sidebar textarea {
-            width: 100%;
-            height: 200px;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            resize: none;
-            font-size: 14px;
-            background-color: #fafafa;
-        }
-
-        .sidebar textarea:focus {
-            outline: none;
-            border-color: #007bff;
-            box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
-        }
-
-        .sidebar button {
-            padding: 10px;
-            border: none;
-            border-radius: 5px;
-            font-size: 14px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-
-        .sidebar button#analyseBtn {
-            background-color: #007bff;
-            color: white;
-        }
-
-        .sidebar button#analyseBtn:hover {
-            background-color: #0056b3;
-        }
-
-        .sidebar button#clearBtn {
-            background-color: #dc3545;
-            color: white;
-        }
-
-        .sidebar button#clearBtn:hover {
-            background-color: #b02a37;
-        }
-
-        .resize-handle {
-            width: 5px;
-            background-color: #ddd;
-            cursor: col-resize;
-            transition: background-color 0.2s;
-        }
-
-        .resize-handle:hover {
-            background-color: #bbb;
-        }
-
-        .main {
-            flex: 1;
-            padding: 20px;
-            overflow-y: auto;
-        }
-
-        .main h2, .main h3 {
-            color: #333;
-            margin-bottom: 20px;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            background-color: #ffffff;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-            margin-bottom: 30px;
-        }
-
-        th, td {
-            padding: 12px;
-            font-size: 13px;
-            text-align: left;
-            border-bottom: 1px solid #ddd;
-        }
-
-        th {
-            background-color: #007bff;
-            color: white;
-            cursor: pointer;
-            position: relative;
-            user-select: none;
-        }
-
-        th:hover {
-            background-color: #0056b3;
-        }
-
-        th.sort-asc::after {
-            content: '↑';
-            position: absolute;
-            right: 8px;
-        }
-
-        th.sort-desc::after {
-            content: '↓';
-            position: absolute;
-            right: 8px;
-        }
-
-        tr:hover {
-            background-color: #f8f9fa;
-        }
-
-        .body-section {
-            background-color: #ffffff;
-            padding: 20px;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-            margin-bottom: 30px;
-        }
-
-        .body-section pre {
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            margin: 0;
-            font-size: 14px;
-        }
-
-        .body-section .html-content {
-            border: 1px solid #ddd;
-            padding: 10px;
-            border-radius: 5px;
-        }
-
-        .body-content-container {
-            display: none;
-            margin-top: 10px;
-        }
-
-        .body-content-container.expanded {
-            display: block;
-        }
-
-        .attachments-section {
-            background-color: #ffffff;
-            padding: 20px;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-            margin-bottom: 30px;
-        }
-
-        .attachments-section h3 {
-            color: #333;
-            margin-bottom: 15px;
-        }
-
-        .attachments-section table {
-            margin-bottom: 0;
-        }
-
-        .attachments-section .download-btn {
-            display: inline-block;
-            padding: 8px 12px;
-            background-color: #007bff;
-            color: white;
-            text-decoration: none;
-            border-radius: 5px;
-            font-size: 13px;
-            transition: background-color 0.3s;
-        }
-
-        .attachments-section .download-btn:hover {
-            background-color: #0056b3;
-        }
-
-        .ioc-section {
-            background-color: #ffffff;
-            padding: 20px;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-        }
-
-        .ioc-section table {
-            margin-bottom: 0;
-        }
-
-        .spf-section {
-            background-color: #ffffff;
-            padding: 20px;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
-        }
-
-        .spf-section h3 {
-            color: #333;
-            margin-bottom: 15px;
-        }
-
-        .spf-section table {
-            margin-bottom: 0;
-        }
-
-        .spf-status {
-            padding: 10px;
-            margin-bottom: 10px;
-            border-radius: 5px;
-            color: white;
-            font-weight: bold;
-            text-align: center;
-            display: inline-block;
-            width: calc(100% - 30px);
-        }
-
-        .spf-pass {
-            background-color: #28a745;
-        }
-
-        .spf-fail {
-            background-color: #dc3545;
-        }
-
-        .bcl-section {
-            background-color: #ffffff;
-            padding: 20px;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
-        }
-
-        .bcl-section h3 {
-            color: #333;
-            margin-bottom: 15px;
-        }
-
-        .bcl-status {
-            padding: 10px;
-            margin-bottom: 10px;
-            border-radius: 5px;
-            color: white;
-            font-weight: bold;
-            text-align: center;
-            display: inline-block;
-            width: calc(100% - 30px);
-        }
-
-        .bcl-low {
-            background-color: #28a745;
-        }
-
-        .bcl-medium {
-            background-color: #ffc107;
-        }
-
-        .bcl-high, .bcl-na {
-            background-color: #dc3545;
-        }
-
-        .bcl-details-container {
-            display: none;
-            margin-top: 10px;
-        }
-
-        .bcl-details-container.expanded {
-            display: block;
-        }
-
-        .forefront-section {
-            background-color: #ffffff;
-            padding: 20px;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
-        }
-
-        .forefront-section h3 {
-            color: #333;
-            margin-bottom: 15px;
-        }
-
-        .forefront-section table {
-            margin-bottom: 0;
-        }
-
-        .forefront-status {
-            padding: 10px;
-            margin-bottom: 10px;
-            border-radius: 5px;
-            color: white;
-            font-weight: bold;
-            text-align: center;
-            display: inline-block;
-            width: calc(100% - 30px);
-            background-color: #17a2b8;
-        }
-
-        .forefront-status.na {
-            background-color: #dc3545;
-        }
-
-        .header-section {
-            background-color: #ffffff;
-            padding: 20px;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
-        }
-
-        .header-section table {
-            margin-bottom: 0;
-        }
-
-        .spf-details, .forefront-details, .bcl-details {
-            white-space: pre-wrap;
-            word-wrap: break-word;
-        }
-
-        .spf-details-container, .forefront-details-container {
-            display: none;
-            margin-top: 10px;
-        }
-
-        .spf-details-container.expanded, .forefront-details-container.expanded {
-            display: block;
-        }
-
-        .toggle-spf-arrow, .toggle-forefront-arrow, .toggle-header-arrow, .toggle-body-arrow, .toggle-bcl-arrow {
-            cursor: pointer;
-            font-size: 14px;
-            margin-left: 10px;
-            vertical-align: middle;
-            color: #333;
-            transition: color 0.3s;
-        }
-
-        .toggle-spf-arrow:hover, .toggle-forefront-arrow:hover, .toggle-header-arrow:hover, .toggle-body-arrow:hover, .toggle-bcl-arrow:hover {
-            color: #007bff;
-        }
-
-        .spf-status-container, .forefront-status-container, .header-table-container, .body-content-toggle, .bcl-status-container {
-            display: flex;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-
-        .header-table-toggle {
-            text-align: center;
-            margin-bottom: 10px;
-        }
-
-        /* Adjust column widths for header table */
-        th:nth-child(1), td:nth-child(1) { /* Order */
-            width: 8%;
-        }
-        th:nth-child(2), td:nth-child(2) { /* Action */
-            width: 10%;
-        }
-        th:nth-child(3), td:nth-child(3) { /* Timestamp */
-            width: 18%;
-        }
-        th:nth-child(4), td:nth-child(4) { /* From Server */
-            width: 15%;
-        }
-        th:nth-child(5), td:nth-child(5) { /* By Server */
-            width: 15%;
-        }
-        th:nth-child(6), td:nth-child(6) { /* IP */
-            width: 13%;
-        }
-        th:nth-child(7), td:nth-child(7) { /* Email/Domain */
-            width: 13%;
-        }
-        th:nth-child(8), td:nth-child(8) { /* Details */
-            width: 8%;
-        }
-
-        /* Adjust column widths for IOC, SPF, Forefront, and Attachments tables */
-        .ioc-section th:nth-child(1), .ioc-section td:nth-child(1),
-        .spf-section th:nth-child(1), .spf-section td:nth-child(1),
-        .forefront-section th:nth-child(1), .forefront-section td:nth-child(1),
-        .attachments-section th:nth-child(1), .attachments-section td:nth-child(1) { /* Type/Field/Name */
-            width: 40%;
-        }
-        .ioc-section th:nth-child(2), .ioc-section td:nth-child(2),
-        .spf-section th:nth-child(2), .spf-section td:nth-child(2),
-        .forefront-section th:nth-child(2), .forefront-section td:nth-child(2),
-        .attachments-section th:nth-child(2), .attachments-section td:nth-child(2) { /* Value/Type */
-            width: 30%;
-        }
-        .attachments-section th:nth-child(3), .attachments-section td:nth-child(3) { /* Download */
-            width: 30%;
-        }
-
-        @media (max-width: 768px) {
-            body {
-                flex-direction: column;
-            }
-
-            .sidebar-container {
-                width: 100%;
-            }
-
-            .sidebar {
-                width: 100%;
-                max-width: none;
-                min-width: 0;
-            }
-
-            .resize-handle {
-                display: none;
-            }
-
-            .main {
-                width: 100%;
-            }
-
-            table, thead, tbody, th, td, tr {
-                display: block;
-            }
-            th, td {
-                width: 100% !important;
-                box-sizing: border-box;
-            }
-            th::before {
-                content: attr(data-label);
-                font-weight: normal;
-                display: inline-block;
-                width: 30%;
-            }
-            td::before {
-                content: attr(data-label);
-                font-weight: normal;
-                display: inline-block;
-                width: 30%;
-            }
-
-            .spf-status, .forefront-status, .bcl-status {
-                width: calc(100% - 20px);
-            }
-        }
+        * * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    font-size: 12px;
+    display: flex;
+    min-height: 100vh;
+    background-color: #f0f2f5;
+}
+
+.sidebar-container {
+    display: flex;
+    position: relative;
+}
+
+.sidebar {
+    width: 300px;
+    background-color: #ffffff;
+    padding: 20px;
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    min-width: 200px;
+    max-width: 500px;
+}
+
+.sidebar h2 {
+    color: #333;
+    font-size: 1.3em;
+    margin-bottom: 10px;
+}
+
+.sidebar textarea {
+    width: 100%;
+    height: 200px;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    resize: none;
+    font-size: 14px;
+    background-color: #fafafa;
+}
+
+.sidebar textarea:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+}
+
+.sidebar button {
+    padding: 10px;
+    border: none;
+    border-radius: 5px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.sidebar button#analyseBtn {
+    background-color: #007bff;
+    color: white;
+}
+
+.sidebar button#analyseBtn:hover {
+    background-color: #0056b3;
+}
+
+.sidebar button#clearBtn {
+    background-color: #dc3545;
+    color: white;
+}
+
+.sidebar button#clearBtn:hover {
+    background-color: #b02a37;
+}
+
+.resize-handle {
+    width: 5px;
+    background-color: #ddd;
+    cursor: col-resize;
+    transition: background-color 0.2s;
+}
+
+.resize-handle:hover {
+    background-color: #bbb;
+}
+
+.main {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.main h2, .main h3 {
+    color: #333;
+    margin-bottom: 20px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: #ffffff;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    margin-bottom: 30px;
+}
+
+th, td {
+    padding: 12px;
+    font-size: 13px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+th {
+    background-color: #007bff;
+    color: white;
+    cursor: pointer;
+    position: relative;
+    user-select: none;
+}
+
+th:hover {
+    background-color: #0056b3;
+}
+
+th.sort-asc::after {
+    content: '↑';
+    position: absolute;
+    right: 8px;
+}
+
+th.sort-desc::after {
+    content: '↓';
+    position: absolute;
+    right: 8px;
+}
+
+tr:hover {
+    background-color: #f8f9fa;
+}
+
+.body-section {
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    margin-bottom: 30px;
+}
+
+.body-section pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    margin: 0;
+    font-size: 14px;
+}
+
+.body-section .html-content {
+    border: 1px solid #ddd;
+    padding: 10px;
+    border-radius: 5px;
+}
+
+.body-content-container {
+    display: none;
+    margin-top: 10px;
+}
+
+.body-content-container.expanded {
+    display: block;
+}
+
+.attachments-section {
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    margin-bottom: 30px;
+}
+
+.attachments-section h3 {
+    color: #333;
+    margin-bottom: 15px;
+}
+
+.attachments-section table {
+    margin-bottom: 0;
+}
+
+.attachments-section .download-btn {
+    display: inline-block;
+    padding: 8px 12px;
+    background-color: #007bff;
+    color: white;
+    text-decoration: none;
+    border-radius: 5px;
+    font-size: 13px;
+    transition: background-color 0.3s;
+}
+
+.attachments-section .download-btn:hover {
+    background-color: #0056b3;
+}
+
+.ioc-section {
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.ioc-section table {
+    margin-bottom: 0;
+}
+
+.spf-section, .dkim-section, .dmarc-section {
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+}
+
+.spf-section h3, .dkim-section h3, .dmarc-section h3 {
+    color: #333;
+    margin-bottom: 15px;
+}
+
+.spf-section table, .dkim-section table, .dmarc-section table {
+    margin-bottom: 0;
+}
+
+.spf-status, .dkim-status, .dmarc-status {
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+    color: white;
+    font-weight: bold;
+    text-align: center;
+    display: inline-block;
+    width: calc(100% - 30px);
+}
+
+.spf-pass, .dkim-pass, .dmarc-pass {
+    background-color: #28a745;
+}
+
+.spf-fail, .dkim-fail, .dmarc-fail {
+    background-color: #dc3545;
+}
+
+.bcl-section {
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+}
+
+.bcl-section h3 {
+    color: #333;
+    margin-bottom: 15px;
+}
+
+.bcl-status {
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+    color: white;
+    font-weight: bold;
+    text-align: center;
+    display: inline-block;
+    width: calc(100% - 30px);
+}
+
+.bcl-low {
+    background-color: #28a745;
+}
+
+.bcl-medium {
+    background-color: #ffc107;
+}
+
+.bcl-high, .bcl-na {
+    background-color: #dc3545;
+}
+
+.bcl-details-container {
+    display: none;
+    margin-top: 10px;
+}
+
+.bcl-details-container.expanded {
+    display: block;
+}
+
+.forefront-section {
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+}
+
+.forefront-section h3 {
+    color: #333;
+    margin-bottom: 15px;
+}
+
+.forefront-section table {
+    margin-bottom: 0;
+}
+
+.forefront-status {
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+    color: white;
+    font-weight: bold;
+    text-align: center;
+    display: inline-block;
+    width: calc(100% - 30px);
+    background-color: #17a2b8;
+}
+
+.forefront-status.na {
+    background-color: #dc3545;
+}
+
+.header-section {
+    overflow-x: auto;
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+}
+
+.header-section table {
+    width: 100%;
+    max-width: 100%;
+    table-layout: auto;
+    margin-bottom: 0;
+}
+
+.spf-details, .dkim-details, .dmarc-details, .forefront-details, .bcl-details {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.spf-details-container, .dkim-details-container, .dmarc-details-container, .forefront-details-container {
+    display: none;
+    margin-top: 10px;
+}
+
+.spf-details-container.expanded, .dkim-details-container.expanded, .dmarc-details-container.expanded, .forefront-details-container.expanded {
+    display: block;
+}
+
+.toggle-spf-arrow, .toggle-dkim-arrow, .toggle-dmarc-arrow, .toggle-forefront-arrow, .toggle-header-arrow, .toggle-body-arrow, .toggle-bcl-arrow {
+    cursor: pointer;
+    font-size: 14px;
+    margin-left: 10px;
+    vertical-align: middle;
+    color: #333;
+    transition: color 0.3s;
+}
+
+.toggle-spf-arrow:hover, .toggle-dkim-arrow:hover, .toggle-dmarc-arrow:hover, .toggle-forefront-arrow:hover, .toggle-header-arrow:hover, .toggle-body-arrow:hover, .toggle-bcl-arrow:hover {
+    color: #007bff;
+}
+
+.spf-status-container, .dkim-status-container, .dmarc-status-container, .forefront-status-container, .header-table-container, .body-content-toggle, .bcl-status-container {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.header-table-toggle {
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+/* Adjust column widths for header table */
+.header-section th:nth-child(1), .header-section td:nth-child(1) { /* Order */
+    width: 10%;
+    min-width: 50px;
+}
+.header-section th:nth-child(2), .header-section td:nth-child(2) { /* Action */
+    width: 12%;
+    min-width: 80px;
+    word-wrap: break-word;
+}
+.header-section th:nth-child(3), .header-section td:nth-child(3) { /* Timestamp */
+    width: 16%;
+    min-width: 120px;
+    word-wrap: break-word;
+}
+.header-section th:nth-child(4), .header-section td:nth-child(4) { /* From Server */
+    width: 15%;
+    min-width: 100px;
+    word-wrap: break-word;
+}
+.header-section th:nth-child(5), .header-section td:nth-child(5) { /* By Server */
+    width: 15%;
+    min-width: 100px;
+    word-wrap: break-word;
+}
+.header-section th:nth-child(6), .header-section td:nth-child(6) { /* IP */
+    width: 12%;
+    min-width: 80px;
+    word-wrap: break-word;
+}
+.header-section th:nth-child(7), .header-section td:nth-child(7) { /* Email/Domain */
+    width: 15%;
+    min-width: 100px;
+    word-wrap: break-word;
+}
+.header-section th:nth-child(8), .header-section td:nth-child(8) { /* Details */
+    width: 15%;
+    min-width: 100px;
+    word-wrap: break-word;
+}
+
+/* Improve text wrapping in header table cells */
+.header-section td, .header-section th {
+    word-break: break-word;
+    overflow-wrap: break-word;
+    padding: 8px;
+}
+
+/* Adjust column widths for IOC, SPF, DKIM, DMARC, Forefront, and Attachments tables */
+.ioc-section th:nth-child(1), .ioc-section td:nth-child(1),
+.spf-section th:nth-child(1), .spf-section td:nth-child(1),
+.dkim-section th:nth-child(1), .dkim-section td:nth-child(1),
+.dmarc-section th:nth-child(1), .dmarc-section td:nth-child(1),
+.forefront-section th:nth-child(1), .forefront-section td:nth-child(1),
+.attachments-section th:nth-child(1), .attachments-section td:nth-child(1) { /* Type/Field/Name */
+    width: 40%;
+}
+.ioc-section th:nth-child(2), .ioc-section td:nth-child(2),
+.spf-section th:nth-child(2), .spf-section td:nth-child(2),
+.dkim-section th:nth-child(2), .dkim-section td:nth-child(2),
+.dmarc-section th:nth-child(2), .dmarc-section td:nth-child(2),
+.forefront-section th:nth-child(2), .forefront-section td:nth-child(2),
+.attachments-section th:nth-child(2), .attachments-section td:nth-child(2) { /* Value/Type */
+    width: 30%;
+}
+.attachments-section th:nth-child(3), .attachments-section td:nth-child(3) { /* Download */
+    width: 30%;
+}
+
+@media (max-width: 768px) {
+    body {
+        flex-direction: column;
+    }
+
+    .sidebar-container {
+        width: 100%;
+    }
+
+    .sidebar {
+        width: 100%;
+        max-width: none;
+        min-width: 0;
+    }
+
+    .resize-handle {
+        display: none;
+    }
+
+    .main {
+        width: 100%;
+    }
+
+    table, thead, tbody, th, td, tr {
+        display: block;
+    }
+    th, td {
+        width: 100% !important;
+        min-width: 0;
+        box-sizing: border-box;
+    }
+    th::before {
+        content: attr(data-label);
+        font-weight: normal;
+        display: inline-block;
+        width: 40%;
+    }
+    td::before {
+        content: attr(data-label);
+        font-weight: normal;
+        display: inline-block;
+        width: 40%;
+    }
+
+    .spf-status, .dkim-status, .dmarc-status, .forefront-status, .bcl-status {
+        width: calc(100% - 20px);
+    }
+
+    .header-section table,
+    .header-section thead,
+    .header-section tbody,
+    .header-section th,
+    .header-section td,
+    .header-section tr {
+        display: block;
+    }
+    .header-section th,
+    .header-section td {
+        width: 100% !important;
+        min-width: 0;
+    }
+}
+        
     </style>
 </head>
 <body>
@@ -575,6 +621,131 @@
         };
         let lastBodyContent = '';
         let attachments = [];
+        let lastDkimResult = {
+        status: 'N/A',
+        fields: {
+            Result: '', Selector: '', Domain: '', SigningAlgorithm: '',
+            Canonicalization: '', SignatureValue: ''
+        },
+        details: ''
+    };
+    let lastDmarcResult = {
+        status: 'N/A',
+        fields: {
+            Result: '', FromDomain: '', Policy: '', SubdomainPolicy: '',
+            AlignmentDKIM: '', AlignmentSPF: ''
+        },
+        details: ''
+    };
+
+    function analyseDKIMRecord(headers) {
+        if (typeof headers !== 'string') {
+            return {
+                status: 'N/A',
+                fields: {
+                    Result: '', Selector: '', Domain: '', SigningAlgorithm: '',
+                    Canonicalization: '', SignatureValue: ''
+                },
+                details: 'Headers must be a string'
+            };
+        }
+        const dkimRegex = /^DKIM-Signature:.*?(?=\n[A-Z-]|$)/gim;
+        const dkimMatches = headers.match(dkimRegex) || [];
+        if (dkimMatches.length === 0) {
+            return {
+                status: 'N/A',
+                fields: {
+                    Result: '', Selector: '', Domain: '', SigningAlgorithm: '',
+                    Canonicalization: '', SignatureValue: ''
+                },
+                details: 'DKIM-Signature header is missing'
+            };
+        }
+
+        const dkimHeader = dkimMatches[0].trim();
+        const authResultsRegex = /^Authentication-Results:.*?(?=\n[A-Z-]|$)/gim;
+        const authResultsMatches = headers.match(authResultsRegex) || [];
+        let result = '';
+        if (authResultsMatches.length > 0) {
+            const dkimResultMatch = authResultsMatches[0].match(/dkim=(\w+)/i);
+            result = dkimResultMatch ? dkimResultMatch[1] : '';
+        }
+
+        const fields = {
+            Result: result || 'N/A',
+            Selector: (dkimHeader.match(/s=([^;]+)/i) || [])[1] || '',
+            Domain: (dkimHeader.match(/d=([^;]+)/i) || [])[1] || '',
+            SigningAlgorithm: (dkimHeader.match(/a=([^;]+)/i) || [])[1] || '',
+            Canonicalization: (dkimHeader.match(/c=([^;]+)/i) || [])[1] || '',
+            SignatureValue: (dkimHeader.match(/b=([^;]+)/i) || [])[1] || ''
+        };
+
+        return {
+            status: fields.Result.toLowerCase() === 'pass' ? 'PASS' : 'FAIL',
+            fields,
+            details: dkimHeader
+        };
+    }
+
+    function analyseDMARCRecord(headers) {
+        if (typeof headers !== 'string') {
+            return {
+                status: 'N/A',
+                fields: {
+                    Result: '', FromDomain: '', Policy: '', SubdomainPolicy: '',
+                    AlignmentDKIM: '', AlignmentSPF: ''
+                },
+                details: 'Headers must be a string'
+            };
+        }
+        const dmarcRegex = /^Authentication-Results:.*?(?=\n[A-Z-]|$)/gim;
+        const dmarcMatches = headers.match(dmarcRegex) || [];
+        if (dmarcMatches.length === 0) {
+            return {
+                status: 'N/A',
+                fields: {
+                    Result: '', FromDomain: '', Policy: '', SubdomainPolicy: '',
+                    AlignmentDKIM: '', AlignmentSPF: ''
+                },
+                details: 'DMARC Authentication-Results header is missing'
+            };
+        }
+
+        const dmarcHeader = dmarcMatches[0].trim();
+        const fields = {
+            Result: (dmarcHeader.match(/dmarc=(\w+)/i) || [])[1] || '',
+            FromDomain: (dmarcHeader.match(/header\.from=([^;]+)/i) || [])[1] || '',
+            Policy: (dmarcHeader.match(/p=([^;]+)/i) || [])[1] || '',
+            SubdomainPolicy: (dmarcHeader.match(/sp=([^;]+)/i) || [])[1] || '',
+            AlignmentDKIM: (dmarcHeader.match(/dkim-alignment=([^;]+)/i) || [])[1] || '',
+            AlignmentSPF: (dmarcHeader.match(/spf-alignment=([^;]+)/i) || [])[1] || ''
+        };
+
+        return {
+            status: fields.Result.toLowerCase() === 'pass' ? 'PASS' : 'FAIL',
+            fields,
+            details: dmarcHeader
+        };
+    }
+
+    function toggleDkimDetails() {
+        const dkimDetails = document.getElementById('dkim-details');
+        const toggleArrow = document.querySelector('.toggle-dkim-arrow');
+        if (dkimDetails && toggleArrow) {
+            dkimDetails.classList.toggle('expanded');
+            toggleArrow.textContent = dkimDetails.classList.contains('expanded') ? '▲' : '▼';
+        }
+    }
+
+    function toggleDmarcDetails() {
+        const dmarcDetails = document.getElementById('dmarc-details');
+        const toggleArrow = document.querySelector('.toggle-dmarc-arrow');
+        if (dmarcDetails && toggleArrow) {
+            dmarcDetails.classList.toggle('expanded');
+            toggleArrow.textContent = dmarcDetails.classList.contains('expanded') ? '▲' : '▼';
+        }
+    }
+
 
         function escapeHtml(text) {
             if (typeof text !== 'string') return '';
@@ -888,96 +1059,178 @@
             });
         }
 
-        function renderHeaderFields(headerFields, spfResult, bclResult, forefrontResult) {
-            let html = '<div class="header-fields" style="margin-bottom: 20px;">';
-            html += `
-                <div class="spf-section">
-                    ${spfResult.status === 'N/A' ? 
-                        '<div class="spf-status-container"><div class="spf-status spf-fail">SPF: N/A</div></div><p>No SPF record found.</p>' : 
-                        `<div class="spf-status-container">
-                            <div class="spf-status ${spfResult.status === 'PASS' ? 'spf-pass' : 'spf-fail'}">
-                                SPF: ${escapeHtml(spfResult.fields.Result || 'N/A')}
-                            </div>
-                            <span class="toggle-spf-arrow" onclick="toggleSpfDetails()">▼</span>
+        function renderHeaderFields(headerFields, spfResult, dkimResult, dmarcResult, bclResult, forefrontResult) {
+        let html = '<div class="header-fields" style="margin-bottom: 20px;">';
+        html += `
+            <div class="spf-section">
+                ${spfResult.status === 'N/A' ? 
+                    '<div class="spf-status-container"><div class="spf-status spf-fail">SPF: N/A</div></div><p>No SPF record found.</p>' : 
+                    `<div class="spf-status-container">
+                        <div class="spf-status ${spfResult.status === 'PASS' ? 'spf-pass' : 'spf-fail'}">
+                            SPF: ${escapeHtml(spfResult.fields.Result || 'N/A')}
                         </div>
-                        <div class="spf-details-container" id="spf-details">
-                            <h3>SPF Analysis</h3>
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th data-label="Field">Field</th>
-                                        <th data-label="Value">Value</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr><td data-label="Result">Result</td><td data-label="Value">${escapeHtml(spfResult.fields.Result || 'N/A')}</td></tr>
-                                    <tr><td data-label="Receiver">Receiver</td><td data-label="Value">${escapeHtml(spfResult.fields.Receiver || 'N/A')}</td></tr>
-                                    <tr><td data-label="Client IP">Client IP</td><td data-label="Value">${escapeHtml(spfResult.fields.ClientIP || 'N/A')}</td></tr>
-                                    <tr><td data-label="Envelope From">Envelope From</td><td data-label="Value">${escapeHtml(spfResult.fields.EnvelopeFrom || 'N/A')}</td></tr>
-                                    <tr><td data-label="HELO">HELO</td><td data-label="Value">${escapeHtml(spfResult.fields.HELO || 'N/A')}</td></tr>
-                                    <tr><td data-label="Mechanism">Mechanism</td><td data-label="Value">${escapeHtml(spfResult.fields.Mechanism || 'N/A')}</td></tr>
-                                    <tr><td data-label="Priority/Protocol">Priority/Protocol</td><td data-label="Value">${escapeHtml(spfResult.fields.PriorityProtocol || 'N/A')}</td></tr>
-                                </tbody>
-                            </table>
-                            <p style="margin-top: 10px;" class="spf-details"><strong>Full Details:</strong> ${escapeHtml(spfResult.details)}</p>
-                        </div>`
-                    }
-                </div>
-            `;
-            html += `
-                <div class="bcl-section">
-                    <div class="bcl-status-container">
-                        <div class="bcl-status ${bclResult.status === 'LOW' ? 'bcl-low' : bclResult.status === 'MEDIUM' ? 'bcl-medium' : 'bcl-' + bclResult.status.toLowerCase()}">
-                            X-Microsoft-Antispam: ${escapeHtml(bclResult.status || 'N/A')}
+                        <span class="toggle-spf-arrow" onclick="toggleSpfDetails()">▼</span>
+                    </div>
+                    <div class="spf-details-container" id="spf-details">
+                        <h3>SPF Analysis</h3>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th data-label="Field">Field</th>
+                                    <th data-label="Value">Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td data-label="Result">Result</td><td data-label="Value">${escapeHtml(spfResult.fields.Result || 'N/A')}</td></tr>
+                                <tr><td data-label="Receiver">Receiver</td><td data-label="Value">${escapeHtml(spfResult.fields.Receiver || 'N/A')}</td></tr>
+                                <tr><td data-label="Client IP">Client IP</td><td data-label="Value">${escapeHtml(spfResult.fields.ClientIP || 'N/A')}</td></tr>
+                                <tr><td data-label="Envelope From">Envelope From</td><td data-label="Value">${escapeHtml(spfResult.fields.EnvelopeFrom || 'N/A')}</td></tr>
+                                <tr><td data-label="HELO">HELO</td><td data-label="Value">${escapeHtml(spfResult.fields.HELO || 'N/A')}</td></tr>
+                                <tr><td data-label="Mechanism">Mechanism</td><td data-label="Value">${escapeHtml(spfResult.fields.Mechanism || 'N/A')}</td></tr>
+                                <tr><td data-label="Priority/Protocol">Priority/Protocol</td><td data-label="Value">${escapeHtml(spfResult.fields.PriorityProtocol || 'N/A')}</td></tr>
+                            </tbody>
+                        </table>
+                        <p style="margin-top: 10px;" class="spf-details"><strong>Full Details:</strong> ${escapeHtml(spfResult.details)}</p>
+                    </div>`
+                }
+            </div>
+        `;
+        html += `
+            <div class="dkim-section">
+                ${dkimResult.status === 'N/A' ? 
+                    '<div class="dkim-status-container"><div class="dkim-status dkim-fail">DKIM: N/A</div></div><p>No DKIM record found.</p>' : 
+                    `<div class="dkim-status-container">
+                        <div class="dkim-status ${dkimResult.status === 'PASS' ? 'dkim-pass' : 'dkim-fail'}">
+                            DKIM: ${escapeHtml(dkimResult.fields.Result || 'N/A')}
+                        </div>
+                        <span class="toggle-dkim-arrow" onclick="toggleDkimDetails()">▼</span>
+                    </div>
+                    <div class="dkim-details-container" id="dkim-details">
+                        <h3>DKIM Analysis</h3>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th data-label="Field">Field</th>
+                                    <th data-label="Value">Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td data-label="Result">Result</td><td data-label="Value">${escapeHtml(dkimResult.fields.Result || 'N/A')}</td></tr>
+                                <tr><td data-label="Selector">Selector</td><td data-label="Value">${escapeHtml(dkimResult.fields.Selector || 'N/A')}</td></tr>
+                                <tr><td data-label="Domain">Domain</td><td data-label="Value">${escapeHtml(dkimResult.fields.Domain || 'N/A')}</td></tr>
+                                <tr><td data-label="Signing Algorithm">Signing Algorithm</td><td data-label="Value">${escapeHtml(dkimResult.fields.SigningAlgorithm || 'N/A')}</td></tr>
+                                <tr><td data-label="Canonicalization">Canonicalization</td><td data-label="Value">${escapeHtml(dkimResult.fields.Canonicalization || 'N/A')}</td></tr>
+                                <tr><td data-label="Signature Value">Signature Value</td><td data-label="Value">${escapeHtml(dkimResult.fields.SignatureValue || 'N/A')}</td></tr>
+                            </tbody>
+                        </table>
+                        <p style="margin-top: 10px;" class="dkim-details"><strong>Full Details:</strong> ${escapeHtml(dkimResult.details)}</p>
+                    </div>`
+                }
+            </div>
+        `;
+        html += `
+            <div class="dmarc-section">
+                ${dmarcResult.status === 'N/A' ? 
+                    '<div class="dmarc-status-container"><div class="dmarc-status dmarc-fail">DMARC: N/A</div></div><p>No DMARC record found.</p>' : 
+                    `<div class="dmarc-status-container">
+                        <div class="dmarc-status ${dmarcResult.status === 'PASS' ? 'dmarc-pass' : 'dmarc-fail'}">
+                            DMARC: ${escapeHtml(dmarcResult.fields.Result || 'N/A')}
+                        </div>
+                        <span class="toggle-dmarc-arrow" onclick="toggleDmarcDetails()">▼</span>
+                    </div>
+                    <div class="dmarc-details-container" id="dmarc-details">
+                        <h3>DMARC Analysis</h3>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th data-label="Field">Field</th>
+                                    <th data-label="Value">Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td data-label="Result">Result</td><td data-label="Value">${escapeHtml(dmarcResult.fields.Result || 'N/A')}</td></tr>
+                                <tr><td data-label="From Domain">From Domain</td><td data-label="Value">${escapeHtml(dmarcResult.fields.FromDomain || 'N/A')}</td></tr>
+                                <tr><td data-label="Policy">Policy</td><td data-label="Value">${escapeHtml(dmarcResult.fields.Policy || 'N/A')}</td></tr>
+                                <tr><td data-label="Subdomain Policy">Subdomain Policy</td><td data-label="Value">${escapeHtml(dmarcResult.fields.SubdomainPolicy || 'N/A')}</td></tr>
+                                <tr><td data-label="DKIM Alignment">DKIM Alignment</td><td data-label="Value">${escapeHtml(dmarcResult.fields.AlignmentDKIM || 'N/A')}</td></tr>
+                                <tr><td data-label="SPF Alignment">SPF Alignment</td><td data-label="Value">${escapeHtml(dmarcResult.fields.AlignmentSPF || 'N/A')}</td></tr>
+                            </tbody>
+                        </table>
+                        <p style="margin-top: 10px;" class="dmarc-details"><strong>Full Details:</strong> ${escapeHtml(dmarcResult.details)}</p>
+                    </div>`
+                }
+            </div>
+        `;
+        html += `
+            <div class="bcl-section">
+                ${bclResult.status === 'N/A' ? 
+                    '<div class="bcl-status-container"><div class="bcl-status bcl-na">X-Microsoft-Antispam: N/A</div></div><p>No X-Microsoft-Antispam header found.</p>' : 
+                    `<div class="bcl-status-container">
+                        <div class="bcl-status ${bclResult.status === 'LOW' ? 'bcl-low' : bclResult.status === 'MEDIUM' ? 'bcl-medium' : 'bcl-high'}">
+                            X-Microsoft-Antispam: ${escapeHtml(bclResult.status)}
                         </div>
                         <span class="toggle-bcl-arrow" onclick="toggleBclDetails()">▼</span>
                     </div>
-                    <div class="bcl-details-container${isBclDetailsExpanded ? ' expanded' : ''}" id="bcl-details">
-                        <p><strong>BCL Message:</strong> ${escapeHtml(bclResult.message)}</p>
-                        <p><strong>BCL Details:</strong> ${escapeHtml(bclResult.details)}</p>
-                    </div>
-                </div>
-            `;
-            html += `
-                <div class="forefront-section">
-                    ${forefrontResult.status === 'N/A' ? 
-                        '<div class="forefront-status-container"><div class="forefront-status na">X-Forefront-Antispam-Report: N/A</div></div><p>No X-Forefront-Antispam-Report header found.</p>' : 
-                        `<div class="forefront-status-container">
-                            <div class="forefront-status">
-                                X-Forefront-Antispam-Report: ${escapeHtml(forefrontResult.status)}
-                            </div>
-                            <span class="toggle-forefront-arrow" onclick="toggleForefrontDetails()">▼</span>
+                    <div class="bcl-details-container" id="bcl-details">
+                        <h3>BCL Analysis</h3>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th data-label="Field">Field</th>
+                                    <th data-label="Value">Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td data-label="Status">Status</td><td data-label="Value">${escapeHtml(bclResult.status)}</td></tr>
+                                <tr><td data-label="BCL Value">BCL Value</td><td data-label="Value">${escapeHtml(bclResult.value || 'N/A')}</td></tr>
+                                <tr><td data-label="Message">Message</td><td data-label="Value">${escapeHtml(bclResult.message)}</td></tr>
+                            </tbody>
+                        </table>
+                        <p style="margin-top: 10px;" class="bcl-details"><strong>Full Details:</strong> ${escapeHtml(bclResult.details)}</p>
+                    </div>`
+                }
+            </div>
+        `;
+        html += `
+            <div class="forefront-section">
+                ${forefrontResult.status === 'N/A' ? 
+                    '<div class="forefront-status-container"><div class="forefront-status na">X-Forefront-Antispam-Report: N/A</div></div><p>No X-Forefront-Antispam-Report header found.</p>' : 
+                    `<div class="forefront-status-container">
+                        <div class="forefront-status">
+                            X-Forefront-Antispam-Report: ${escapeHtml(forefrontResult.status)}
                         </div>
-                        <div class="forefront-details-container" id="forefront-details">
-                            <h3>X-Forefront-Antispam-Report Analysis</h3>
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th data-label="Field">Field</th>
-                                        <th data-label="Value">Value</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr><td data-label="Language">Language</td><td data-label="Value">${escapeHtml(forefrontResult.fields.LANG || 'N/A')}</td></tr>
-                                    <tr><td data-label="Spam Confidence Level">Spam Confidence Level</td><td data-label="Value">${escapeHtml(forefrontResult.fields.SCL || 'N/A')}</td></tr>
-                                    <tr><td data-label="Spam Filtering Verdict">Spam Filtering Verdict</td><td data-label="Value">${escapeHtml(forefrontResult.fields.SFV || 'N/A')}</td></tr>
-                                    <tr><td data-label="IP Filter Verdict">IP Filter Verdict</td><td data-label="Value">${escapeHtml(forefrontResult.fields.IPV || 'N/A')}</td></tr>
-                                    <tr><td data-label="HELO/EHLO">HELO/EHLO</td><td data-label="Value">${escapeHtml(forefrontResult.fields.H || 'N/A')}</td></tr>
-                                    <tr><td data-label="PTR Record">PTR Record</td><td data-label="Value">${escapeHtml(forefrontResult.fields.PTR || 'N/A')}</td></tr>
-                                    <tr><td data-label="Connecting IP Address">Connecting IP Address</td><td data-label="Value">${escapeHtml(forefrontResult.fields.CIP || 'N/A')}</td></tr>
-                                    <tr><td data-label="Protection Policy Category">Protection Policy Category</td><td data-label="Value">${escapeHtml(forefrontResult.fields.CAT || 'N/A')}</td></tr>
-                                    <tr><td data-label="Spam Rules">Spam Rules</td><td data-label="Value">${escapeHtml(forefrontResult.fields.SFS || 'N/A')}</td></tr>
-                                    <tr><td data-label="Source Header">Source Header</td><td data-label="Value">${escapeHtml(forefrontResult.fields.SRV || 'N/A')}</td></tr>
-                                    <tr><td data-label="Direction">Direction</td><td data-label="Value">${escapeHtml(forefrontResult.fields.DIR || 'N/A')}</td></tr>
-                                </tbody>
-                            </table>
-                            <p style="margin-top: 10px;" class="forefront-details"><strong>Full Details:</strong> ${escapeHtml(forefrontResult.details)}</p>
-                        </div>`
-                    }
-                </div>
-            `;
-            return html;
-        }
+                        <span class="toggle-forefront-arrow" onclick="toggleForefrontDetails()">▼</span>
+                    </div>
+                    <div class="forefront-details-container" id="forefront-details">
+                        <h3>X-Forefront-Antispam-Report Analysis</h3>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th data-label="Field">Field</th>
+                                    <th data-label="Value">Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td data-label="Language">Language</td><td data-label="Value">${escapeHtml(forefrontResult.fields.LANG || 'N/A')}</td></tr>
+                                <tr><td data-label="Spam Confidence Level">Spam Confidence Level</td><td data-label="Value">${escapeHtml(forefrontResult.fields.SCL || 'N/A')}</td></tr>
+                                <tr><td data-label="Spam Filtering Verdict">Spam Filtering Verdict</td><td data-label="Value">${escapeHtml(forefrontResult.fields.SFV || 'N/A')}</td></tr>
+                                <tr><td data-label="IP Filter Verdict">IP Filter Verdict</td><td data-label="Value">${escapeHtml(forefrontResult.fields.IPV || 'N/A')}</td></tr>
+                                <tr><td data-label="HELO/EHLO">HELO/EHLO</td><td data-label="Value">${escapeHtml(forefrontResult.fields.H || 'N/A')}</td></tr>
+                                <tr><td data-label="PTR Record">PTR Record</td><td data-label="Value">${escapeHtml(forefrontResult.fields.PTR || 'N/A')}</td></tr>
+                                <tr><td data-label="Connecting IP Address">Connecting IP Address</td><td data-label="Value">${escapeHtml(forefrontResult.fields.CIP || 'N/A')}</td></tr>
+                                <tr><td data-label="Protection Policy Category">Protection Policy Category</td><td data-label="Value">${escapeHtml(forefrontResult.fields.CAT || 'N/A')}</td></tr>
+                                <tr><td data-label="Spam Rules">Spam Rules</td><td data-label="Value">${escapeHtml(forefrontResult.fields.SFS || 'N/A')}</td></tr>
+                                <tr><td data-label="Source Header">Source Header</td><td data-label="Value">${escapeHtml(forefrontResult.fields.SRV || 'N/A')}</td></tr>
+                                <tr><td data-label="Direction">Direction</td><td data-label="Value">${escapeHtml(forefrontResult.fields.DIR || 'N/A')}</td></tr>
+                            </tbody>
+                        </table>
+                        <p style="margin-top: 10px;" class="forefront-details"><strong>Full Details:</strong> ${escapeHtml(forefrontResult.details)}</p>
+                    </div>`
+                }
+            </div>
+        `;
+        return html;
+    }
 
         function toggleSpfDetails() {
             const spfDetails = document.getElementById('spf-details');
@@ -1042,71 +1295,79 @@
             return html;
         }
 
-        function renderTable(spfResult, bclResult, forefrontResult) {
-            const headerResultsDiv = document.getElementById('headerResults');
-            const emailDetailsDiv = document.getElementById('emailDetails');
-            if (!headerResultsDiv || !emailDetailsDiv) {
-                console.error('Header results or email details div not found');
-                return;
-            }
 
-            emailDetailsDiv.innerHTML = renderEmailDetails(headerFields);
+           // Update renderTable function signature
+    function renderTable(spfResult, bclResult, forefrontResult) {
+        renderTable(spfResult, lastDkimResult, lastDmarcResult, bclResult, forefrontResult);
+    }
 
-            let tableHtml = renderHeaderFields(headerFields, spfResult, bclResult, forefrontResult);
-            if (transactions.length === 0) {
-                tableHtml += '<p>No headers found.</p>';
-                headerResultsDiv.innerHTML = tableHtml;
-                return;
-            }
-
-            tableHtml += `
-                <div class="header-section">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th data-column="order" class="${sortState.column === 'order' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('order')">Order</th>
-                                <th data-column="action" class="${sortState.column === 'action' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('action')">Action</th>
-                                <th data-column="timestamp" class="${sortState.column === 'timestamp' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('timestamp')">Timestamp</th>
-                                <th data-column="fromServer" class="${sortState.column === 'fromServer' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('fromServer')">From Server</th>
-                                <th data-column="byServer" class="${sortState.column === 'byServer' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('byServer')">By Server</th>
-                                <th data-column="ip" class="${sortState.column === 'ip' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('ip')">IP</th>
-                                <th data-column="emailOrDomain" class="${sortState.column === 'emailOrDomain' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('emailOrDomain')">Email/Domain</th>
-                                <th data-column="details" class="${sortState.column === 'details' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('details')">Details</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-            `;
-
-            const displayTransactions = isHeaderTableExpanded ? transactions : transactions.slice(0, 5);
-            displayTransactions.forEach(transaction => {
-                tableHtml += `
-                    <tr>
-                        <td data-label="Order">${transaction.order || ''}</td>
-                        <td data-label="Action">${escapeHtml(transaction.action)}</td>
-                        <td data-label="Timestamp">${escapeHtml(transaction.timestamp || '')}</td>
-                        <td data-label="From Server">${escapeHtml(transaction.fromServer || '')}</td>
-                        <td data-label="By Server">${escapeHtml(transaction.byServer || '')}</td>
-                        <td data-label="IP">${escapeHtml(transaction.ip || '')}</td>
-                        <td data-label="Email/Domain">${escapeHtml(transaction.emailOrDomain || '')}</td>
-                        <td data-label="Details">${escapeHtml(transaction.details)}</td>
-                    </tr>
-                `;
-            });
-
-            tableHtml += '</tbody></table>';
-
-            if (transactions.length > 5) {
-                tableHtml += `
-                    <div class="header-table-toggle">
-                        <span class="toggle-header-arrow" onclick="toggleHeaderTable()">${isHeaderTableExpanded ? '▲' : '▼'}</span>
-                    </div>
-                `;
-            }
-
-            tableHtml += '</div>';
-
-            headerResultsDiv.innerHTML = tableHtml;
+    // New renderTable function
+    function renderTable(spfResult, dkimResult, dmarcResult, bclResult, forefrontResult) {
+        const headerResultsDiv = document.getElementById('headerResults');
+        const emailDetailsDiv = document.getElementById('emailDetails');
+        if (!headerResultsDiv || !emailDetailsDiv) {
+            console.error('Header results or email details div not found');
+            return;
         }
+
+        emailDetailsDiv.innerHTML = renderEmailDetails(headerFields);
+
+        let tableHtml = renderHeaderFields(headerFields, spfResult, dkimResult, dmarcResult, bclResult, forefrontResult);
+        if (transactions.length === 0) {
+            tableHtml += '<p>No headers found.</p>';
+            headerResultsDiv.innerHTML = tableHtml;
+            return;
+        }
+
+        tableHtml += `
+            <div class="header-section">
+                <table>
+                    <thead>
+                        <tr>
+                            <th data-column="order" class="${sortState.column === 'order' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('order')">Order</th>
+                            <th data-column="action" class="${sortState.column === 'action' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('action')">Action</th>
+                            <th data-column="timestamp" class="${sortState.column === 'timestamp' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('timestamp')">Timestamp</th>
+                            <th data-column="fromServer" class="${sortState.column === 'fromServer' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('fromServer')">From Server</th>
+                            <th data-column="byServer" class="${sortState.column === 'byServer' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('byServer')">By Server</th>
+                            <th data-column="ip" class="${sortState.column === 'ip' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('ip')">IP</th>
+                            <th data-column="emailOrDomain" class="${sortState.column === 'emailOrDomain' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('emailOrDomain')">Email/Domain</th>
+                            <th data-column="details" class="${sortState.column === 'details' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('details')">Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        const displayTransactions = isHeaderTableExpanded ? transactions : transactions.slice(0, 5);
+        displayTransactions.forEach(transaction => {
+            tableHtml += `
+                <tr>
+                    <td data-label="Order">${transaction.order || ''}</td>
+                    <td data-label="Action">${escapeHtml(transaction.action)}</td>
+                    <td data-label="Timestamp">${escapeHtml(transaction.timestamp || '')}</td>
+                    <td data-label="From Server">${escapeHtml(transaction.fromServer || '')}</td>
+                    <td data-label="By Server">${escapeHtml(transaction.byServer || '')}</td>
+                    <td data-label="IP">${escapeHtml(transaction.ip || '')}</td>
+                    <td data-label="Email/Domain">${escapeHtml(transaction.emailOrDomain || '')}</td>
+                    <td data-label="Details">${escapeHtml(transaction.details)}</td>
+                </tr>
+            `;
+        });
+
+        tableHtml += '</tbody></table>';
+
+        if (transactions.length > 5) {
+            tableHtml += `
+                <div class="header-table-toggle">
+                    <span class="toggle-header-arrow" onclick="toggleHeaderTable()">${isHeaderTableExpanded ? '▲' : '▼'}</span>
+                </div>
+            `;
+        }
+
+        tableHtml += '</div>';
+
+        headerResultsDiv.innerHTML = tableHtml;
+    }
+
 
         function renderAttachments() {
             const attachmentResultsDiv = document.getElementById('attachmentResults');
@@ -1146,16 +1407,17 @@
             attachmentResultsDiv.innerHTML = tableHtml;
         }
 
-        function sortColumn(column) {
-            if (sortState.column === column) {
-                sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
-            } else {
-                sortState.column = column;
-                sortState.direction = 'asc';
-            }
-            sortTransactions(sortState.column, sortState.direction);
-            renderTable(lastSpfResult, lastBclResult, lastForefrontResult);
+       // Update sortColumn function
+    function sortColumn(column) {
+        if (sortState.column === column) {
+            sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+        } else {
+            sortState.column = column;
+            sortState.direction = 'asc';
         }
+        sortTransactions(sortState.column, sortState.direction);
+        renderTable(lastSpfResult, lastDkimResult, lastDmarcResult, lastBclResult, lastForefrontResult);
+    }
 
         function processIOCs(text, bodyParts) {
             if (typeof text !== 'string' || !Array.isArray(bodyParts)) return [];
@@ -1315,377 +1577,399 @@
             iocResultsDiv.innerHTML = tableHtml;
         }
 
-        function clearResults() {
-            const headerInput = document.getElementById('headerInput');
-            const headerResultsDiv = document.getElementById('headerResults');
-            const emailDetailsDiv = document.getElementById('emailDetails');
-            const bodyResultsDiv = document.getElementById('bodyResults');
-            const attachmentResultsDiv = document.getElementById('attachmentResults');
-            const iocResultsDiv = document.getElementById('iocResults');
+ // Update clearResults function
+ function clearResults() {
+        const headerInput = document.getElementById('headerInput');
+        const headerResultsDiv = document.getElementById('headerResults');
+        const emailDetailsDiv = document.getElementById('emailDetails');
+        const bodyResultsDiv = document.getElementById('bodyResults');
+        const attachmentResultsDiv = document.getElementById('attachmentResults');
+        const iocResultsDiv = document.getElementById('iocResults');
 
-            if (headerInput) headerInput.value = '';
-            if (headerResultsDiv) headerResultsDiv.innerHTML = '';
-            if (emailDetailsDiv) emailDetailsDiv.innerHTML = '';
-            if (bodyResultsDiv) bodyResultsDiv.innerHTML = '';
-            if (attachmentResultsDiv) attachmentResultsDiv.innerHTML = '';
-            if (iocResultsDiv) iocResultsDiv.innerHTML = '';
-            transactions = [];
-            headerFields = {};
-            isHeaderTableExpanded = false;
-            isBodyContentExpanded = false;
-            isBclDetailsExpanded = false;
-            lastBodyContent = '';
-            attachments = [];
-            lastSpfResult = {
-                status: 'N/A',
-                fields: {
-                    Result: '', Receiver: '', ClientIP: '', EnvelopeFrom: '',
-                    HELO: '', Mechanism: '', PriorityProtocol: ''
-                },
-                details: ''
-            };
-            lastBclResult = { status: 'N/A', value: '', message: '', details: '' };
-            lastForefrontResult = {
-                status: 'N/A',
-                fields: {
-                    CIP: '', CTRY: '', LANG: '', SCL: '', SRV: '', IPV: '',
-                    SFV: '', H: '', PTR: '', CAT: '', SFS: '', DIR: ''
-                },
-                details: ''
-            };
+        if (headerInput) headerInput.value = '';
+        if (headerResultsDiv) headerResultsDiv.innerHTML = '';
+        if (emailDetailsDiv) emailDetailsDiv.innerHTML = '';
+        if (bodyResultsDiv) bodyResultsDiv.innerHTML = '';
+        if (attachmentResultsDiv) attachmentResultsDiv.innerHTML = '';
+        if (iocResultsDiv) iocResultsDiv.innerHTML = '';
+        transactions = [];
+        headerFields = {};
+        isHeaderTableExpanded = false;
+        isBodyContentExpanded = false;
+        isBclDetailsExpanded = false;
+        lastBodyContent = '';
+        attachments = [];
+        lastSpfResult = {
+            status: 'N/A',
+            fields: {
+                Result: '', Receiver: '', ClientIP: '', EnvelopeFrom: '',
+                HELO: '', Mechanism: '', PriorityProtocol: ''
+            },
+            details: ''
+        };
+        lastDkimResult = {
+            status: 'N/A',
+            fields: {
+                Result: '', Selector: '', Domain: '', SigningAlgorithm: '',
+                Canonicalization: '', SignatureValue: ''
+            },
+            details: ''
+        };
+        lastDmarcResult = {
+            status: 'N/A',
+            fields: {
+                Result: '', FromDomain: '', Policy: '', SubdomainPolicy: '',
+                AlignmentDKIM: '', AlignmentSPF: ''
+            },
+            details: ''
+        };
+        lastBclResult = { status: 'N/A', value: '', message: '', details: '' };
+        lastForefrontResult = {
+            status: 'N/A',
+            fields: {
+                CIP: '', CTRY: '', LANG: '', SCL: '', SRV: '', IPV: '',
+                SFV: '', H: '', PTR: '', CAT: '', SFS: '', DIR: ''
+            },
+            details: ''
+        };
+    }
+
+
+    function analyseEmail() {
+    const headerInput = document.getElementById('headerInput');
+    const headerResultsDiv = document.getElementById('headerResults');
+    const emailDetailsDiv = document.getElementById('emailDetails');
+    const bodyResultsDiv = document.getElementById('bodyResults');
+    const attachmentResultsDiv = document.getElementById('attachmentResults');
+    const iocResultsDiv = document.getElementById('iocResults');
+
+    if (!headerInput || !headerResultsDiv || !emailDetailsDiv || !bodyResultsDiv || !attachmentResultsDiv || !iocResultsDiv) {
+        console.error('Required DOM elements missing');
+        return;
+    }
+
+    const input = headerInput.value.trim();
+    if (!input) {
+        emailDetailsDiv.innerHTML = '<p>Please enter email headers to analyse.</p>';
+        headerResultsDiv.innerHTML = '<p>Please enter email headers to analyse.</p>';
+        bodyResultsDiv.innerHTML = '<p>No body content provided.</p>';
+        attachmentResultsDiv.innerHTML = '<p>No attachments found.</p>';
+        iocResultsDiv.innerHTML = '<p>No IOCs found.</p>';
+        return;
+    }
+
+    try {
+        // Normalize line endings and split headers from body
+        const normalizedInput = input.replace(/\r\n/g, '\n');
+        const headerEndIndex = normalizedInput.indexOf('\n\n');
+        const headers = headerEndIndex !== -1 ? normalizedInput.substring(0, headerEndIndex) : normalizedInput;
+        const body = headerEndIndex !== -1 ? normalizedInput.substring(headerEndIndex + 2).trim() : '';
+        transactions = [];
+        headerFields = { from: '', to: [], cc: [], subject: '', date: '' };
+        attachments = [];
+
+        // Perform analyses
+        lastSpfResult = analyseSPFRecord(headers);
+        lastDkimResult = analyseDKIMRecord(headers);
+        lastDmarcResult = analyseDMARCRecord(headers);
+        lastBclResult = analyseBCLRecord(headers);
+        lastForefrontResult = analyseForefrontAntispam(headers);
+
+        // Regular expressions for specific headers
+        const fromRegex = /^From:.*?(?=\n[A-Z-]|$)/gim;
+        const senderRegex = /^Sender:.*?(?=\n[A-Z-]|$)/gim;
+        const toRegex = /^To:.*?(?=\n[A-Z-]|$)/gim;
+        const ccRegex = /^Cc:.*?(?=\n[A-Z-]|$)/gim;
+        const subjectRegex = /^Subject:.*?(?=\n[A-Z-]|$)/gim;
+        const dateRegex = /^Date:.*?(?=\n[A-Z-]|$)/gim;
+        const emailRegex = /[^\s<>,;]+@[^\s<>,;]+\.[^\s<>,;]+/g;
+        const contentTypeRegex = /Content-Type:.*?(?=\n[A-Z-]|$)/gis;
+        const contentEncodingRegex = /Content-Transfer-Encoding:.*?(?=\n[A-Z-]|$)/gis;
+        const contentDispositionRegex = /Content-Disposition:.*?(?=\n[A-Z-]|$)/gis;
+        const receivedRegex = /^Received:.*?(?=\n[A-Z-]|$|\n\n)(?:\n\s+.*?(?=\n[A-Z-]|$|\n\n))*/gim;
+        const receivedDateRegex = /;?\s*(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s*)?\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}\s+\d{2}:\d{2}:\d{2}\s*(?:[+-]\d{4}|GMT)?/i;
+        const serverRegex = /by\s+([a-zA-Z0-9:.-]+)/i;
+        const fromServerRegex = /from\s+([a-zA-Z0-9:.-]+)/i;
+        const ipRegex = /\[(?:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})|([0-9a-fA-F:]+))\]/;
+        const boundaryRegex = /boundary=["']?([^"'\n;]+)["']?/i;
+        const forRegex = /for\s+<?([^\s>]+@[^\s>]+)>?/i;
+        const filenameRegex = /filename=["']?([^"'\n;]+)["']?/i;
+
+        // Extract header fields
+        const fromMatches = headers.match(fromRegex) || [];
+        if (fromMatches.length > 0) {
+            headerFields.from = parseEmailAddress(fromMatches[0].replace(/^From:\s*/i, '').trim()) || fromMatches[0].replace(/^From:\s*/i, '').trim();
         }
 
-        function analyseEmail() {
-            const headerInput = document.getElementById('headerInput');
-            const headerResultsDiv = document.getElementById('headerResults');
-            const emailDetailsDiv = document.getElementById('emailDetails');
-            const bodyResultsDiv = document.getElementById('bodyResults');
-            const attachmentResultsDiv = document.getElementById('attachmentResults');
-            const iocResultsDiv = document.getElementById('iocResults');
+        const senderMatches = headers.match(senderRegex) || [];
+        if (senderMatches.length > 0 && !headerFields.from) {
+            headerFields.from = parseEmailAddress(senderMatches[0].replace(/^Sender:\s*/i, '').trim()) || senderMatches[0].replace(/^Sender:\s*/i, '').trim();
+        }
 
-            if (!headerInput || !headerResultsDiv || !emailDetailsDiv || !bodyResultsDiv || !attachmentResultsDiv || !iocResultsDiv) {
-                console.error('Required DOM elements missing');
-                return;
-            }
+        const toMatches = headers.match(toRegex) || [];
+        toMatches.forEach(match => {
+            const emails = match.match(emailRegex) || [];
+            headerFields.to.push(...emails);
+        });
+        headerFields.to = [...new Set(headerFields.to)];
 
-            const input = headerInput.value.trim();
-            if (!input) {
-                emailDetailsDiv.innerHTML = '<p>Please enter email headers to analyse.</p>';
-                headerResultsDiv.innerHTML = '<p>Please enter email headers to analyse.</p>';
-                bodyResultsDiv.innerHTML = '<p>No body content provided.</p>';
-                attachmentResultsDiv.innerHTML = '<p>No attachments found.</p>';
-                iocResultsDiv.innerHTML = '<p>No IOCs found.</p>';
-                return;
-            }
+        const ccMatches = headers.match(ccRegex) || [];
+        ccMatches.forEach(match => {
+            const emails = match.match(emailRegex) || [];
+            headerFields.cc.push(...emails);
+        });
+        headerFields.cc = [...new Set(headerFields.cc)];
 
-            try {
-                // Normalize line endings and split headers from body
-                const normalizedInput = input.replace(/\r\n/g, '\n');
-                const headerEndIndex = normalizedInput.indexOf('\n\n');
-                const headers = headerEndIndex !== -1 ? normalizedInput.substring(0, headerEndIndex) : normalizedInput;
-                const body = headerEndIndex !== -1 ? normalizedInput.substring(headerEndIndex + 2).trim() : '';
-                transactions = [];
-                headerFields = { from: '', to: [], cc: [], subject: '', date: '' };
-                attachments = [];
+        const subjectMatches = headers.match(subjectRegex) || [];
+        if (subjectMatches.length > 0) {
+            headerFields.subject = decodeQuotedPrintable(subjectMatches[0].replace(/^Subject:\s*/i, '').trim());
+        }
 
-                // Perform analyses
-                lastSpfResult = analyseSPFRecord(headers);
-                lastBclResult = analyseBCLRecord(headers);
-                lastForefrontResult = analyseForefrontAntispam(headers);
+        const dateMatches = headers.match(dateRegex) || [];
+        if (dateMatches.length > 0) {
+            headerFields.date = parseDate(dateMatches[0].replace(/^Date:\s*/i, '').trim());
+        }
 
-                // Regular expressions for specific headers
-                const fromRegex = /^From:.*?(?=\n[A-Z-]|$)/gim;
-                const senderRegex = /^Sender:.*?(?=\n[A-Z-]|$)/gim;
-                const toRegex = /^To:.*?(?=\n[A-Z-]|$)/gim;
-                const ccRegex = /^Cc:.*?(?=\n[A-Z-]|$)/gim;
-                const subjectRegex = /^Subject:.*?(?=\n[A-Z-]|$)/gim;
-                const dateRegex = /^Date:.*?(?=\n[A-Z-]|$)/gim;
-                const emailRegex = /[^\s<>,;]+@[^\s<>,;]+\.[^\s<>,;]+/g;
-                const contentTypeRegex = /Content-Type:.*?(?=\n[A-Z-]|$)/gis;
-                const contentEncodingRegex = /Content-Transfer-Encoding:.*?(?=\n[A-Z-]|$)/gis;
-                const contentDispositionRegex = /Content-Disposition:.*?(?=\n[A-Z-]|$)/gis;
-                const receivedRegex = /^Received:.*?(?=\n[A-Z-]|$|\n\n)(?:\n\s+.*?(?=\n[A-Z-]|$|\n\n))*/gim;
-                const receivedDateRegex = /;?\s*(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s*)?\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}\s+\d{2}:\d{2}:\d{2}\s*(?:[+-]\d{4}|GMT)?/i;
-                const serverRegex = /by\s+([a-zA-Z0-9:.-]+)/i;
-                const fromServerRegex = /from\s+([a-zA-Z0-9:.-]+)/i;
-                const ipRegex = /\[(?:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})|([0-9a-fA-F:]+))\]/;
-                const boundaryRegex = /boundary=["']?([^"'\n;]+)["']?/i;
-                const forRegex = /for\s+<?([^\s>]+@[^\s>]+)>?/i;
-                const filenameRegex = /filename=["']?([^"'\n;]+)["']?/i;
+        // Extract global sender and recipients
+        const globalSender = headerFields.from;
+        const globalRecipients = headerFields.to;
 
-                // Extract header fields
-                const fromMatches = headers.match(fromRegex) || [];
-                if (fromMatches.length > 0) {
-                    headerFields.from = parseEmailAddress(fromMatches[0].replace(/^From:\s*/i, '').trim()) || fromMatches[0].replace(/^From:\s*/i, '').trim();
-                }
+        // Parse all headers
+        let orderCounter = 0;
+        const headerLines = headers.split('\n');
+        let currentHeader = '';
+        let currentValue = [];
+        const allHeaders = [];
 
-                const senderMatches = headers.match(senderRegex) || [];
-                if (senderMatches.length > 0 && !headerFields.from) {
-                    headerFields.from = parseEmailAddress(senderMatches[0].replace(/^Sender:\s*/i, '').trim()) || senderMatches[0].replace(/^Sender:\s*/i, '').trim();
-                }
-
-                const toMatches = headers.match(toRegex) || [];
-                toMatches.forEach(match => {
-                    const emails = match.match(emailRegex) || [];
-                    headerFields.to.push(...emails);
-                });
-                headerFields.to = [...new Set(headerFields.to)];
-
-                const ccMatches = headers.match(ccRegex) || [];
-                ccMatches.forEach(match => {
-                    const emails = match.match(emailRegex) || [];
-                    headerFields.cc.push(...emails);
-                });
-                headerFields.cc = [...new Set(headerFields.cc)];
-
-                const subjectMatches = headers.match(subjectRegex) || [];
-                if (subjectMatches.length > 0) {
-                    headerFields.subject = decodeQuotedPrintable(subjectMatches[0].replace(/^Subject:\s*/i, '').trim());
-                }
-
-                const dateMatches = headers.match(dateRegex) || [];
-                if (dateMatches.length > 0) {
-                    headerFields.date = parseDate(dateMatches[0].replace(/^Date:\s*/i, '').trim());
-                }
-
-                // Extract global sender and recipients
-                const globalSender = headerFields.from;
-                const globalRecipients = headerFields.to;
-
-                // Parse all headers
-                let orderCounter = 0;
-                const headerLines = headers.split('\n');
-                let currentHeader = '';
-                let currentValue = [];
-                const allHeaders = [];
-
-                headerLines.forEach(line => {
-                    if (/^[A-Za-z0-9-]+:/.test(line)) {
-                        if (currentHeader) {
-                            allHeaders.push({
-                                name: currentHeader,
-                                value: currentValue.join('\n').trim()
-                            });
-                            currentValue = [];
-                        }
-                        const [name, ...value] = line.split(':');
-                        currentHeader = name.trim();
-                        currentValue.push(value.join(':').trim());
-                    } else if (currentHeader && /^\s+/.test(line)) {
-                        currentValue.push(line.trim());
-                    }
-                });
-
+        headerLines.forEach(line => {
+            if (/^[A-Za-z0-9-]+:/.test(line)) {
                 if (currentHeader) {
                     allHeaders.push({
                         name: currentHeader,
                         value: currentValue.join('\n').trim()
                     });
+                    currentValue = [];
+                }
+                const [name, ...value] = line.split(':');
+                currentHeader = name.trim();
+                currentValue.push(value.join(':').trim());
+            } else if (currentHeader && /^\s+/.test(line)) {
+                currentValue.push(line.trim());
+            }
+        });
+
+        if (currentHeader) {
+            allHeaders.push({
+                name: currentHeader,
+                value: currentValue.join('\n').trim()
+            });
+        }
+
+        allHeaders.forEach(header => {
+            const headerName = header.name;
+            const headerValue = header.value;
+
+            if (headerName.toLowerCase() === 'received') {
+                const rawValue = headerValue;
+                const cleanedValue = rawValue.replace(/\n\s+/g, ' ').trim();
+
+                let date = '';
+                const dateMatch = rawValue.match(receivedDateRegex);
+                if (dateMatch) {
+                    date = parseDate(dateMatch[0].replace(/^;\s*/, '').trim());
                 }
 
-                allHeaders.forEach(header => {
-                    const headerName = header.name;
-                    const headerValue = header.value;
+                let fromServer = '';
+                const fromServerMatch = rawValue.match(fromServerRegex);
+                if (fromServerMatch) {
+                    fromServer = fromServerMatch[1].trim();
+                }
 
-                    if (headerName.toLowerCase() === 'received') {
-                        const rawValue = headerValue;
-                        const cleanedValue = rawValue.replace(/\n\s+/g, ' ').trim();
+                let byServer = '';
+                const byServerMatch = rawValue.match(serverRegex);
+                if (byServerMatch) {
+                    byServer = byServerMatch[1].trim();
+                }
 
-                        let date = '';
-                        const dateMatch = rawValue.match(receivedDateRegex);
-                        if (dateMatch) {
-                            date = parseDate(dateMatch[0].replace(/^;\s*/, '').trim());
-                        }
+                let ip = '';
+                const ipMatch = rawValue.match(ipRegex);
+                if (ipMatch) {
+                    ip = validateIP(ipMatch[1] || ipMatch[2]);
+                }
 
-                        let fromServer = '';
-                        const fromServerMatch = rawValue.match(fromServerRegex);
-                        if (fromServerMatch) {
-                            fromServer = fromServerMatch[1].trim();
-                        }
-
-                        let byServer = '';
-                        const byServerMatch = rawValue.match(serverRegex);
-                        if (byServerMatch) {
-                            byServer = byServerMatch[1].trim();
-                        }
-
-                        let ip = '';
-                        const ipMatch = rawValue.match(ipRegex);
-                        if (ipMatch) {
-                            ip = validateIP(ipMatch[1] || ipMatch[2]);
-                        }
-
-                        let recipientEmail = '';
-                        const forMatch = rawValue.match(forRegex);
-                        if (forMatch) {
-                            recipientEmail = parseEmailAddress(forMatch[1]);
-                        } else {
-                            recipientEmail = globalRecipients[0] || '';
-                        }
-
-                        if (fromServer || byServer) {
-                            transactions.push({
-                                order: ++orderCounter,
-                                action: 'Received',
-                                timestamp: date,
-                                fromServer: fromServer,
-                                byServer: byServer,
-                                ip: ip,
-                                emailOrDomain: recipientEmail || globalSender || fromServer || byServer,
-                                details: cleanedValue
-                            });
-                        }
-                    } else {
-                        transactions.push({
-                            order: ++orderCounter,
-                            action: headerName,
-                            timestamp: '',
-                            fromServer: '',
-                            byServer: '',
-                            ip: '',
-                            emailOrDomain: '',
-                            details: headerValue
-                        });
-                    }
-                });
-
-                // Default sort
-                sortState = { column: 'order', direction: 'asc' };
-                sortTransactions(sortState.column, sortState.direction);
-
-                // Process body
-                const bodyParts = [];
-                if (!body) {
-                    lastBodyContent = '<p>No body content provided.</p>';
-                    attachmentResultsDiv.innerHTML = '<p>No attachments found.</p>';
+                let recipientEmail = '';
+                const forMatch = rawValue.match(forRegex);
+                if (forMatch) {
+                    recipientEmail = parseEmailAddress(forMatch[1]);
                 } else {
-                    const contentTypeMatch = headers.match(contentTypeRegex) || [];
-                    let boundary = '';
-                    for (let match of contentTypeMatch) {
-                        const boundaryMatch = match.match(boundaryRegex);
-                        if (boundaryMatch) {
-                            boundary = boundaryMatch[1];
-                            break;
+                    recipientEmail = globalRecipients[0] || '';
+                }
+
+                if (fromServer || byServer) {
+                    transactions.push({
+                        order: ++orderCounter,
+                        action: 'Received',
+                        timestamp: date,
+                        fromServer: fromServer,
+                        byServer: byServer,
+                        ip: ip,
+                        emailOrDomain: recipientEmail || globalSender || fromServer || byServer,
+                        details: cleanedValue
+                    });
+                }
+            } else {
+                transactions.push({
+                    order: ++orderCounter,
+                    action: headerName,
+                    timestamp: '',
+                    fromServer: '',
+                    byServer: '',
+                    ip: '',
+                    emailOrDomain: '',
+                    details: headerValue
+                });
+            }
+        });
+
+        // Default sort
+        sortState = { column: 'order', direction: 'asc' };
+        sortTransactions(sortState.column, sortState.direction);
+
+        // Process body
+        const bodyParts = [];
+        if (!body) {
+            lastBodyContent = '<p>No body content provided.</p>';
+            attachmentResultsDiv.innerHTML = '<p>No attachments found.</p>';
+        } else {
+            const contentTypeMatch = headers.match(contentTypeRegex) || [];
+            let boundary = '';
+            for (let match of contentTypeMatch) {
+                const boundaryMatch = match.match(boundaryRegex);
+                if (boundaryMatch) {
+                    boundary = boundaryMatch[1];
+                    break;
+                }
+            }
+
+            if (boundary) {
+                const parts = body.split(`--${boundary}`).filter(part => part.trim() && !part.startsWith('--'));
+                lastBodyContent = parts.map((part, index) => {
+                    const lines = part.trim().split('\n');
+                    let contentType = '';
+                    let encoding = '7bit';
+                    let charset = 'utf-8';
+                    let contentDisposition = '';
+                    let content = '';
+                    let inContent = false;
+                    let filename = '';
+
+                    for (let line of lines) {
+                        if (!inContent && line.match(/^Content-Type:/i)) {
+                            contentType = line.replace(/^Content-Type:\s*/i, '').trim();
+                            const charsetMatch = contentType.match(/charset=["']?([^"'\s;]+)["']?/i);
+                            if (charsetMatch) {
+                                charset = charsetMatch[1].toLowerCase();
+                            }
+                        } else if (!inContent && line.match(/^Content-Transfer-Encoding:/i)) {
+                            encoding = line.replace(/^Content-Transfer-Encoding:\s*/i, '').trim().toLowerCase();
+                        } else if (!inContent && line.match(/^Content-Disposition:/i)) {
+                            contentDisposition = line.replace(/^Content-Disposition:\s*/i, '').trim().toLowerCase();
+                            const filenameMatch = line.match(filenameRegex);
+                            if (filenameMatch) {
+                                filename = filenameMatch[1];
+                            }
+                        } else if (!inContent && line.trim() === '') {
+                            inContent = true;
+                        } else if (inContent) {
+                            content += line + '\n';
                         }
                     }
 
-                    if (boundary) {
-                        const parts = body.split(`--${boundary}`).filter(part => part.trim() && !part.startsWith('--'));
-                        lastBodyContent = parts.map((part, index) => {
-                            const lines = part.trim().split('\n');
-                            let contentType = '';
-                            let encoding = '7bit';
-                            let charset = 'utf-8';
-                            let contentDisposition = '';
-                            let content = '';
-                            let inContent = false;
-                            let filename = '';
+                    content = content.trim();
+                    const isAttachment = contentDisposition.includes('attachment') ||
+                        contentType.match(/^(application|image|audio|video)\//i) ||
+                        (filename && !contentType.includes('text/'));
 
-                            for (let line of lines) {
-                                if (!inContent && line.match(/^Content-Type:/i)) {
-                                    contentType = line.replace(/^Content-Type:\s*/i, '').trim();
-                                    const charsetMatch = contentType.match(/charset=["']?([^"'\s;]+)["']?/i);
-                                    if (charsetMatch) {
-                                        charset = charsetMatch[1].toLowerCase();
-                                    }
-                                } else if (!inContent && line.match(/^Content-Transfer-Encoding:/i)) {
-                                    encoding = line.replace(/^Content-Transfer-Encoding:\s*/i, '').trim().toLowerCase();
-                                } else if (!inContent && line.match(/^Content-Disposition:/i)) {
-                                    contentDisposition = line.replace(/^Content-Disposition:\s*/i, '').trim().toLowerCase();
-                                    const filenameMatch = line.match(filenameRegex);
-                                    if (filenameMatch) {
-                                        filename = filenameMatch[1];
-                                    }
-                                } else if (!inContent && line.trim() === '') {
-                                    inContent = true;
-                                } else if (inContent) {
-                                    content += line + '\n';
-                                }
-                            }
+                    if (isAttachment && content && filename) {
+                        let decodedContent = content;
+                        let binaryContent;
 
-                            content = content.trim();
-                            const isAttachment = contentDisposition.includes('attachment') ||
-                                contentType.match(/^(application|image|audio|video)\//i) ||
-                                (filename && !contentType.includes('text/'));
-
-                            if (isAttachment && content && filename) {
-                                let decodedContent = content;
-                                let binaryContent;
-
-                                if (encoding === 'base64') {
-                                    decodedContent = decodeBase64(content);
-                                    if (decodedContent === '') {
-                                        console.warn(`Failed to decode attachment: ${filename}`);
-                                        return '';
-                                    }
-                                    binaryContent = new Uint8Array(decodedContent.split('').map(char => char.charCodeAt(0)));
-                                } else if (encoding === 'quoted-printable') {
-                                    decodedContent = decodeQuotedPrintable(content);
-                                    binaryContent = new Uint8Array(decodedContent.split('').map(char => char.charCodeAt(0)));
-                                } else {
-                                    binaryContent = new Uint8Array(content.split('').map(char => char.charCodeAt(0)));
-                                }
-
-                                try {
-                                    const blob = new Blob([binaryContent], { type: contentType.split(';')[0] });
-                                    const dataUrl = URL.createObjectURL(blob);
-
-                                    attachments.push({
-                                        name: filename,
-                                        type: contentType.split(';')[0] || 'application/octet-stream',
-                                        dataUrl: dataUrl
-                                    });
-                                } catch (e) {
-                                    console.warn(`Failed to create attachment for ${filename}:`, e);
-                                }
-
+                        if (encoding === 'base64') {
+                            decodedContent = decodeBase64(content);
+                            if (decodedContent === '') {
+                                console.warn(`Failed to decode attachment: ${filename}`);
                                 return '';
                             }
-
-                            if (encoding === 'base64') {
-                                content = decodeBase64(content);
-                                if (content === '') {
-                                    return `<p>Failed to decode base64 content for part ${index + 1}.</p>`;
-                                }
-                            } else if (encoding === 'quoted-printable') {
-                                content = decodeQuotedPrintable(content);
-                            }
-
-                            bodyParts.push({ content, encoding });
-
-                            if (contentType.includes('text/plain')) {
-                                return `<h4>Plain Text</h4><pre>${escapeHtml(content)}</pre>`;
-                            } else if (contentType.includes('text/html')) {
-                                return `<h4>HTML Content</h4><div class="html-content">${sanitizeHtml(content)}</div>`;
-                            }
-                            return '';
-                        }).filter(part => part).join('');
-
-                        if (!lastBodyContent) {
-                            lastBodyContent = '<p>No displayable body content provided.</p>';
+                            binaryContent = new Uint8Array(decodedContent.split('').map(char => char.charCodeAt(0)));
+                        } else if (encoding === 'quoted-printable') {
+                            decodedContent = decodeQuotedPrintable(content);
+                            binaryContent = new Uint8Array(decodedContent.split('').map(char => char.charCodeAt(0)));
+                        } else {
+                            binaryContent = new Uint8Array(content.split('').map(char => char.charCodeAt(0)));
                         }
-                    } else {
-                        lastBodyContent = `<h4>Plain Text</h4><pre>${escapeHtml(body)}</pre>`;
-                        bodyParts.push({ content: body, encoding: '7bit' });
+
+                        try {
+                            const blob = new Blob([binaryContent], { type: contentType.split(';')[0] });
+                            const dataUrl = URL.createObjectURL(blob);
+
+                            attachments.push({
+                                name: filename,
+                                type: contentType.split(';')[0] || 'application/octet-stream',
+                                dataUrl: dataUrl
+                            });
+                        } catch (e) {
+                            console.warn(`Failed to create attachment for ${filename}:`, e);
+                        }
+
+                        return '';
                     }
+
+                    if (encoding === 'base64') {
+                        content = decodeBase64(content);
+                        if (content === '') {
+                            return `<p>Failed to decode base64 content for part ${index + 1}.</p>`;
+                        }
+                    } else if (encoding === 'quoted-printable') {
+                        content = decodeQuotedPrintable(content);
+                    }
+
+                    bodyParts.push({ content, encoding });
+
+                    if (contentType.includes('text/plain')) {
+                        return `<h4>Plain Text</h4><pre>${escapeHtml(content)}</pre>`;
+                    } else if (contentType.includes('text/html')) {
+                        return `<h4>HTML Content</h4><div class="html-content">${sanitizeHtml(content)}</div>`;
+                    }
+                    return '';
+                }).filter(part => part).join('');
+
+                if (!lastBodyContent) {
+                    lastBodyContent = '<p>No displayable body content provided.</p>';
                 }
-
-                renderTable(lastSpfResult, lastBclResult, lastForefrontResult);
-                toggleBodyContent();
-                renderAttachments();
-
-                const iocs = processIOCs(headers, bodyParts);
-                renderIOCs(iocs);
-
-            } catch (e) {
-                console.error('Analysis failed:', e);
-                emailDetailsDiv.innerHTML = '<p>Error analysing email: ' + escapeHtml(e.message) + '</p>';
-                headerResultsDiv.innerHTML = '';
-                bodyResultsDiv.innerHTML = '<p>Error processing body content.</p>';
-                attachmentResultsDiv.innerHTML = '<p>No attachments found.</p>';
-                iocResultsDiv.innerHTML = '<p>No IOCs found.</p>';
+            } else {
+                lastBodyContent = `<h4>Plain Text</h4><pre>${escapeHtml(body)}</pre>`;
+                bodyParts.push({ content: body, encoding: '7bit' });
             }
         }
+
+        renderTable(lastSpfResult, lastDkimResult, lastDmarcResult, lastBclResult, lastForefrontResult);
+        toggleBodyContent();
+        renderAttachments();
+
+        const iocs = processIOCs(headers, bodyParts);
+        renderIOCs(iocs);
+
+    } catch (e) {
+        console.error('Analysis failed:', e);
+        emailDetailsDiv.innerHTML = '<p>Error analysing email: ' + escapeHtml(e.message) + '</p>';
+        headerResultsDiv.innerHTML = '';
+        bodyResultsDiv.innerHTML = '<p>Error processing body content.</p>';
+        attachmentResultsDiv.innerHTML = '<p>No attachments found.</p>';
+        iocResultsDiv.innerHTML = '<p>No IOCs found.</p>';
+    }
+}
+
+ 
     </script>
 </body>
 </html>
