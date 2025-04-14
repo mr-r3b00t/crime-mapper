@@ -403,17 +403,20 @@
         th:nth-child(3), td:nth-child(3) { /* Timestamp */
             width: 18%;
         }
-        th:nth-child(4), td:nth-child(4) { /* Server */
-            width: 18%;
+        th:nth-child(4), td:nth-child(4) { /* From Server */
+            width: 15%;
         }
-        th:nth-child(5), td:nth-child(5) { /* IP */
+        th:nth-child(5), td:nth-child(5) { /* By Server */
+            width: 15%;
+        }
+        th:nth-child(6), td:nth-child(6) { /* IP */
             width: 13%;
         }
-        th:nth-child(6), td:nth-child(6) { /* Email/Domain */
-            width: 18%;
+        th:nth-child(7), td:nth-child(7) { /* Email/Domain */
+            width: 13%;
         }
-        th:nth-child(7), td:nth-child(7) { /* Details */
-            width: 15%;
+        th:nth-child(8), td:nth-child(8) { /* Details */
+            width: 8%;
         }
 
         /* Adjust column widths for IOC, SPF, Forefront, and Attachments tables */
@@ -494,7 +497,7 @@
                     <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;">
                 </a>
                 <p>© Xservus Limited</p>
-                <p>Version 0.3</p>
+                <p>Version 0.2</p>
             </footer>
         </div>
         <div class="resize-handle"></div>
@@ -600,7 +603,6 @@
                         if (name.startsWith('on') || value.includes('javascript:') || value.includes('data:')) {
                             el.removeAttribute(attr.name);
                         }
-                        // Allow safe image URLs from trusted domains
                         if (['src'].includes(name) && value.match(/^(https?:\/\/)?[\w.-]*(mzstatic\.com|apple\.com)\//)) {
                             // Keep original src
                         } else if (['src', 'href'].includes(name) && (value.startsWith('http') || value.startsWith('//'))) {
@@ -1065,7 +1067,8 @@
                                 <th data-column="order" class="${sortState.column === 'order' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('order')">Order</th>
                                 <th data-column="action" class="${sortState.column === 'action' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('action')">Action</th>
                                 <th data-column="timestamp" class="${sortState.column === 'timestamp' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('timestamp')">Timestamp</th>
-                                <th data-column="server" class="${sortState.column === 'server' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('server')">Server</th>
+                                <th data-column="fromServer" class="${sortState.column === 'fromServer' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('fromServer')">From Server</th>
+                                <th data-column="byServer" class="${sortState.column === 'byServer' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('byServer')">By Server</th>
                                 <th data-column="ip" class="${sortState.column === 'ip' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('ip')">IP</th>
                                 <th data-column="emailOrDomain" class="${sortState.column === 'emailOrDomain' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('emailOrDomain')">Email/Domain</th>
                                 <th data-column="details" class="${sortState.column === 'details' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('details')">Details</th>
@@ -1081,7 +1084,8 @@
                         <td data-label="Order">${transaction.order || ''}</td>
                         <td data-label="Action">${escapeHtml(transaction.action)}</td>
                         <td data-label="Timestamp">${escapeHtml(transaction.timestamp || '')}</td>
-                        <td data-label="Server">${escapeHtml(transaction.server || '')}</td>
+                        <td data-label="From Server">${escapeHtml(transaction.fromServer || '')}</td>
+                        <td data-label="By Server">${escapeHtml(transaction.byServer || '')}</td>
                         <td data-label="IP">${escapeHtml(transaction.ip || '')}</td>
                         <td data-label="Email/Domain">${escapeHtml(transaction.emailOrDomain || '')}</td>
                         <td data-label="Details">${escapeHtml(transaction.details)}</td>
@@ -1505,11 +1509,10 @@
                             byServer = byServerMatch[1].trim();
                         }
 
-                        let fromIp = '';
-                        let byIp = '';
+                        let ip = '';
                         const ipMatch = rawValue.match(ipRegex);
                         if (ipMatch) {
-                            fromIp = validateIP(ipMatch[1] || ipMatch[2]);
+                            ip = validateIP(ipMatch[1] || ipMatch[2]);
                         }
 
                         let recipientEmail = '';
@@ -1520,26 +1523,15 @@
                             recipientEmail = globalRecipients[0] || '';
                         }
 
-                        if (fromServer) {
+                        if (fromServer || byServer) {
                             transactions.push({
                                 order: ++orderCounter,
-                                action: 'Send',
+                                action: 'Received',
                                 timestamp: date,
-                                server: fromServer,
-                                ip: fromIp,
-                                emailOrDomain: globalSender || fromServer,
-                                details: cleanedValue
-                            });
-                        }
-
-                        if (byServer) {
-                            transactions.push({
-                                order: ++orderCounter,
-                                action: 'Receive',
-                                timestamp: date,
-                                server: byServer,
-                                ip: fromIp,
-                                emailOrDomain: recipientEmail,
+                                fromServer: fromServer,
+                                byServer: byServer,
+                                ip: ip,
+                                emailOrDomain: recipientEmail || globalSender || fromServer || byServer,
                                 details: cleanedValue
                             });
                         }
@@ -1548,7 +1540,8 @@
                             order: ++orderCounter,
                             action: headerName,
                             timestamp: '',
-                            server: '',
+                            fromServer: '',
+                            byServer: '',
                             ip: '',
                             emailOrDomain: '',
                             details: headerValue
