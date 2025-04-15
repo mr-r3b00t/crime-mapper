@@ -528,6 +528,75 @@ tr:hover {
         min-width: 0;
     }
 }
+
+.auth-results-section {
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+}
+
+.auth-results-section h3 {
+    color: #333;
+    margin-bottom: 15px;
+}
+
+.auth-results-section table {
+    margin-bottom: 0;
+}
+
+.auth-results-status {
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+    color: white;
+    font-weight: bold;
+    text-align: center;
+    display: inline-block;
+    width: calc(100% - 30px);
+}
+
+.auth-results-pass {
+    background-color: #28a745;
+}
+
+.auth-results-fail {
+    background-color: #dc3545;
+}
+
+.auth-results-details-container {
+    display: none;
+    margin-top: 10px;
+}
+
+.auth-results-details-container.expanded {
+    display: block;
+}
+
+.toggle-auth-results-arrow {
+    cursor: pointer;
+    font-size: 14px;
+    margin-left: 10px;
+    vertical-align: middle;
+    color: #333;
+    transition: color 0.3s;
+}
+
+.toggle-auth-results-arrow:hover {
+    color: #007bff;
+}
+
+.auth-results-status-container {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.auth-results-details {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
         
     </style>
 </head>
@@ -629,6 +698,15 @@ tr:hover {
         },
         details: ''
     };
+
+    let lastAuthResults = {
+    status: 'N/A',
+    fields: {
+        SPFResult: '', DKIMResult: '', DMARCResult: '', Server: '', AuthDetails: ''
+    },
+    details: ''
+};
+
     let lastDmarcResult = {
         status: 'N/A',
         fields: {
@@ -1059,178 +1137,210 @@ tr:hover {
             });
         }
 
-        function renderHeaderFields(headerFields, spfResult, dkimResult, dmarcResult, bclResult, forefrontResult) {
-        let html = '<div class="header-fields" style="margin-bottom: 20px;">';
-        html += `
-            <div class="spf-section">
-                ${spfResult.status === 'N/A' ? 
-                    '<div class="spf-status-container"><div class="spf-status spf-fail">SPF: N/A</div></div><p>No SPF record found.</p>' : 
-                    `<div class="spf-status-container">
-                        <div class="spf-status ${spfResult.status === 'PASS' ? 'spf-pass' : 'spf-fail'}">
-                            SPF: ${escapeHtml(spfResult.fields.Result || 'N/A')}
-                        </div>
-                        <span class="toggle-spf-arrow" onclick="toggleSpfDetails()">▼</span>
+        function renderHeaderFields(headerFields, spfResult, dkimResult, dmarcResult, bclResult, forefrontResult, authResult) {
+    let html = '<div class="header-fields" style="margin-bottom: 20px;">';
+    html += `
+        <div class="spf-section">
+            ${spfResult.status === 'N/A' ? 
+                '<div class="spf-status-container"><div class="spf-status spf-fail">SPF: N/A</div></div><p>No SPF record found.</p>' : 
+                `<div class="spf-status-container">
+                    <div class="spf-status ${spfResult.status === 'PASS' ? 'spf-pass' : 'spf-fail'}">
+                        SPF: ${escapeHtml(spfResult.fields.Result || 'N/A')}
                     </div>
-                    <div class="spf-details-container" id="spf-details">
-                        <h3>SPF Analysis</h3>
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th data-label="Field">Field</th>
-                                    <th data-label="Value">Value</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr><td data-label="Result">Result</td><td data-label="Value">${escapeHtml(spfResult.fields.Result || 'N/A')}</td></tr>
-                                <tr><td data-label="Receiver">Receiver</td><td data-label="Value">${escapeHtml(spfResult.fields.Receiver || 'N/A')}</td></tr>
-                                <tr><td data-label="Client IP">Client IP</td><td data-label="Value">${escapeHtml(spfResult.fields.ClientIP || 'N/A')}</td></tr>
-                                <tr><td data-label="Envelope From">Envelope From</td><td data-label="Value">${escapeHtml(spfResult.fields.EnvelopeFrom || 'N/A')}</td></tr>
-                                <tr><td data-label="HELO">HELO</td><td data-label="Value">${escapeHtml(spfResult.fields.HELO || 'N/A')}</td></tr>
-                                <tr><td data-label="Mechanism">Mechanism</td><td data-label="Value">${escapeHtml(spfResult.fields.Mechanism || 'N/A')}</td></tr>
-                                <tr><td data-label="Priority/Protocol">Priority/Protocol</td><td data-label="Value">${escapeHtml(spfResult.fields.PriorityProtocol || 'N/A')}</td></tr>
-                            </tbody>
-                        </table>
-                        <p style="margin-top: 10px;" class="spf-details"><strong>Full Details:</strong> ${escapeHtml(spfResult.details)}</p>
-                    </div>`
-                }
-            </div>
-        `;
-        html += `
-            <div class="dkim-section">
-                ${dkimResult.status === 'N/A' ? 
-                    '<div class="dkim-status-container"><div class="dkim-status dkim-fail">DKIM: N/A</div></div><p>No DKIM record found.</p>' : 
-                    `<div class="dkim-status-container">
-                        <div class="dkim-status ${dkimResult.status === 'PASS' ? 'dkim-pass' : 'dkim-fail'}">
-                            DKIM: ${escapeHtml(dkimResult.fields.Result || 'N/A')}
-                        </div>
-                        <span class="toggle-dkim-arrow" onclick="toggleDkimDetails()">▼</span>
+                    <span class="toggle-spf-arrow" onclick="toggleSpfDetails()">▼</span>
+                </div>
+                <div class="spf-details-container" id="spf-details">
+                    <h3>SPF Analysis</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th data-label="Field">Field</th>
+                                <th data-label="Value">Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td data-label="Result">Result</td><td data-label="Value">${escapeHtml(spfResult.fields.Result || 'N/A')}</td></tr>
+                            <tr><td data-label="Receiver">Receiver</td><td data-label="Value">${escapeHtml(spfResult.fields.Receiver || 'N/A')}</td></tr>
+                            <tr><td data-label="Client IP">Client IP</td><td data-label="Value">${escapeHtml(spfResult.fields.ClientIP || 'N/A')}</td></tr>
+                            <tr><td data-label="Envelope From">Envelope From</td><td data-label="Value">${escapeHtml(spfResult.fields.EnvelopeFrom || 'N/A')}</td></tr>
+                            <tr><td data-label="HELO">HELO</td><td data-label="Value">${escapeHtml(spfResult.fields.HELO || 'N/A')}</td></tr>
+                            <tr><td data-label="Mechanism">Mechanism</td><td data-label="Value">${escapeHtml(spfResult.fields.Mechanism || 'N/A')}</td></tr>
+                            <tr><td data-label="Priority/Protocol">Priority/Protocol</td><td data-label="Value">${escapeHtml(spfResult.fields.PriorityProtocol || 'N/A')}</td></tr>
+                        </tbody>
+                    </table>
+                    <p style="margin-top: 10px;" class="spf-details"><strong>Full Details:</strong> ${escapeHtml(spfResult.details)}</p>
+                </div>`
+            }
+        </div>
+    `;
+    html += `
+        <div class="dkim-section">
+            ${dkimResult.status === 'N/A' ? 
+                '<div class="dkim-status-container"><div class="dkim-status dkim-fail">DKIM: N/A</div></div><p>No DKIM record found.</p>' : 
+                `<div class="dkim-status-container">
+                    <div class="dkim-status ${dkimResult.status === 'PASS' ? 'dkim-pass' : 'dkim-fail'}">
+                        DKIM: ${escapeHtml(dkimResult.fields.Result || 'N/A')}
                     </div>
-                    <div class="dkim-details-container" id="dkim-details">
-                        <h3>DKIM Analysis</h3>
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th data-label="Field">Field</th>
-                                    <th data-label="Value">Value</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr><td data-label="Result">Result</td><td data-label="Value">${escapeHtml(dkimResult.fields.Result || 'N/A')}</td></tr>
-                                <tr><td data-label="Selector">Selector</td><td data-label="Value">${escapeHtml(dkimResult.fields.Selector || 'N/A')}</td></tr>
-                                <tr><td data-label="Domain">Domain</td><td data-label="Value">${escapeHtml(dkimResult.fields.Domain || 'N/A')}</td></tr>
-                                <tr><td data-label="Signing Algorithm">Signing Algorithm</td><td data-label="Value">${escapeHtml(dkimResult.fields.SigningAlgorithm || 'N/A')}</td></tr>
-                                <tr><td data-label="Canonicalization">Canonicalization</td><td data-label="Value">${escapeHtml(dkimResult.fields.Canonicalization || 'N/A')}</td></tr>
-                                <tr><td data-label="Signature Value">Signature Value</td><td data-label="Value">${escapeHtml(dkimResult.fields.SignatureValue || 'N/A')}</td></tr>
-                            </tbody>
-                        </table>
-                        <p style="margin-top: 10px;" class="dkim-details"><strong>Full Details:</strong> ${escapeHtml(dkimResult.details)}</p>
-                    </div>`
-                }
-            </div>
-        `;
-        html += `
-            <div class="dmarc-section">
-                ${dmarcResult.status === 'N/A' ? 
-                    '<div class="dmarc-status-container"><div class="dmarc-status dmarc-fail">DMARC: N/A</div></div><p>No DMARC record found.</p>' : 
-                    `<div class="dmarc-status-container">
-                        <div class="dmarc-status ${dmarcResult.status === 'PASS' ? 'dmarc-pass' : 'dmarc-fail'}">
-                            DMARC: ${escapeHtml(dmarcResult.fields.Result || 'N/A')}
-                        </div>
-                        <span class="toggle-dmarc-arrow" onclick="toggleDmarcDetails()">▼</span>
+                    <span class="toggle-dkim-arrow" onclick="toggleDkimDetails()">▼</span>
+                </div>
+                <div class="dkim-details-container" id="dkim-details">
+                    <h3>DKIM Analysis</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th data-label="Field">Field</th>
+                                <th data-label="Value">Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td data-label="Result">Result</td><td data-label="Value">${escapeHtml(dkimResult.fields.Result || 'N/A')}</td></tr>
+                            <tr><td data-label="Selector">Selector</td><td data-label="Value">${escapeHtml(dkimResult.fields.Selector || 'N/A')}</td></tr>
+                            <tr><td data-label="Domain">Domain</td><td data-label="Value">${escapeHtml(dkimResult.fields.Domain || 'N/A')}</td></tr>
+                            <tr><td data-label="Signing Algorithm">Signing Algorithm</td><td data-label="Value">${escapeHtml(dkimResult.fields.SigningAlgorithm || 'N/A')}</td></tr>
+                            <tr><td data-label="Canonicalization">Canonicalization</td><td data-label="Value">${escapeHtml(dkimResult.fields.Canonicalization || 'N/A')}</td></tr>
+                            <tr><td data-label="Signature Value">Signature Value</td><td data-label="Value">${escapeHtml(dkimResult.fields.SignatureValue || 'N/A')}</td></tr>
+                        </tbody>
+                    </table>
+                    <p style="margin-top: 10px;" class="dkim-details"><strong>Full Details:</strong> ${escapeHtml(dkimResult.details)}</p>
+                </div>`
+            }
+        </div>
+    `;
+    html += `
+        <div class="dmarc-section">
+            ${dmarcResult.status === 'N/A' ? 
+                '<div class="dmarc-status-container"><div class="dmarc-status dmarc-fail">DMARC: N/A</div></div><p>No DMARC record found.</p>' : 
+                `<div class="dmarc-status-container">
+                    <div class="dmarc-status ${dmarcResult.status === 'PASS' ? 'dmarc-pass' : 'dmarc-fail'}">
+                        DMARC: ${escapeHtml(dmarcResult.fields.Result || 'N/A')}
                     </div>
-                    <div class="dmarc-details-container" id="dmarc-details">
-                        <h3>DMARC Analysis</h3>
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th data-label="Field">Field</th>
-                                    <th data-label="Value">Value</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr><td data-label="Result">Result</td><td data-label="Value">${escapeHtml(dmarcResult.fields.Result || 'N/A')}</td></tr>
-                                <tr><td data-label="From Domain">From Domain</td><td data-label="Value">${escapeHtml(dmarcResult.fields.FromDomain || 'N/A')}</td></tr>
-                                <tr><td data-label="Policy">Policy</td><td data-label="Value">${escapeHtml(dmarcResult.fields.Policy || 'N/A')}</td></tr>
-                                <tr><td data-label="Subdomain Policy">Subdomain Policy</td><td data-label="Value">${escapeHtml(dmarcResult.fields.SubdomainPolicy || 'N/A')}</td></tr>
-                                <tr><td data-label="DKIM Alignment">DKIM Alignment</td><td data-label="Value">${escapeHtml(dmarcResult.fields.AlignmentDKIM || 'N/A')}</td></tr>
-                                <tr><td data-label="SPF Alignment">SPF Alignment</td><td data-label="Value">${escapeHtml(dmarcResult.fields.AlignmentSPF || 'N/A')}</td></tr>
-                            </tbody>
-                        </table>
-                        <p style="margin-top: 10px;" class="dmarc-details"><strong>Full Details:</strong> ${escapeHtml(dmarcResult.details)}</p>
-                    </div>`
-                }
-            </div>
-        `;
-        html += `
-            <div class="bcl-section">
-                ${bclResult.status === 'N/A' ? 
-                    '<div class="bcl-status-container"><div class="bcl-status bcl-na">X-Microsoft-Antispam: N/A</div></div><p>No X-Microsoft-Antispam header found.</p>' : 
-                    `<div class="bcl-status-container">
-                        <div class="bcl-status ${bclResult.status === 'LOW' ? 'bcl-low' : bclResult.status === 'MEDIUM' ? 'bcl-medium' : 'bcl-high'}">
-                            X-Microsoft-Antispam: ${escapeHtml(bclResult.status)}
-                        </div>
-                        <span class="toggle-bcl-arrow" onclick="toggleBclDetails()">▼</span>
+                    <span class="toggle-dmarc-arrow" onclick="toggleDmarcDetails()">▼</span>
+                </div>
+                <div class="dmarc-details-container" id="dmarc-details">
+                    <h3>DMARC Analysis</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th data-label="Field">Field</th>
+                                <th data-label="Value">Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td data-label="Result">Result</td><td data-label="Value">${escapeHtml(dmarcResult.fields.Result || 'N/A')}</td></tr>
+                            <tr><td data-label="From Domain">From Domain</td><td data-label="Value">${escapeHtml(dmarcResult.fields.FromDomain || 'N/A')}</td></tr>
+                            <tr><td data-label="Policy">Policy</td><td data-label="Value">${escapeHtml(dmarcResult.fields.Policy || 'N/A')}</td></tr>
+                            <tr><td data-label="Subdomain Policy">Subdomain Policy</td><td data-label="Value">${escapeHtml(dmarcResult.fields.SubdomainPolicy || 'N/A')}</td></tr>
+                            <tr><td data-label="DKIM Alignment">DKIM Alignment</td><td data-label="Value">${escapeHtml(dmarcResult.fields.AlignmentDKIM || 'N/A')}</td></tr>
+                            <tr><td data-label="SPF Alignment">SPF Alignment</td><td data-label="Value">${escapeHtml(dmarcResult.fields.AlignmentSPF || 'N/A')}</td></tr>
+                        </tbody>
+                    </table>
+                    <p style="margin-top: 10px;" class="dmarc-details"><strong>Full Details:</strong> ${escapeHtml(dmarcResult.details)}</p>
+                </div>`
+            }
+        </div>
+    `;
+    html += `
+        <div class="auth-results-section">
+            ${authResult.status === 'N/A' ? 
+                '<div class="auth-results-status-container"><div class="auth-results-status auth-results-fail">Authentication-Results: N/A</div></div><p>No Authentication-Results header found.</p>' : 
+                `<div class="auth-results-status-container">
+                    <div class="auth-results-status ${authResult.status === 'PASS' ? 'auth-results-pass' : 'auth-results-fail'}">
+                        Authentication-Results: ${escapeHtml(authResult.status)}
                     </div>
-                    <div class="bcl-details-container" id="bcl-details">
-                        <h3>BCL Analysis</h3>
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th data-label="Field">Field</th>
-                                    <th data-label="Value">Value</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr><td data-label="Status">Status</td><td data-label="Value">${escapeHtml(bclResult.status)}</td></tr>
-                                <tr><td data-label="BCL Value">BCL Value</td><td data-label="Value">${escapeHtml(bclResult.value || 'N/A')}</td></tr>
-                                <tr><td data-label="Message">Message</td><td data-label="Value">${escapeHtml(bclResult.message)}</td></tr>
-                            </tbody>
-                        </table>
-                        <p style="margin-top: 10px;" class="bcl-details"><strong>Full Details:</strong> ${escapeHtml(bclResult.details)}</p>
-                    </div>`
-                }
-            </div>
-        `;
-        html += `
-            <div class="forefront-section">
-                ${forefrontResult.status === 'N/A' ? 
-                    '<div class="forefront-status-container"><div class="forefront-status na">X-Forefront-Antispam-Report: N/A</div></div><p>No X-Forefront-Antispam-Report header found.</p>' : 
-                    `<div class="forefront-status-container">
-                        <div class="forefront-status">
-                            X-Forefront-Antispam-Report: ${escapeHtml(forefrontResult.status)}
-                        </div>
-                        <span class="toggle-forefront-arrow" onclick="toggleForefrontDetails()">▼</span>
+                    <span class="toggle-auth-results-arrow" onclick="toggleAuthResultsDetails()">▼</span>
+                </div>
+                <div class="auth-results-details-container" id="auth-results-details">
+                    <h3>Authentication-Results Analysis</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th data-label="Field">Field</th>
+                                <th data-label="Value">Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td data-label="SPF Result">SPF Result</td><td data-label="Value">${escapeHtml(authResult.fields.SPFResult || 'N/A')}</td></tr>
+                            <tr><td data-label="DKIM Result">DKIM Result</td><td data-label="Value">${escapeHtml(authResult.fields.DKIMResult || 'N/A')}</td></tr>
+                            <tr><td data-label="DMARC Result">DMARC Result</td><td data-label="Value">${escapeHtml(authResult.fields.DMARCResult || 'N/A')}</td></tr>
+                            <tr><td data-label="Server">Server</td><td data-label="Value">${escapeHtml(authResult.fields.Server || 'N/A')}</td></tr>
+                            <tr><td data-label="Auth Details">Auth Details</td><td data-label="Value">${escapeHtml(authResult.fields.AuthDetails || 'N/A')}</td></tr>
+                        </tbody>
+                    </table>
+                    <p style="margin-top: 10px;" class="auth-results-details"><strong>Full Details:</strong> ${escapeHtml(authResult.details)}</p>
+                </div>`
+            }
+        </div>
+    `;
+    html += `
+        <div class="bcl-section">
+            ${bclResult.status === 'N/A' ? 
+                '<div class="bcl-status-container"><div class="bcl-status bcl-na">X-Microsoft-Antispam: N/A</div></div><p>No X-Microsoft-Antispam header found.</p>' : 
+                `<div class="bcl-status-container">
+                    <div class="bcl-status ${bclResult.status === 'LOW' ? 'bcl-low' : bclResult.status === 'MEDIUM' ? 'bcl-medium' : 'bcl-high'}">
+                        X-Microsoft-Antispam: ${escapeHtml(bclResult.status)}
                     </div>
-                    <div class="forefront-details-container" id="forefront-details">
-                        <h3>X-Forefront-Antispam-Report Analysis</h3>
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th data-label="Field">Field</th>
-                                    <th data-label="Value">Value</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr><td data-label="Language">Language</td><td data-label="Value">${escapeHtml(forefrontResult.fields.LANG || 'N/A')}</td></tr>
-                                <tr><td data-label="Spam Confidence Level">Spam Confidence Level</td><td data-label="Value">${escapeHtml(forefrontResult.fields.SCL || 'N/A')}</td></tr>
-                                <tr><td data-label="Spam Filtering Verdict">Spam Filtering Verdict</td><td data-label="Value">${escapeHtml(forefrontResult.fields.SFV || 'N/A')}</td></tr>
-                                <tr><td data-label="IP Filter Verdict">IP Filter Verdict</td><td data-label="Value">${escapeHtml(forefrontResult.fields.IPV || 'N/A')}</td></tr>
-                                <tr><td data-label="HELO/EHLO">HELO/EHLO</td><td data-label="Value">${escapeHtml(forefrontResult.fields.H || 'N/A')}</td></tr>
-                                <tr><td data-label="PTR Record">PTR Record</td><td data-label="Value">${escapeHtml(forefrontResult.fields.PTR || 'N/A')}</td></tr>
-                                <tr><td data-label="Connecting IP Address">Connecting IP Address</td><td data-label="Value">${escapeHtml(forefrontResult.fields.CIP || 'N/A')}</td></tr>
-                                <tr><td data-label="Protection Policy Category">Protection Policy Category</td><td data-label="Value">${escapeHtml(forefrontResult.fields.CAT || 'N/A')}</td></tr>
-                                <tr><td data-label="Spam Rules">Spam Rules</td><td data-label="Value">${escapeHtml(forefrontResult.fields.SFS || 'N/A')}</td></tr>
-                                <tr><td data-label="Source Header">Source Header</td><td data-label="Value">${escapeHtml(forefrontResult.fields.SRV || 'N/A')}</td></tr>
-                                <tr><td data-label="Direction">Direction</td><td data-label="Value">${escapeHtml(forefrontResult.fields.DIR || 'N/A')}</td></tr>
-                            </tbody>
-                        </table>
-                        <p style="margin-top: 10px;" class="forefront-details"><strong>Full Details:</strong> ${escapeHtml(forefrontResult.details)}</p>
-                    </div>`
-                }
-            </div>
-        `;
-        return html;
-    }
+                    <span class="toggle-bcl-arrow" onclick="toggleBclDetails()">▼</span>
+                </div>
+                <div class="bcl-details-container" id="bcl-details">
+                    <h3>BCL Analysis</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th data-label="Field">Field</th>
+                                <th data-label="Value">Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td data-label="Status">Status</td><td data-label="Value">${escapeHtml(bclResult.status)}</td></tr>
+                            <tr><td data-label="BCL Value">BCL Value</td><td data-label="Value">${escapeHtml(bclResult.value || 'N/A')}</td></tr>
+                            <tr><td data-label="Message">Message</td><td data-label="Value">${escapeHtml(bclResult.message)}</td></tr>
+                        </tbody>
+                    </table>
+                    <p style="margin-top: 10px;" class="bcl-details"><strong>Full Details:</strong> ${escapeHtml(bclResult.details)}</p>
+                </div>`
+            }
+        </div>
+    `;
+    html += `
+        <div class="forefront-section">
+            ${forefrontResult.status === 'N/A' ? 
+                '<div class="forefront-status-container"><div class="forefront-status na">X-Forefront-Antispam-Report: N/A</div></div><p>No X-Forefront-Antispam-Report header found.</p>' : 
+                `<div class="forefront-status-container">
+                    <div class="forefront-status">
+                        X-Forefront-Antispam-Report: ${escapeHtml(forefrontResult.status)}
+                    </div>
+                    <span class="toggle-forefront-arrow" onclick="toggleForefrontDetails()">▼</span>
+                </div>
+                <div class="forefront-details-container" id="forefront-details">
+                    <h3>X-Forefront-Antispam-Report Analysis</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th data-label="Field">Field</th>
+                                <th data-label="Value">Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td data-label="Language">Language</td><td data-label="Value">${escapeHtml(forefrontResult.fields.LANG || 'N/A')}</td></tr>
+                            <tr><td data-label="Spam Confidence Level">Spam Confidence Level</td><td data-label="Value">${escapeHtml(forefrontResult.fields.SCL || 'N/A')}</td></tr>
+                            <tr><td data-label="Spam Filtering Verdict">Spam Filtering Verdict</td><td data-label="Value">${escapeHtml(forefrontResult.fields.SFV || 'N/A')}</td></tr>
+                            <tr><td data-label="IP Filter Verdict">IP Filter Verdict</td><td data-label="Value">${escapeHtml(forefrontResult.fields.IPV || 'N/A')}</td></tr>
+                            <tr><td data-label="HELO/EHLO">HELO/EHLO</td><td data-label="Value">${escapeHtml(forefrontResult.fields.H || 'N/A')}</td></tr>
+                            <tr><td data-label="PTR Record">PTR Record</td><td data-label="Value">${escapeHtml(forefrontResult.fields.PTR || 'N/A')}</td></tr>
+                            <tr><td data-label="Connecting IP Address">Connecting IP Address</td><td data-label="Value">${escapeHtml(forefrontResult.fields.CIP || 'N/A')}</td></tr>
+                            <tr><td data-label="Protection Policy Category">Protection Policy Category</td><td data-label="Value">${escapeHtml(forefrontResult.fields.CAT || 'N/A')}</td></tr>
+                            <tr><td data-label="Spam Rules">Spam Rules</td><td data-label="Value">${escapeHtml(forefrontResult.fields.SFS || 'N/A')}</td></tr>
+                            <tr><td data-label="Source Header">Source Header</td><td data-label="Value">${escapeHtml(forefrontResult.fields.SRV || 'N/A')}</td></tr>
+                            <tr><td data-label="Direction">Direction</td><td data-label="Value">${escapeHtml(forefrontResult.fields.DIR || 'N/A')}</td></tr>
+                        </tbody>
+                    </table>
+                    <p style="margin-top: 10px;" class="forefront-details"><strong>Full Details:</strong> ${escapeHtml(forefrontResult.details)}</p>
+                </div>`
+            }
+        </div>
+    `;
+    return html;
+}
 
         function toggleSpfDetails() {
             const spfDetails = document.getElementById('spf-details');
@@ -1296,77 +1406,77 @@ tr:hover {
         }
 
 
-           // Update renderTable function signature
-    function renderTable(spfResult, bclResult, forefrontResult) {
-        renderTable(spfResult, lastDkimResult, lastDmarcResult, bclResult, forefrontResult);
-    }
-
     // New renderTable function
-    function renderTable(spfResult, dkimResult, dmarcResult, bclResult, forefrontResult) {
+    function renderTable(spfResult, dkimResult, dmarcResult, bclResult, forefrontResult, authResult) {
         const headerResultsDiv = document.getElementById('headerResults');
-        const emailDetailsDiv = document.getElementById('emailDetails');
-        if (!headerResultsDiv || !emailDetailsDiv) {
-            console.error('Header results or email details div not found');
-            return;
-        }
-
-        emailDetailsDiv.innerHTML = renderEmailDetails(headerFields);
-
-        let tableHtml = renderHeaderFields(headerFields, spfResult, dkimResult, dmarcResult, bclResult, forefrontResult);
-        if (transactions.length === 0) {
-            tableHtml += '<p>No headers found.</p>';
-            headerResultsDiv.innerHTML = tableHtml;
-            return;
-        }
-
-        tableHtml += `
-            <div class="header-section">
-                <table>
-                    <thead>
-                        <tr>
-                            <th data-column="order" class="${sortState.column === 'order' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('order')">Order</th>
-                            <th data-column="action" class="${sortState.column === 'action' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('action')">Action</th>
-                            <th data-column="timestamp" class="${sortState.column === 'timestamp' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('timestamp')">Timestamp</th>
-                            <th data-column="fromServer" class="${sortState.column === 'fromServer' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('fromServer')">From Server</th>
-                            <th data-column="byServer" class="${sortState.column === 'byServer' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('byServer')">By Server</th>
-                            <th data-column="ip" class="${sortState.column === 'ip' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('ip')">IP</th>
-                            <th data-column="emailOrDomain" class="${sortState.column === 'emailOrDomain' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('emailOrDomain')">Email/Domain</th>
-                            <th data-column="details" class="${sortState.column === 'details' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('details')">Details</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-        `;
-
-        const displayTransactions = isHeaderTableExpanded ? transactions : transactions.slice(0, 5);
-        displayTransactions.forEach(transaction => {
-            tableHtml += `
-                <tr>
-                    <td data-label="Order">${transaction.order || ''}</td>
-                    <td data-label="Action">${escapeHtml(transaction.action)}</td>
-                    <td data-label="Timestamp">${escapeHtml(transaction.timestamp || '')}</td>
-                    <td data-label="From Server">${escapeHtml(transaction.fromServer || '')}</td>
-                    <td data-label="By Server">${escapeHtml(transaction.byServer || '')}</td>
-                    <td data-label="IP">${escapeHtml(transaction.ip || '')}</td>
-                    <td data-label="Email/Domain">${escapeHtml(transaction.emailOrDomain || '')}</td>
-                    <td data-label="Details">${escapeHtml(transaction.details)}</td>
-                </tr>
-            `;
-        });
-
-        tableHtml += '</tbody></table>';
-
-        if (transactions.length > 5) {
-            tableHtml += `
-                <div class="header-table-toggle">
-                    <span class="toggle-header-arrow" onclick="toggleHeaderTable()">${isHeaderTableExpanded ? '▲' : '▼'}</span>
-                </div>
-            `;
-        }
-
-        tableHtml += '</div>';
-
-        headerResultsDiv.innerHTML = tableHtml;
+if (headerResultsDiv) {
+    headerResultsDiv.innerHTML = '';
+} else {
+    console.error('Header results div not found');
+}
+    const emailDetailsDiv = document.getElementById('emailDetails');
+    if (!headerResultsDiv || !emailDetailsDiv) {
+        console.error('Header results or email details div not found');
+        return;
     }
+
+    emailDetailsDiv.innerHTML = renderEmailDetails(headerFields);
+
+    let tableHtml = renderHeaderFields(headerFields, spfResult, dkimResult, dmarcResult, bclResult, forefrontResult, authResult);
+    if (transactions.length === 0) {
+        tableHtml += '<p>No headers found.</p>';
+        headerResultsDiv.innerHTML = tableHtml;
+        return;
+    }
+
+    tableHtml += `
+        <div class="header-section">
+            <table>
+                <thead>
+                    <tr>
+                        <th data-column="order" class="${sortState.column === 'order' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('order')">Order</th>
+                        <th data-column="action" class="${sortState.column === 'action' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('action')">Action</th>
+                        <th data-column="timestamp" class="${sortState.column === 'timestamp' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('timestamp')">Timestamp</th>
+                        <th data-column="fromServer" class="${sortState.column === 'fromServer' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('fromServer')">From Server</th>
+                        <th data-column="byServer" class="${sortState.column === 'byServer' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('byServer')">By Server</th>
+                        <th data-column="ip" class="${sortState.column === 'ip' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('ip')">IP</th>
+                        <th data-column="emailOrDomain" class="${sortState.column === 'emailOrDomain' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('emailOrDomain')">Email/Domain</th>
+                        <th data-column="details" class="${sortState.column === 'details' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('details')">Details</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    const displayTransactions = isHeaderTableExpanded ? transactions : transactions.slice(0, 5);
+    displayTransactions.forEach(transaction => {
+        tableHtml += `
+            <tr>
+                <td data-label="Order">${transaction.order || ''}</td>
+                <td data-label="Action">${escapeHtml(transaction.action)}</td>
+                <td data-label="Timestamp">${escapeHtml(transaction.timestamp || '')}</td>
+                <td data-label="From Server">${escapeHtml(transaction.fromServer || '')}</td>
+                <td data-label="By Server">${escapeHtml(transaction.byServer || '')}</td>
+                <td data-label="IP">${escapeHtml(transaction.ip || '')}</td>
+                <td data-label="Email/Domain">${escapeHtml(transaction.emailOrDomain || '')}</td>
+                <td data-label="Details">${escapeHtml(transaction.details)}</td>
+            </tr>
+        `;
+    });
+
+    tableHtml += '</tbody></table>';
+
+    if (transactions.length > 5) {
+        tableHtml += `
+            <div class="header-table-toggle">
+                <span class="toggle-header-arrow" onclick="toggleHeaderTable()">${isHeaderTableExpanded ? '▲' : '▼'}</span>
+            </div>
+        `;
+    }
+
+    tableHtml += '</div>';
+
+    headerResultsDiv.innerHTML = tableHtml;
+}
 
 
         function renderAttachments() {
@@ -1408,16 +1518,16 @@ tr:hover {
         }
 
        // Update sortColumn function
-    function sortColumn(column) {
-        if (sortState.column === column) {
-            sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
-        } else {
-            sortState.column = column;
-            sortState.direction = 'asc';
-        }
-        sortTransactions(sortState.column, sortState.direction);
-        renderTable(lastSpfResult, lastDkimResult, lastDmarcResult, lastBclResult, lastForefrontResult);
+       function sortColumn(column) {
+    if (sortState.column === column) {
+        sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortState.column = column;
+        sortState.direction = 'asc';
     }
+    sortTransactions(sortState.column, sortState.direction);
+    renderTable(lastSpfResult, lastDkimResult, lastDmarcResult, lastBclResult, lastForefrontResult, lastAuthResults);
+}
 
         function processIOCs(text, bodyParts) {
             if (typeof text !== 'string' || !Array.isArray(bodyParts)) return [];
@@ -1632,6 +1742,13 @@ tr:hover {
             },
             details: ''
         };
+        lastAuthResults = {
+    status: 'N/A',
+    fields: {
+        SPFResult: '', DKIMResult: '', DMARCResult: '', Server: '', AuthDetails: ''
+    },
+    details: ''
+};
     }
 
 
@@ -1831,6 +1948,9 @@ tr:hover {
             }
         });
 
+        // Process Authentiction headers
+        lastAuthResults = analyseAuthResults(headers);
+
         // Default sort
         sortState = { column: 'order', direction: 'asc' };
         sortTransactions(sortState.column, sortState.direction);
@@ -1952,7 +2072,7 @@ tr:hover {
             }
         }
 
-        renderTable(lastSpfResult, lastDkimResult, lastDmarcResult, lastBclResult, lastForefrontResult);
+        renderTable(lastSpfResult, lastDkimResult, lastDmarcResult, lastBclResult, lastForefrontResult, lastAuthResults);
         toggleBodyContent();
         renderAttachments();
 
@@ -1969,6 +2089,56 @@ tr:hover {
     }
 }
 
+function analyseAuthResults(headers) {
+    if (typeof headers !== 'string') {
+        return {
+            status: 'N/A',
+            fields: {
+                SPFResult: '', DKIMResult: '', DMARCResult: '', Server: '', AuthDetails: ''
+            },
+            details: 'Headers must be a string'
+        };
+    }
+    const authRegex = /^Authentication-Results:.*?(?=\n[A-Z-]|$)/gim;
+    const authMatches = headers.match(authRegex) || [];
+    if (authMatches.length === 0) {
+        return {
+            status: 'N/A',
+            fields: {
+                SPFResult: '', DKIMResult: '', DMARCResult: '', Server: '', AuthDetails: ''
+            },
+            details: 'Authentication-Results header is missing'
+        };
+    }
+
+    const authHeader = authMatches[0].trim();
+    const fields = {
+        SPFResult: (authHeader.match(/spf=(\w+)/i) || [])[1] || '',
+        DKIMResult: (authHeader.match(/dkim=(\w+)/i) || [])[1] || '',
+        DMARCResult: (authHeader.match(/dmarc=(\w+)/i) || [])[1] || '',
+        Server: (authHeader.match(/^Authentication-Results:\s*([^;]+)/i) || [])[1] || '',
+        AuthDetails: (authHeader.match(/auth=([^;]+)/i) || [])[1] || ''
+    };
+
+    const overallStatus = fields.SPFResult.toLowerCase() === 'pass' && 
+                         fields.DKIMResult.toLowerCase() === 'pass' && 
+                         fields.DMARCResult.toLowerCase() === 'pass' ? 'PASS' : 'FAIL';
+
+    return {
+        status: overallStatus,
+        fields,
+        details: authHeader
+    };
+}
+
+function toggleAuthResultsDetails() {
+    const authDetails = document.getElementById('auth-results-details');
+    const toggleArrow = document.querySelector('.toggle-auth-results-arrow');
+    if (authDetails && toggleArrow) {
+        authDetails.classList.toggle('expanded');
+        toggleArrow.textContent = authDetails.classList.contains('expanded') ? '▲' : '▼';
+    }
+}
  
     </script>
 </body>
