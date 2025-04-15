@@ -1,9 +1,3 @@
-<script type="text/javascript">
-    var gk_fileData = {};
-    function loadFileData(filename) {
-      return gk_fileData[filename] || "";
-    }
-    </script><!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -631,6 +625,11 @@ tr:hover {
     </div>
 
     <script>
+
+    var gk_fileData = {};
+    function loadFileData(filename) {
+      return gk_fileData[filename] || "";
+    }
         // Sidebar resizing logic
         const sidebar = document.querySelector('.sidebar');
         const resizeHandle = document.querySelector('.resize-handle');
@@ -724,80 +723,44 @@ tr:hover {
             status: 'N/A',
             fields: {
                 Result: '', Selector: '', Domain: '', SigningAlgorithm: '',
-                Canonicalization: '', SignatureValue: ''
+                Canonicalization: ''
             },
             details: 'Headers must be a string'
         };
     }
 
-    // Initialize default result
     let result = {
         status: 'N/A',
         fields: {
             Result: '', Selector: '', Domain: '', SigningAlgorithm: '',
-            Canonicalization: '', SignatureValue: ''
+            Canonicalization: ''
         },
         details: ''
     };
 
-    // Try parsing Authentication-Results header first
-    const authResultsRegex = /^Authentication-Results:.*?(?=\n[A-Z-]|$)/gim;
-    const authResultsMatches = headers.match(authResultsRegex) || [];
-    if (authResultsMatches.length > 0) {
-        const authHeader = authResultsMatches[0].trim();
+    // Extract Authentication-Results header
+    const authResultsRegex = /(?:^|\n)Authentication-Results:[^\n]*(?:\n\s+[^\n]*)*?(?=\n[^ \t\n]|\n*$)/gi;
+    const authHeaderMatch = headers.match(authResultsRegex);
+
+    if (authHeaderMatch) {
+        const authHeader = authHeaderMatch[authHeaderMatch.length - 1].replace(/^Authentication-Results:\s*/, '').trim();
         result.details = authHeader;
 
-        // Extract DKIM fields
-        result.fields.Selector = (authHeader.match(/s=([^;]+)/i) || [])[1] || '';
-        result.fields.Domain = (authHeader.match(/d=([^;]+)/i) || [])[1] || '';
-        result.fields.SigningAlgorithm = (authHeader.match(/a=([^;]+)/i) || [])[1] || '';
-        result.fields.Canonicalization = (authHeader.match(/c=([^;]+)/i) || [])[1] || '';
-        result.fields.SignatureValue = (authHeader.match(/b=([^;]+)/i) || [])[1] || '';
+        // Extract explicit DKIM result
+        const dkimResultMatch = authHeader.match(/dkim=([\w\s]+?)(?=\s|;|$)/i);
+        result.fields.Result = dkimResultMatch ? dkimResultMatch[1].trim().toLowerCase() : '';
+        result.status = result.fields.Result === 'pass' ? 'PASS' : 
+                        (result.fields.Result === 'fail' ? 'FAIL' : 
+                        (result.fields.Result ? 'UNKNOWN' : 'N/A'));
 
-        // Try to get explicit dkim result
-        const dkimResultMatch = authHeader.match(/dkim=(\w+)/i);
-        result.fields.Result = dkimResultMatch ? dkimResultMatch[1] : '';
-
-        // If no explicit dkim result, infer based on presence of fields
-        if (!result.fields.Result && (result.fields.Selector || result.fields.Domain || result.fields.SigningAlgorithm)) {
-            result.fields.Result = 'unknown';
-            result.status = 'UNKNOWN'; // Custom status for partial data
-        } else if (result.fields.Result) {
-            result.status = result.fields.Result.toLowerCase() === 'pass' ? 'PASS' : 'FAIL';
-        }
-    }
-
-    // If no valid DKIM data from Authentication-Results, try DKIM-Signature
-    if (!result.fields.Result && !result.fields.Selector && !result.fields.Domain) {
-        const dkimRegex = /^DKIM-Signature:.*?(?=\n[A-Z-]|$)/gim;
-        const dkimMatches = headers.match(dkimRegex) || [];
-        if (dkimMatches.length === 0) {
-            return {
-                status: 'N/A',
-                fields: {
-                    Result: '', Selector: '', Domain: '', SigningAlgorithm: '',
-                    Canonicalization: '', SignatureValue: ''
-                },
-                details: 'No DKIM record found'
-            };
-        }
-
-        const dkimHeader = dkimMatches[0].trim();
-        result.fields.Selector = (dkimHeader.match(/s=([^;]+)/i) || [])[1] || '';
-        result.fields.Domain = (dkimHeader.match(/d=([^;]+)/i) || [])[1] || '';
-        result.fields.SigningAlgorithm = (dkimHeader.match(/a=([^;]+)/i) || [])[1] || '';
-        result.fields.Canonicalization = (dkimHeader.match(/c=([^;]+)/i) || [])[1] || '';
-        result.fields.SignatureValue = (dkimHeader.match(/b=([^;]+)/i) || [])[1] || '';
-        result.details = dkimHeader;
-
-        // Try to get dkim result from Authentication-Results
-        result.fields.Result = authResultsMatches.length > 0 ? (authResultsMatches[0].match(/dkim=(\w+)/i)?.[1] || '') : '';
-        if (result.fields.Result) {
-            result.status = result.fields.Result.toLowerCase() === 'pass' ? 'PASS' : 'FAIL';
-        } else if (result.fields.Selector || result.fields.Domain || result.fields.SigningAlgorithm) {
-            result.fields.Result = 'unknown';
-            result.status = 'UNKNOWN';
-        }
+        // Extract additional DKIM fields (optional, informational)
+        result.fields.Domain = (authHeader.match(/header\.d=([\w\s.-]+?)(?=\s|;|$)/i) || [])[1]?.trim() || '';
+        result.fields.Selector = (authHeader.match(/header\.s=([\w\s.-]+?)(?=\s|;|$)/i) || [])[1]?.trim() || '';
+        result.fields.SigningAlgorithm = (authHeader.match(/header\.a=([\w\s-]+?)(?=\s|;|$)/i) || [])[1]?.trim() || '';
+        result.fields.Canonicalization = (authHeader.match(/header\.c=([\w\s\/]+?)(?=\s|;|$)/i) || [])[1]?.trim() || '';
+    } else {
+        result.details = 'No Authentication-Results header found.';
+        result.status = 'N/A';
     }
 
     return result;
@@ -1263,37 +1226,36 @@ function renderHeaderFields(headerFields, spfResult, dkimResult, dmarcResult, bc
     
     // DKIM Section
     html += `
-        <div class="dkim-section">
-            ${dkimResult.status === 'N/A' ? 
-                '<div class="dkim-status-container"><div class="dkim-status dkim-fail">DKIM: N/A</div></div><p>No DKIM record found.</p>' : 
-                `<div class="dkim-status-container">
-                    <div class="dkim-status ${dkimResult.status === 'PASS' ? 'dkim-pass' : dkimResult.status === 'UNKNOWN' ? 'dkim-fail' : 'dkim-fail'}">
-                        DKIM: ${escapeHtml(dkimResult.fields.Result || 'N/A')}
-                    </div>
-                    <span class="toggle-dkim-arrow" onclick="toggleDkimDetails()">▼</span>
-                </div>
-                <div class="dkim-details-container" id="dkim-details">
-                    <h3>DKIM Analysis</h3>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th data-label="Field">Field</th>
-                                <th data-label="Value">Value</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr><td data-label="Result">Result</td><td data-label="Value">${escapeHtml(dkimResult.fields.Result || 'N/A')}</td></tr>
-                            <tr><td data-label="Selector">Selector</td><td data-label="Value">${escapeHtml(dkimResult.fields.Selector || 'N/A')}</td></tr>
-                            <tr><td data-label="Domain">Domain</td><td data-label="Value">${escapeHtml(dkimResult.fields.Domain || 'N/A')}</td></tr>
-                            <tr><td data-label="Signing Algorithm">Signing Algorithm</td><td data-label="Value">${escapeHtml(dkimResult.fields.SigningAlgorithm || 'N/A')}</td></tr>
-                            <tr><td data-label="Canonicalization">Canonicalization</td><td data-label="Value">${escapeHtml(dkimResult.fields.Canonicalization || 'N/A')}</td></tr>
-                            <tr><td data-label="Signature Value">Signature Value</td><td data-label="Value">${escapeHtml(dkimResult.fields.SignatureValue || 'N/A')}</td></tr>
-                        </tbody>
-                    </table>
-                    <p style="margin-top: 10px;" class="dkim-details"><strong>Full Details:</strong> ${escapeHtml(dkimResult.details)}</p>
-                </div>`
-            }
+       <div class="dkim-section">
+    ${dkimResult.status === 'N/A' ? 
+        '<div class="dkim-status-container"><div class="dkim-status dkim-fail">DKIM: N/A</div></div><p>No DKIM authentication result found.</p>' : 
+        `<div class="dkim-status-container">
+            <div class="dkim-status ${dkimResult.status === 'PASS' ? 'dkim-pass' : 'dkim-fail'}">
+                DKIM: ${escapeHtml(dkimResult.fields.Result.toUpperCase())}
+            </div>
+            <span class="toggle-dkim-arrow" onclick="toggleDkimDetails()">▼</span>
         </div>
+        <div class="dkim-details-container" id="dkim-details">
+            <h3>DKIM Analysis</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th data-label="Field">Field</th>
+                        <th data-label="Value">Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td data-label="Result">Result</td><td data-label="Value">${escapeHtml(dkimResult.fields.Result || 'N/A')}</td></tr>
+                    <tr><td data-label="Selector">Selector</td><td data-label="Value">${escapeHtml(dkimResult.fields.Selector || 'N/A')}</td></tr>
+                    <tr><td data-label="Domain">Domain</td><td data-label="Value">${escapeHtml(dkimResult.fields.Domain || 'N/A')}</td></tr>
+                    <tr><td data-label="Signing Algorithm">Signing Algorithm</td><td data-label="Value">${escapeHtml(dkimResult.fields.SigningAlgorithm || 'N/A')}</td></tr>
+                    <tr><td data-label="Canonicalization">Canonicalization</td><td data-label="Value">${escapeHtml(dkimResult.fields.Canonicalization || 'N/A')}</td></tr>
+                </tbody>
+            </table>
+            <p style="margin-top: 10px;" class="dkim-details"><strong>Full Details:</strong> ${escapeHtml(dkimResult.details)}</p>
+        </div>`
+    }
+</div>
     `;
     
     // DMARC Section
@@ -2208,9 +2170,9 @@ function analyseAuthResults(headers) {
         };
     }
 
-    // Normalize headers to handle multi-line entries
-    const normalizedHeaders = headers.replace(/\n\s+/g, ' ').trim();
-    const authRegex = /^Authentication-Results:[^\n]*(?:\n\s+[^\n]*)*?(?=\n[A-Z-]|$)/gim;
+    // Normalize headers to match analyseDMARCRecord: simplify tabs and multiple spaces
+    const normalizedHeaders = headers.replace(/\t+/g, ' ').replace(/ +/g, ' ').trim();
+    const authRegex = /(?:^|\n)Authentication-Results:[^\n]*(?:\n\s+[^\n]*)*?(?=\n[^ \t\n]|\n*$)/gi;
     const authMatches = headers.match(authRegex) || [];
 
     if (authMatches.length === 0) {
@@ -2223,12 +2185,12 @@ function analyseAuthResults(headers) {
         };
     }
 
-    // Use the last Authentication-Results header (closest to receiving server)
+    // Use the last Authentication-Results header (consistent with analyseDMARCRecord)
     const authHeader = authMatches[authMatches.length - 1].replace(/^Authentication-Results:\s*/, '').trim();
     const fields = {
-        SPFResult: (authHeader.match(/spf=(\w+)/i) || [])[1] || '',
-        DKIMResult: (authHeader.match(/dkim=(\w+)/i) || [])[1] || '',
-        DMARCResult: (authHeader.match(/dmarc=(\w+)/i) || [])[1] || '',
+        SPFResult: (authHeader.match(/spf=([\w\s]+?)(?=\s|;|$)/i) || [])[1]?.trim() || '',
+        DKIMResult: (authHeader.match(/dkim=([\w\s]+?)(?=\s|;|$)/i) || [])[1]?.trim() || '',
+        DMARCResult: (authHeader.match(/dmarc=([\w\s]+?)(?=\s|;|$)/i) || [])[1]?.trim() || '',
         Server: (authHeader.match(/^([^;]+)/i) || [])[1]?.trim() || '',
         AuthDetails: (authHeader.match(/auth=([^;]+)/i) || [])[1] || ''
     };
