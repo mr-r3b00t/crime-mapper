@@ -766,45 +766,89 @@ tr:hover {
     }
 
     function analyseDMARCRecord(headers) {
-        if (typeof headers !== 'string') {
-            return {
-                status: 'N/A',
-                fields: {
-                    Result: '', FromDomain: '', Policy: '', SubdomainPolicy: '',
-                    AlignmentDKIM: '', AlignmentSPF: ''
-                },
-                details: 'Headers must be a string'
-            };
-        }
-        const dmarcRegex = /^Authentication-Results:.*?(?=\n[A-Z-]|$)/gim;
-        const dmarcMatches = headers.match(dmarcRegex) || [];
-        if (dmarcMatches.length === 0) {
-            return {
-                status: 'N/A',
-                fields: {
-                    Result: '', FromDomain: '', Policy: '', SubdomainPolicy: '',
-                    AlignmentDKIM: '', AlignmentSPF: ''
-                },
-                details: 'DMARC Authentication-Results header is missing'
-            };
-        }
-
-        const dmarcHeader = dmarcMatches[0].trim();
-        const fields = {
-            Result: (dmarcHeader.match(/dmarc=(\w+)/i) || [])[1] || '',
-            FromDomain: (dmarcHeader.match(/header\.from=([^;]+)/i) || [])[1] || '',
-            Policy: (dmarcHeader.match(/p=([^;]+)/i) || [])[1] || '',
-            SubdomainPolicy: (dmarcHeader.match(/sp=([^;]+)/i) || [])[1] || '',
-            AlignmentDKIM: (dmarcHeader.match(/dkim-alignment=([^;]+)/i) || [])[1] || '',
-            AlignmentSPF: (dmarcHeader.match(/spf-alignment=([^;]+)/i) || [])[1] || ''
-        };
-
+    // Validate input
+    if (typeof headers !== 'string') {
+        console.debug('analyseDMARCRecord: Invalid input, headers must be a string:', headers);
         return {
-            status: fields.Result.toLowerCase() === 'pass' ? 'PASS' : 'FAIL',
-            fields,
-            details: dmarcHeader
+            status: 'N/A',
+            fields: {
+                Result: 'N/A',
+                FromDomain: 'N/A',
+                Policy: 'N/A',
+                SubdomainPolicy: 'N/A',
+                AlignmentDKIM: 'N/A',
+                AlignmentSPF: 'N/A'
+            },
+            details: 'Headers must be a string'
         };
     }
+
+    // Log input for debugging
+    console.debug('analyseDMARCRecord: Input headers:', headers);
+
+    // Normalize whitespace (replace tabs and multiple spaces with single space, preserve newlines)
+    const normalizedHeaders = headers.replace(/\t+/g, ' ').replace(/ +/g, ' ').trim();
+
+    // Find all Authentication-Results headers
+    const authResultsRegex = /(?:^|\n)Authentication-Results:[^\n]*(?:\n\s+[^\n]*)*?(?=\n[^ \t\n]|\n*$)/gi;
+    const authMatches = normalizedHeaders.match(authResultsRegex) || [];
+
+    if (authMatches.length === 0) {
+        console.debug('analyseDMARCRecord: No Authentication-Results header found in:', normalizedHeaders);
+        return {
+            status: 'N/A',
+            fields: {
+                Result: 'N/A',
+                FromDomain: 'N/A',
+                Policy: 'N/A',
+                SubdomainPolicy: 'N/A',
+                AlignmentDKIM: 'N/A',
+                AlignmentSPF: 'N/A'
+            },
+            details: 'No DMARC record found'
+        };
+    }
+
+    // Use the last Authentication-Results header (closest to receiving server)
+    const dmarcHeader = authMatches[authMatches.length - 1].replace(/^Authentication-Results:\s*/, '').trim();
+    console.debug('analyseDMARCRecord: Selected header:', dmarcHeader);
+
+    // Extract fields with case-insensitive regex
+    const fields = {
+        Result: (dmarcHeader.match(/dmarc=(\w+)/i) || [])[1]?.toLowerCase() || 'N/A',
+        FromDomain: (dmarcHeader.match(/header\.from=([^;\s]+)/i) || [])[1] || 'N/A',
+        Policy: (dmarcHeader.match(/p=([^;\s]+)/i) || [])[1] || 'N/A',
+        SubdomainPolicy: (dmarcHeader.match(/sp=([^;\s]+)/i) || [])[1] || 'N/A',
+        AlignmentDKIM: (dmarcHeader.match(/dkim-alignment=([^;\s]+)/i) || [])[1] || 'N/A',
+        AlignmentSPF: (dmarcHeader.match(/spf-alignment=([^;\s]+)/i) || [])[1] || 'N/A'
+    };
+
+    // Determine status based on Result
+    let status = 'N/A';
+    if (fields.Result !== 'N/A') {
+        if (['pass', 'fail', 'none'].includes(fields.Result)) {
+            status = fields.Result === 'pass' ? 'PASS' : 'FAIL';
+        } else {
+            status = 'INVALID';
+        }
+    }
+
+    // Provide detailed feedback
+    let details = `DMARC result: ${fields.Result}`;
+    if (fields.Result === 'N/A') {
+        details = 'No DMARC record found';
+    } else if (fields.Policy !== 'N/A') {
+        details += `, policy: ${fields.Policy}`;
+    }
+
+    console.debug('analyseDMARCRecord: Output:', { status, fields, details });
+
+    return {
+        status,
+        fields,
+        details
+    };
+}
 
     function toggleDkimDetails() {
         const dkimDetails = document.getElementById('dkim-details');
@@ -1370,10 +1414,7 @@ tr:hover {
             }
         }
 
-        function toggleHeaderTable() {
-            isHeaderTableExpanded = !isHeaderTableExpanded;
-            renderTable(lastSpfResult, lastBclResult, lastForefrontResult);
-        }
+  
 
         function toggleBodyContent() {
             isBodyContentExpanded = !isBodyContentExpanded;
@@ -1407,14 +1448,16 @@ tr:hover {
 
 
     // New renderTable function
-    function renderTable(spfResult, dkimResult, dmarcResult, bclResult, forefrontResult, authResult) {
-        const headerResultsDiv = document.getElementById('headerResults');
-if (headerResultsDiv) {
-    headerResultsDiv.innerHTML = '';
-} else {
-    console.error('Header results div not found');
+
+    function toggleHeaderTable() {
+    isHeaderTableExpanded = !isHeaderTableExpanded;
+    renderTable(lastSpfResult, lastDkimResult, lastDmarcResult, lastBclResult, lastForefrontResult, lastAuthResults);
 }
+
+function renderTable(spfResult, dkimResult, dmarcResult, bclResult, forefrontResult, authResult) {
+    const headerResultsDiv = document.getElementById('headerResults');
     const emailDetailsDiv = document.getElementById('emailDetails');
+    
     if (!headerResultsDiv || !emailDetailsDiv) {
         console.error('Header results or email details div not found');
         return;
@@ -1423,30 +1466,34 @@ if (headerResultsDiv) {
     emailDetailsDiv.innerHTML = renderEmailDetails(headerFields);
 
     let tableHtml = renderHeaderFields(headerFields, spfResult, dkimResult, dmarcResult, bclResult, forefrontResult, authResult);
+    
+    // Always render the header section, even if no transactions
+    tableHtml += '<div class="header-section">';
+
     if (transactions.length === 0) {
-        tableHtml += '<p>No headers found.</p>';
+        tableHtml += '<p>No headers found.</p></div>';
         headerResultsDiv.innerHTML = tableHtml;
         return;
     }
 
     tableHtml += `
-        <div class="header-section">
-            <table>
-                <thead>
-                    <tr>
-                        <th data-column="order" class="${sortState.column === 'order' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('order')">Order</th>
-                        <th data-column="action" class="${sortState.column === 'action' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('action')">Action</th>
-                        <th data-column="timestamp" class="${sortState.column === 'timestamp' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('timestamp')">Timestamp</th>
-                        <th data-column="fromServer" class="${sortState.column === 'fromServer' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('fromServer')">From Server</th>
-                        <th data-column="byServer" class="${sortState.column === 'byServer' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('byServer')">By Server</th>
-                        <th data-column="ip" class="${sortState.column === 'ip' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('ip')">IP</th>
-                        <th data-column="emailOrDomain" class="${sortState.column === 'emailOrDomain' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('emailOrDomain')">Email/Domain</th>
-                        <th data-column="details" class="${sortState.column === 'details' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('details')">Details</th>
-                    </tr>
-                </thead>
-                <tbody>
+        <table>
+            <thead>
+                <tr>
+                    <th data-column="order" class="${sortState.column === 'order' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('order')">Order</th>
+                    <th data-column="action" class="${sortState.column === 'action' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('action')">Action</th>
+                    <th data-column="timestamp" class="${sortState.column === 'timestamp' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('timestamp')">Timestamp</th>
+                    <th data-column="fromServer" class="${sortState.column === 'fromServer' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('fromServer')">From Server</th>
+                    <th data-column="byServer" class="${sortState.column === 'byServer' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('byServer')">By Server</th>
+                    <th data-column="ip" class="${sortState.column === 'ip' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('ip')">IP</th>
+                    <th data-column="emailOrDomain" class="${sortState.column === 'emailOrDomain' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('emailOrDomain')">Email/Domain</th>
+                    <th data-column="details" class="${sortState.column === 'details' ? 'sort-' + sortState.direction : ''}" onclick="sortColumn('details')">Details</th>
+                </tr>
+            </thead>
+            <tbody>
     `;
 
+    // Render either all transactions or the first 5 based on isHeaderTableExpanded
     const displayTransactions = isHeaderTableExpanded ? transactions : transactions.slice(0, 5);
     displayTransactions.forEach(transaction => {
         tableHtml += `
@@ -1465,6 +1512,7 @@ if (headerResultsDiv) {
 
     tableHtml += '</tbody></table>';
 
+    // Always show the toggle if there are more than 5 transactions
     if (transactions.length > 5) {
         tableHtml += `
             <div class="header-table-toggle">
@@ -1477,6 +1525,8 @@ if (headerResultsDiv) {
 
     headerResultsDiv.innerHTML = tableHtml;
 }
+
+
 
 
         function renderAttachments() {
