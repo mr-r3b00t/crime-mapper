@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Time Delta Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .timeline-dot {
+            width: 12px;
+            height: 12px;
+            background-color: #3b82f6;
+            border-radius: 50%;
+            position: absolute;
+            left: -6px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        .timeline-bar {
+            height: 8px;
+            background-color: #3b82f6;
+            border-radius: 4px;
+            margin-top: 8px;
+            transition: width 0.5s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-3xl">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">Email Time Delta Analyzer</h1>
+        
+        <div class="mb-6">
+            <label for="emailInput" class="block text-sm font-medium text-gray-700 mb-2">
+                Paste Email Header Source
+            </label>
+            <textarea
+                id="emailInput"
+                class="w-full h-40 p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y"
+                placeholder="Paste the complete email source here..."
+            ></textarea>
+        </div>
+
+        <button
+            id="analyzeButton"
+            class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors duration-200 font-semibold"
+        >
+            Analyze Time Deltas
+        </button>
+
+        <div id="results" class="mt-8 hidden">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">Analysis Results</h2>
+            <div id="errorMessage" class="hidden bg-red-100 text-red-700 p-4 rounded-lg mb-4"></div>
+            <div class="relative pl-8">
+                <div id="creationStage" class="mb-6 relative">
+                    <div class="timeline-dot"></div>
+                    <h3 class="text-lg font-medium text-gray-700">Email Created</h3>
+                    <p id="creationTime" class="text-gray-600"></p>
+                </div>
+
+                <div id="creationToSentStage" class="mb-6 relative">
+                    <div class="timeline-dot"></div>
+                    <h3 class="text-lg font-medium text-gray-700">Time to Send</h3>
+                    <p id="creationToSent" class="text-gray-600"></p>
+                    <div id="creationToSentBar" class="timeline-bar"></div>
+                </div>
+
+                <div id="sentStage" class="mb-6 relative">
+                    <div class="timeline-dot"></div>
+                    <h3 class="text-lg font-medium text-gray-700">Email Sent</h3>
+                    <p id="sentTime" class="text-gray-600"></p>
+                </div>
+
+                <div id="sentToDeliveredStage" class="mb-6 relative">
+                    <div class="timeline-dot"></div>
+                    <h3 class="text-lg font-medium text-gray-700">Time to Deliver</h3>
+                    <p id="sentToDelivered" class="text-gray-600"></p>
+                    <div id="sentToDeliveredBar" class="timeline-bar"></div>
+                </div>
+
+                <div id="deliveredStage" class="mb-6 relative">
+                    <div class="timeline-dot"></div>
+                    <h3 class="text-lg font-medium text-gray-700">Email Delivered</h3>
+                    <p id="deliveredTime" class="text-gray-600"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function formatTimeDelta(seconds) {
+            if (seconds === null) return 'Not available';
+            if (seconds >= 60) {
+                const minutes = seconds / 60;
+                return `${minutes.toFixed(2)} minutes`;
+            }
+            return `${seconds.toFixed(2)} seconds`;
+        }
+
+        function calculateBarWidth(seconds) {
+            if (!seconds) return '0%';
+            // Scale bar width: max 100% for 5 minutes (300 seconds)
+            const maxSeconds = 300;
+            const percentage = Math.min((seconds / maxSeconds) * 100, 100);
+            return `${percentage}%`;
+        }
+
+        function parseEmailTimeDelta(emlSource) {
+            const result = {
+                creationToSent: null,
+                sentToDelivered: null,
+                error: null,
+                creationTime: null,
+                sentTime: null,
+                deliveredTime: null
+            };
+
+            try {
+                const [headersPart] = emlSource.split('\n\n', 1);
+                const headers = headersPart.split('\n');
+
+                let dateHeader = null;
+                let receivedHeaders = [];
+                let createdTime = null;
+
+                for (let i = 0; i < headers.length; i++) {
+                    const line = headers[i].trim();
+                    let fullLine = line;
+                    while (i + 1 < headers.length && headers[i + 1].match(/^\s/)) {
+                        fullLine += ' ' + headers[++i].trim();
+                    }
+
+                    if (fullLine.toLowerCase().startsWith('date:')) {
+                        dateHeader = fullLine.substring(5).trim();
+                    }
+                    if (fullLine.toLowerCase().startsWith('received:')) {
+                        receivedHeaders.push(fullLine.substring(9).trim());
+                    }
+                    if (fullLine.toLowerCase().startsWith('x-ms-exchange-crosstenant-originalarrivaltime:') ||
+                        fullLine.toLowerCase().startsWith('x-createdtime:') ||
+                        fullLine.toLowerCase().startsWith('x-origination-time:')) {
+                        createdTime = fullLine.split(':').slice(1).join(':').trim();
+                    }
+                }
+
+                const sentDate = dateHeader ? new Date(dateHeader) : null;
+                const creationDate = createdTime ? new Date(createdTime) : sentDate;
+                let deliveryDate = null;
+                if (receivedHeaders.length > 0) {
+                    const lastReceived = receivedHeaders[0];
+                    const dateMatch = lastReceived.match(/;\s*(.+)$/);
+                    if (dateMatch) {
+                        deliveryDate = new Date(dateMatch[1].trim());
+                    }
+                }
+
+                if (creationDate && !isNaN(creationDate)) {
+                    result.creationTime = creationDate.toISOString();
+                }
+                if (sentDate && !isNaN(sentDate)) {
+                    result.sentTime = sentDate.toISOString();
+                }
+                if (deliveryDate && !isNaN(deliveryDate)) {
+                    result.deliveredTime = deliveryDate.toISOString();
+                }
+
+                if (creationDate && sentDate && !isNaN(creationDate) && !isNaN(sentDate)) {
+                    result.creationToSent = (sentDate - creationDate) / 1000;
+                }
+                if (sentDate && deliveryDate && !isNaN(sentDate) && !isNaN(deliveryDate)) {
+                    result.sentToDelivered = (deliveryDate - sentDate) / 1000;
+                }
+
+                if (result.creationToSent === null && result.sentToDelivered === null) {
+                    result.error = 'Could not parse valid dates from email headers';
+                }
+
+            } catch (err) {
+                result.error = `Error parsing email: ${err.message}`;
+            }
+
+            return result;
+        }
+
+        document.getElementById('analyzeButton').addEventListener('click', () => {
+            const emailInput = document.getElementById('emailInput').value;
+            const resultsDiv = document.getElementById('results');
+            const errorMessage = document.getElementById('errorMessage');
+
+            if (!emailInput.trim()) {
+                errorMessage.textContent = 'Please provide email source text';
+                errorMessage.classList.remove('hidden');
+                resultsDiv.classList.add('hidden');
+                return;
+            }
+
+            const result = parseEmailTimeDelta(emailInput);
+
+            errorMessage.classList.add('hidden');
+            resultsDiv.classList.remove('hidden');
+
+            // Update timeline
+            document.getElementById('creationTime').textContent = result.creationTime 
+                ? new Date(result.creationTime).toLocaleString() 
+                : 'Not available';
+                
+            document.getElementById('creationToSent').textContent = formatTimeDelta(result.creationToSent);
+            document.getElementById('creationToSentBar').style.width = calculateBarWidth(result.creationToSent);
+                
+            document.getElementById('sentTime').textContent = result.sentTime 
+                ? new Date(result.sentTime).toLocaleString() 
+                : 'Not available';
+                
+            document.getElementById('sentToDelivered').textContent = formatTimeDelta(result.sentToDelivered);
+            document.getElementById('sentToDeliveredBar').style.width = calculateBarWidth(result.sentToDelivered);
+                
+            document.getElementById('deliveredTime').textContent = result.deliveredTime 
+                ? new Date(result.deliveredTime).toLocaleString() 
+                : 'Not available';
+
+            // Show/hide stages based on availability
+            document.getElementById('creationStage').classList.toggle('hidden', !result.creationTime);
+            document.getElementById('creationToSentStage').classList.toggle('hidden', result.creationToSent === null);
+            document.getElementById('sentStage').classList.toggle('hidden', !result.sentTime);
+            document.getElementById('sentToDeliveredStage').classList.toggle('hidden', result.sentToDelivered === null);
+            document.getElementById('deliveredStage').classList.toggle('hidden', !result.deliveredTime);
+
+            if (result.error) {
+                errorMessage.textContent = result.error;
+                errorMessage.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
