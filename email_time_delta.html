@@ -167,11 +167,43 @@
             max-height: 300px;
             overflow-y: auto;
         }
+        .info-section {
+            text-align: center;
+            font-size: 10px;
+            color: #6b7280;
+            padding-top: 10px;
+            margin-bottom: 24px;
+        }
+        .info-section a {
+            color: #6b7280;
+            text-decoration: none;
+        }
+        .info-section a:hover {
+            text-decoration: underline;
+        }
+        .info-section img {
+            height: 60px;
+            width: 217px;
+            margin-bottom: 8px;
+        }
+        .info-section p {
+            margin: 4px 0;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1 class="title">Email Time Delta Analyzer</h1>
+        
+        <section class="info-section">
+            <a href="https://www.buymeacoffee.com/mrr3b00t" target="_blank">
+                <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee">
+            </a>
+            <p>Copyright © Xservus Limited</p>
+            <p>Experimental - Validate all results manually and/or with another tool</p>
+            <p>Version 0.1</p>
+            <p><a href="https://www.pwndefend.com">https://www.pwndefend.com</a></p>
+        </section>
         
         <div class="mb-6">
             <label for="emailInput" class="label">Paste Email Source</label>
@@ -449,12 +481,14 @@
                 console.log('Full decoded body for timestamp parsing:', decodedBody);
 
                 const bodyLines = decodedBody.split('\n').filter(line => line.trim());
-                const bodyDateRegex = /(?:(?:<b>Sent:<\/b>\s*)?(\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*(?:AM|PM|am|pm))?(?:<br>)?)|(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[+-]\d{4}|Z)?)|(On\s+\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4},\s+at\s+\d{1,2}:\d{2}(?::\d{2})?(?:,)?)|(Sent:\s*(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM|am|pm))|(On\s+(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},\s+\d{4}\s+at\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM|am|pm),?)|(On\s+\d{2}\/\d{2}\/\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?,?))/i;
+                console.log('Body lines:', bodyLines);
+                const bodyDateRegex = /(?:(?:<b>Sent:<\/b>\s*)?(\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*(?:AM|PM|am|pm))?(?:<br>)?)|(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[+-]\d{4}|Z)?)|(On\s+\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4},\s+at\s+\d{1,2}:\d{2}(?::\d{2})?(?:,)?)|(Sent:\s*(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM|am|pm))|(On\s+(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},\s+\d{4}\s+at\s+\d{1,2}:\d{2}(?::\d{2})?(?:,)?)|(On\s+\d{2}\/\d{2}\/\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?,?)|(Date:\s*(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s+\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}\s+at\s+\d{1,2}:\d{2}(?::\d{2})?(?:,)?))/i;
 
                 bodyLines.forEach((line, index) => {
                     const match = line.match(bodyDateRegex);
                     if (match) {
-                        let timestampStr = match[1] || match[2] || match[3] || match[4] || match[5] || match[6];
+                        console.log(`Matched timestamp in line ${index + 1}: ${line}`);
+                        let timestampStr = match[1] || match[2] || match[3] || match[4] || match[5] || match[6] || match[7];
                         if (timestampStr) {
                             // Clean up and normalize timestamp
                             timestampStr = timestampStr.replace(/<b>Sent:<\/b>\s*/i, '').replace(/<br>/i, '').trim();
@@ -465,15 +499,21 @@
                                 // Outlook: "Sent: Monday, April 7, 2025 9:51 PM"
                                 timestampStr = timestampStr.replace(/^Sent:\s*(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s+/, '');
                             } else if (timestampStr.startsWith('On') && timestampStr.includes(' at ') && timestampStr.match(/Mon|Tue|Wed|Thu|Fri|Sat|Sun/)) {
-                                // Gmail/ProtonMail: "On Mon, Apr 7, 2025 at 9:51 PM,"
+                                // Gmail/ProtonMail: "On Mon, Apr 7, 2025 at 9:51 PM," or "On Mon, 14 Apr 2025 at 11:28,"
                                 timestampStr = timestampStr.replace(/^On\s+(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s+/, '');
                                 timestampStr = timestampStr.replace(/,\s+at\s+/, ' ');
                             } else if (timestampStr.startsWith('On') && timestampStr.match(/\d{2}\/\d{2}\/\d{4}/)) {
                                 // Thunderbird: "On 04/07/2025 21:51,"
                                 // Already parseable, no change needed
+                            } else if (timestampStr.startsWith('Date:')) {
+                                // New format: "Date: Monday, 14 April 2025 at 11:46"
+                                timestampStr = timestampStr.replace(/^Date:\s*(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s+/, '');
+                                timestampStr = timestampStr.replace(/\s+at\s+/, ' ');
                             }
+                            console.log(`Normalized timestamp: ${timestampStr}`);
                             const timestamp = new Date(timestampStr);
                             if (!isNaN(timestamp)) {
+                                console.log(`Parsed timestamp: ${timestamp.toISOString()}`);
                                 const entry = {
                                     lineNumber: index + 1,
                                     timestamp: timestamp.toISOString(),
@@ -488,6 +528,8 @@
                                 console.log(`Failed to parse timestamp: ${timestampStr}`);
                             }
                         }
+                    } else {
+                        console.log(`No timestamp match in line ${index + 1}: ${line}`);
                     }
                 });
 
