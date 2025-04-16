@@ -11,6 +11,8 @@ IF YOU WANT TO REALLY TEST THIS, PLEASE RUN IT LOCALLY WITH A LOCAL CORS PROXY (
 
 ✉️ [Email Analysis Tool - Experimental](https://mr-r3b00t.github.io/crime-mapper/header_analysis.html)
 
+✉️ [Email Time Detla Analysis Tool - Experimental](https://mr-r3b00t.github.io/crime-mapper/email_time_delta.html)
+
 🔗 [Live Demo](https://mr-r3b00t.github.io/crime-mapper/crimemapper.html)  
  
 
