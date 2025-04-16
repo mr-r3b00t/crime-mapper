@@ -315,6 +315,15 @@
             return `${percentage}%`;
         }
 
+        function escapeHtml(unsafe) {
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
         function parseEmailTimeDelta(emlSource) {
             const result = {
                 creationToSent: null,
@@ -490,10 +499,13 @@
                         console.log(`Matched timestamp in line ${index + 1}: ${line}`);
                         let timestampStr = match[1] || match[2] || match[3] || match[4] || match[5] || match[6] || match[7] || match[8];
                         if (timestampStr) {
-                            // Clean up and normalize timestamp
-                            timestampStr = timestampStr.replace(/<b>Sent:<\/b>\s*/i, '').replace(/<br>/i, '').trim();
+                            // Clean up HTML tags and entities for parsing
+                            timestampStr = timestampStr.replace(/<[^>]+>/g, '').replace(/&[a-zA-Z0-9#]+;/g, '').trim();
+                            console.log(`Cleaned timestamp: ${timestampStr}`);
+
+                            // Normalize timestamp
                             if (timestampStr.startsWith('On') && timestampStr.includes(', at') && !timestampStr.match(/Mon|Tue|Wed|Thu|Fri|Sat|Sun/)) {
-                                // Apple Mail: "On 8 Apr 2025, at 22:51" or "On 8 Apr 2025, at 22:51,"
+                                // Apple Mail: "On 8 Apr 2025, at 22:51"
                                 timestampStr = timestampStr.replace(/^On\s+(\d{1,2}\s+\w{3}\s+\d{4}),\s+at\s+(\d{1,2}:\d{2}(?::\d{2})?)(?:,)?/, '$1 $2');
                             } else if (timestampStr.startsWith('Sent:')) {
                                 // Outlook: "Sent: Monday, April 7, 2025 9:51 PM"
@@ -504,16 +516,17 @@
                                 timestampStr = timestampStr.replace(/,\s+at\s+/, ' ');
                             } else if (timestampStr.startsWith('On') && timestampStr.match(/\d{2}\/\d{2}\/\d{4}/)) {
                                 // Thunderbird: "On 04/07/2025 21:51,"
-                                // Already parseable, no change needed
+                                // Already parseable
                             } else if (timestampStr.startsWith('Date:')) {
                                 // Format: "Date: Monday, 14 April 2025 at 11:46"
                                 timestampStr = timestampStr.replace(/^Date:\s*(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s+/, '');
                                 timestampStr = timestampStr.replace(/\s+at\s+/, ' ');
                             } else if (timestampStr.match(/^(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),/)) {
-                                // New format: "Tuesday, April 15, 2025 8:58:46 AM"
+                                // Format: "Tuesday, April 15, 2025 8:58:46 AM"
                                 timestampStr = timestampStr.replace(/^(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s+/, '');
                             }
                             console.log(`Normalized timestamp: ${timestampStr}`);
+
                             const timestamp = new Date(timestampStr);
                             if (!isNaN(timestamp)) {
                                 console.log(`Parsed timestamp: ${timestamp.toISOString()}`);
@@ -638,11 +651,13 @@
                 result.bodyTimestamps.forEach((entry, index) => {
                     const stageDiv = document.createElement('div');
                     stageDiv.className = 'stage';
+                    const escapedLine = escapeHtml(entry.line.substring(0, 100)) + (entry.line.length > 100 ? '...' : '');
+                    console.log(`Rendering line ${entry.lineNumber}: raw=${entry.line}, escaped=${escapedLine}`);
                     stageDiv.innerHTML = `
                         <div class="timeline-dot"></div>
                         <h3 class="stage-title">Line ${entry.lineNumber}</h3>
                         <p class="stage-text">Time: ${new Date(entry.timestamp).toLocaleString()}</p>
-                        <p class="stage-text">Content: ${entry.line}</p>
+                        <p class="stage-text">Content: ${escapedLine}</p>
                         ${entry.deltaFromCreation !== undefined ? `
                             <p class="stage-text">Time from creation: ${formatTimeDelta(entry.deltaFromCreation)}</p>
                             <div class="timeline-bar ${entry.deltaFromCreation < 0 ? 'negative-bar' : ''}" style="width: ${calculateBarWidth(entry.deltaFromCreation)};"></div>
