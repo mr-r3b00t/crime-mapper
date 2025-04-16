@@ -1,13 +1,128 @@
-<!DOCTYPE html>
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row =>
+                    row.some(cell => cell !== '' && cell !== null && cell !== undefined)
+                );
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Email Time Delta Analyzer</title>
-    <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            margin: 0;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            padding: 32px;
+            width: 100%;
+            max-width: 1024px;
+        }
+        .title {
+            font-size: 30px;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 24px;
+        }
+        .label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 8px;
+        }
+        .textarea {
+            width: 100%;
+            height: 160px;
+            padding: 16px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            resize: vertical;
+            font-size: 14px;
+            color: #374151;
+        }
+        .textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+        }
+        .button {
+            width: 100%;
+            background-color: #2563eb;
+            color: #ffffff;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .button:hover {
+            background-color: #1d4ed8;
+        }
+        .results {
+            margin-top: 32px;
+        }
+        .section-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 16px;
+        }
+        .error-message, .base64-message {
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+        }
+        .error-message {
+            background-color: #fee2e2;
+            color: #b91c1c;
+        }
+        .base64-message {
+            background-color: #fef9c3;
+            color: #854d0e;
+        }
+        .hidden {
+            display: none;
+        }
+        .timeline {
+            position: relative;
+            padding-left: 32px;
         }
         .timeline-dot {
             width: 12px;
@@ -26,84 +141,145 @@
             margin-top: 8px;
             transition: width 0.5s ease-in-out;
         }
+        .negative-bar {
+            background-color: #ef4444; /* Red for negative deltas */
+        }
+        .stage {
+            margin-bottom: 24px;
+            position: relative;
+        }
+        .stage-title {
+            font-size: 18px;
+            font-weight: 500;
+            color: #374151;
+        }
+        .stage-text {
+            color: #6b7280;
+            font-size: 14px;
+        }
+        .decoded-body {
+            background-color: #f9fafb;
+            padding: 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #374151;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-3xl">
-        <h1 class="text-3xl font-bold text-gray-800 mb-6">Email Time Delta Analyzer</h1>
+<body>
+    <div class="container">
+        <h1 class="title">Email Time Delta Analyzer</h1>
         
         <div class="mb-6">
-            <label for="emailInput" class="block text-sm font-medium text-gray-700 mb-2">
-                Paste Email Header Source
-            </label>
+            <label for="emailInput" class="label">Paste Email Source</label>
             <textarea
                 id="emailInput"
-                class="w-full h-40 p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y"
+                class="textarea"
                 placeholder="Paste the complete email source here..."
             ></textarea>
         </div>
 
-        <button
-            id="analyzeButton"
-            class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors duration-200 font-semibold"
-        >
-            Analyze Time Deltas
-        </button>
+        <button id="analyzeButton" class="button">Analyze Time Deltas</button>
 
-        <div id="results" class="mt-8 hidden">
-            <h2 class="text-xl font-semibold text-gray-800 mb-4">Analysis Results</h2>
-            <div id="errorMessage" class="hidden bg-red-100 text-red-700 p-4 rounded-lg mb-4"></div>
-            <div class="relative pl-8">
-                <div id="creationStage" class="mb-6 relative">
+        <div id="results" class="results hidden">
+            <h2 class="section-title">Header Analysis Results</h2>
+            <div id="errorMessage" class="error-message hidden"></div>
+            <div id="base64Message" class="base64-message hidden"></div>
+            <div class="timeline">
+                <div id="creationStage" class="stage">
                     <div class="timeline-dot"></div>
-                    <h3 class="text-lg font-medium text-gray-700">Email Created</h3>
-                    <p id="creationTime" class="text-gray-600"></p>
+                    <h3 class="stage-title">Email Created</h3>
+                    <p id="creationTime" class="stage-text"></p>
                 </div>
 
-                <div id="creationToSentStage" class="mb-6 relative">
+                <div id="creationToSentStage" class="stage">
                     <div class="timeline-dot"></div>
-                    <h3 class="text-lg font-medium text-gray-700">Time to Send</h3>
-                    <p id="creationToSent" class="text-gray-600"></p>
+                    <h3 class="stage-title">Time to Send</h3>
+                    <p id="creationToSent" class="stage-text"></p>
                     <div id="creationToSentBar" class="timeline-bar"></div>
                 </div>
 
-                <div id="sentStage" class="mb-6 relative">
+                <div id="sentStage" class="stage">
                     <div class="timeline-dot"></div>
-                    <h3 class="text-lg font-medium text-gray-700">Email Sent</h3>
-                    <p id="sentTime" class="text-gray-600"></p>
+                    <h3 class="stage-title">Email Sent</h3>
+                    <p id="sentTime" class="stage-text"></p>
                 </div>
 
-                <div id="sentToDeliveredStage" class="mb-6 relative">
+                <div id="sentToDeliveredStage" class="stage">
                     <div class="timeline-dot"></div>
-                    <h3 class="text-lg font-medium text-gray-700">Time to Deliver</h3>
-                    <p id="sentToDelivered" class="text-gray-600"></p>
+                    <h3 class="stage-title">Time to Deliver</h3>
+                    <p id="sentToDelivered" class="stage-text"></p>
                     <div id="sentToDeliveredBar" class="timeline-bar"></div>
                 </div>
 
-                <div id="deliveredStage" class="mb-6 relative">
+                <div id="deliveredStage" class="stage">
                     <div class="timeline-dot"></div>
-                    <h3 class="text-lg font-medium text-gray-700">Email Delivered</h3>
-                    <p id="deliveredTime" class="text-gray-600"></p>
+                    <h3 class="stage-title">Email Delivered</h3>
+                    <p id="deliveredTime" class="stage-text"></p>
                 </div>
+
+                <div id="headerTimestamps" class="timeline"></div>
             </div>
+
+            <h2 class="section-title mt-8">Body Analysis Results</h2>
+            <div id="bodyResults" class="timeline"></div>
+            
+            <h2 class="section-title mt-8">Decoded Email Body</h2>
+            <div id="decodedBody" class="decoded-body"></div>
         </div>
     </div>
 
-    <script>
+    <script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function loadFileData(filename) {
+            if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+                try {
+                    var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                    var firstSheetName = workbook.SheetNames[0];
+                    var worksheet = workbook.Sheets[firstSheetName];
+                    var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                    var filteredData = jsonData.filter(row =>
+                        row.some(cell => cell !== '' && cell !== null && cell !== undefined)
+                    );
+                    var csv = XLSX.utils.aoa_to_sheet(filteredData);
+                    csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                    return csv;
+                } catch (e) {
+                    console.error(e);
+                    return "";
+                }
+            }
+            return gk_fileData[filename] || "";
+        }
+
         function formatTimeDelta(seconds) {
             if (seconds === null) return 'Not available';
-            if (seconds >= 60) {
-                const minutes = seconds / 60;
-                return `${minutes.toFixed(2)} minutes`;
+            const absSeconds = Math.abs(seconds);
+            let formatted;
+            if (absSeconds >= 86400) {
+                const days = absSeconds / 86400;
+                formatted = `${days.toFixed(2)} days`;
+            } else if (absSeconds >= 3600) {
+                const hours = absSeconds / 3600;
+                formatted = `${hours.toFixed(2)} hours`;
+            } else if (absSeconds >= 60) {
+                const minutes = absSeconds / 60;
+                formatted = `${minutes.toFixed(2)} minutes`;
+            } else {
+                formatted = `${absSeconds.toFixed(2)} seconds`;
             }
-            return `${seconds.toFixed(2)} seconds`;
+            return seconds < 0 ? `-${formatted}` : formatted;
         }
 
         function calculateBarWidth(seconds) {
             if (!seconds) return '0%';
-            // Scale bar width: max 100% for 5 minutes (300 seconds)
             const maxSeconds = 300;
-            const percentage = Math.min((seconds / maxSeconds) * 100, 100);
+            const percentage = Math.min((Math.abs(seconds) / maxSeconds) * 100, 100);
             return `${percentage}%`;
         }
 
@@ -114,22 +290,52 @@
                 error: null,
                 creationTime: null,
                 sentTime: null,
-                deliveredTime: null
+                deliveredTime: null,
+                bodyTimestamps: [],
+                headerTimestamps: [],
+                base64DecodeError: null,
+                decodedBody: ''
             };
 
             try {
-                const [headersPart] = emlSource.split('\n\n', 1);
-                const headers = headersPart.split('\n');
+                const parts = emlSource.split(/(?=(?:^|\n)--[\w\-]+)/m);
+                let headersPart = parts[0];
+                let bodyParts = parts.slice(1);
 
+                if (bodyParts.length === 0) {
+                    const simpleSplit = emlSource.split('\n\n', 2);
+                    headersPart = simpleSplit[0];
+                    bodyParts = simpleSplit[1] ? [simpleSplit[1]] : [];
+                }
+
+                const headers = headersPart.split('\n');
                 let dateHeader = null;
                 let receivedHeaders = [];
                 let createdTime = null;
+                const dateRegex = /\w{3}, \d{1,2} \w{3} \d{4} \d{2}:\d{2}:\d{2} [+-]\d{4}|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[+-]\d{4}|Z)?|\w{3} \w{3} \d{1,2} \d{2}:\d{2}:\d{2} \d{4}/;
 
-                for (let i = 0; i < headers.length; i++) {
-                    const line = headers[i].trim();
-                    let fullLine = line;
-                    while (i + 1 < headers.length && headers[i + 1].match(/^\s/)) {
-                        fullLine += ' ' + headers[++i].trim();
+                headers.forEach((line, index) => {
+                    let fullLine = line.trim();
+                    let lineIndex = index;
+                    while (lineIndex + 1 < headers.length && headers[lineIndex + 1].match(/^\s/)) {
+                        fullLine += ' ' + headers[++lineIndex].trim();
+                    }
+
+                    const colonIndex = fullLine.indexOf(':');
+                    if (colonIndex !== -1) {
+                        const headerName = fullLine.substring(0, colonIndex).trim();
+                        const headerValue = fullLine.substring(colonIndex + 1).trim();
+                        const dateMatch = headerValue.match(dateRegex);
+                        if (dateMatch) {
+                            const timestamp = new Date(headerValue);
+                            if (!isNaN(timestamp)) {
+                                result.headerTimestamps.push({
+                                    headerName,
+                                    timestamp: timestamp.toISOString(),
+                                    lineIndex
+                                });
+                            }
+                        }
                     }
 
                     if (fullLine.toLowerCase().startsWith('date:')) {
@@ -143,7 +349,9 @@
                         fullLine.toLowerCase().startsWith('x-origination-time:')) {
                         createdTime = fullLine.split(':').slice(1).join(':').trim();
                     }
-                }
+                });
+
+                result.headerTimestamps.sort((a, b) => a.lineIndex - b.lineIndex);
 
                 const sentDate = dateHeader ? new Date(dateHeader) : null;
                 const creationDate = createdTime ? new Date(createdTime) : sentDate;
@@ -173,8 +381,128 @@
                     result.sentToDelivered = (deliveryDate - sentDate) / 1000;
                 }
 
-                if (result.creationToSent === null && result.sentToDelivered === null) {
-                    result.error = 'Could not parse valid dates from email headers';
+                let decodedBody = '';
+                bodyParts.forEach((part, partIndex) => {
+                    const lines = part.split('\n');
+                    let contentType = null;
+                    let contentTransferEncoding = null;
+                    let bodyContent = '';
+                    let inBody = false;
+
+                    for (let i = 0; i < lines.length; i++) {
+                        const line = lines[i];
+                        if (!inBody) {
+                            let fullLine = line.trim();
+                            while (i + 1 < lines.length && lines[i + 1].match(/^\s/)) {
+                                fullLine += ' ' + lines[++i].trim();
+                            }
+
+                            if (fullLine.toLowerCase().startsWith('content-type:')) {
+                                contentType = fullLine.split(':')[1].trim().toLowerCase();
+                            }
+                            if (fullLine.toLowerCase().startsWith('content-transfer-encoding:')) {
+                                contentTransferEncoding = fullLine.split(':')[1].trim().toLowerCase();
+                            }
+                            if (fullLine === '') {
+                                inBody = true;
+                            }
+                        } else {
+                            bodyContent += line + '\n';
+                        }
+                    }
+
+                    let decodedContent = bodyContent.trim();
+                    if (contentType && contentType.includes('text/plain; charset=utf-8') && contentTransferEncoding === 'base64') {
+                        console.log(`Found base64 encoded text/plain part with UTF-8 charset in part ${partIndex}`);
+                        console.log(`Attempting to decode base64 content in part ${partIndex}`);
+                        console.log(`Base64 content: ${bodyContent}`);
+                        try {
+                            const cleanBase64 = bodyContent.replace(/[\r\n]+/g, '').trim();
+                            decodedContent = atob(cleanBase64);
+                            console.log(`Decoded content: ${decodedContent}`);
+                        } catch (err) {
+                            console.log(`Failed to decode base64 content in part ${partIndex}:`, err.message);
+                            result.base64DecodeError = `Failed to decode base64 content in part ${partIndex}: ${err.message}`;
+                            decodedContent = '[Base64 decoding failed]';
+                        }
+                    } else if (contentType && contentTransferEncoding === 'base64' && contentType.includes('text/html')) {
+                        console.log(`Found base64 encoded text/html part in part ${partIndex}`);
+                        console.log(`Attempting to decode base64 content in part ${partIndex}`);
+                        console.log(`Base64 content: ${bodyContent}`);
+                        try {
+                            const cleanBase64 = bodyContent.replace(/[\r\n]+/g, '').trim();
+                            decodedContent = atob(cleanBase64);
+                            console.log(`Decoded content: ${decodedContent}`);
+                        } catch (err) {
+                            console.log(`Failed to decode base64 content in part ${partIndex}:`, err.message);
+                            result.base64DecodeError = `Failed to decode base64 content in part ${partIndex}: ${err.message}`;
+                            decodedContent = '[Base64 decoding failed]';
+                        }
+                    }
+
+                    if (contentType && (contentType.includes('text/plain') || contentType.includes('text/html'))) {
+                        decodedBody += decodedContent + '\n';
+                    }
+                });
+
+                result.decodedBody = decodedBody.trim() || 'No body content available';
+                console.log('Full decoded body for timestamp parsing:', decodedBody);
+
+                const bodyLines = decodedBody.split('\n').filter(line => line.trim());
+                const bodyDateRegex = /(?:(?:<b>Sent:<\/b>\s*)?(\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*(?:AM|PM|am|pm))?(?:<br>)?)|(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[+-]\d{4}|Z)?)|(On\s+\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4},\s+at\s+\d{1,2}:\d{2}(?::\d{2})?(?:,)?)|(Sent:\s*(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM|am|pm))|(On\s+(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},\s+\d{4}\s+at\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM|am|pm),?)|(On\s+\d{2}\/\d{2}\/\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?,?))/i;
+
+                bodyLines.forEach((line, index) => {
+                    const match = line.match(bodyDateRegex);
+                    if (match) {
+                        let timestampStr = match[1] || match[2] || match[3] || match[4] || match[5] || match[6];
+                        if (timestampStr) {
+                            // Clean up and normalize timestamp
+                            timestampStr = timestampStr.replace(/<b>Sent:<\/b>\s*/i, '').replace(/<br>/i, '').trim();
+                            if (timestampStr.startsWith('On') && timestampStr.includes(', at') && !timestampStr.match(/Mon|Tue|Wed|Thu|Fri|Sat|Sun/)) {
+                                // Apple Mail: "On 8 Apr 2025, at 22:51" or "On 8 Apr 2025, at 22:51,"
+                                timestampStr = timestampStr.replace(/^On\s+(\d{1,2}\s+\w{3}\s+\d{4}),\s+at\s+(\d{1,2}:\d{2}(?::\d{2})?)(?:,)?/, '$1 $2');
+                            } else if (timestampStr.startsWith('Sent:')) {
+                                // Outlook: "Sent: Monday, April 7, 2025 9:51 PM"
+                                timestampStr = timestampStr.replace(/^Sent:\s*(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s+/, '');
+                            } else if (timestampStr.startsWith('On') && timestampStr.includes(' at ') && timestampStr.match(/Mon|Tue|Wed|Thu|Fri|Sat|Sun/)) {
+                                // Gmail/ProtonMail: "On Mon, Apr 7, 2025 at 9:51 PM,"
+                                timestampStr = timestampStr.replace(/^On\s+(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s+/, '');
+                                timestampStr = timestampStr.replace(/,\s+at\s+/, ' ');
+                            } else if (timestampStr.startsWith('On') && timestampStr.match(/\d{2}\/\d{2}\/\d{4}/)) {
+                                // Thunderbird: "On 04/07/2025 21:51,"
+                                // Already parseable, no change needed
+                            }
+                            const timestamp = new Date(timestampStr);
+                            if (!isNaN(timestamp)) {
+                                const entry = {
+                                    lineNumber: index + 1,
+                                    timestamp: timestamp.toISOString(),
+                                    line: line.trim().substring(0, 100) + (line.length > 100 ? '...' : '')
+                                };
+                                if (result.creationTime) {
+                                    const creationDate = new Date(result.creationTime);
+                                    entry.deltaFromCreation = (timestamp - creationDate) / 1000;
+                                }
+                                result.bodyTimestamps.push(entry);
+                            } else {
+                                console.log(`Failed to parse timestamp: ${timestampStr}`);
+                            }
+                        }
+                    }
+                });
+
+                result.bodyTimestamps.forEach((entry, index) => {
+                    if (index > 0) {
+                        const prevTime = new Date(result.bodyTimestamps[index - 1].timestamp);
+                        const currentTime = new Date(entry.timestamp);
+                        entry.delta = (currentTime - prevTime) / 1000;
+                    }
+                });
+
+                if (result.creationToSent === null && result.sentToDelivered === null && result.bodyTimestamps.length === 0 && !decodedBody.trim()) {
+                    result.error = 'Could not parse valid dates from email headers or body, and no valid body content found';
+                } else if (result.creationToSent === null && result.sentToDelivered === null && result.bodyTimestamps.length === 0) {
+                    result.error = 'Could not parse valid dates from email headers or body';
                 }
 
             } catch (err) {
@@ -188,10 +516,14 @@
             const emailInput = document.getElementById('emailInput').value;
             const resultsDiv = document.getElementById('results');
             const errorMessage = document.getElementById('errorMessage');
+            const base64Message = document.getElementById('base64Message');
+            const bodyResults = document.getElementById('bodyResults');
+            const decodedBodyDiv = document.getElementById('decodedBody');
 
             if (!emailInput.trim()) {
                 errorMessage.textContent = 'Please provide email source text';
                 errorMessage.classList.remove('hidden');
+                base64Message.classList.add('hidden');
                 resultsDiv.classList.add('hidden');
                 return;
             }
@@ -199,15 +531,16 @@
             const result = parseEmailTimeDelta(emailInput);
 
             errorMessage.classList.add('hidden');
+            base64Message.classList.add('hidden');
             resultsDiv.classList.remove('hidden');
 
-            // Update timeline
             document.getElementById('creationTime').textContent = result.creationTime 
                 ? new Date(result.creationTime).toLocaleString() 
                 : 'Not available';
                 
             document.getElementById('creationToSent').textContent = formatTimeDelta(result.creationToSent);
             document.getElementById('creationToSentBar').style.width = calculateBarWidth(result.creationToSent);
+            document.getElementById('creationToSentBar').className = 'timeline-bar' + (result.creationToSent < 0 ? ' negative-bar' : '');
                 
             document.getElementById('sentTime').textContent = result.sentTime 
                 ? new Date(result.sentTime).toLocaleString() 
@@ -215,17 +548,70 @@
                 
             document.getElementById('sentToDelivered').textContent = formatTimeDelta(result.sentToDelivered);
             document.getElementById('sentToDeliveredBar').style.width = calculateBarWidth(result.sentToDelivered);
+            document.getElementById('sentToDeliveredBar').className = 'timeline-bar' + (result.sentToDelivered < 0 ? ' negative-bar' : '');
                 
             document.getElementById('deliveredTime').textContent = result.deliveredTime 
                 ? new Date(result.deliveredTime).toLocaleString() 
                 : 'Not available';
 
-            // Show/hide stages based on availability
             document.getElementById('creationStage').classList.toggle('hidden', !result.creationTime);
             document.getElementById('creationToSentStage').classList.toggle('hidden', result.creationToSent === null);
             document.getElementById('sentStage').classList.toggle('hidden', !result.sentTime);
             document.getElementById('sentToDeliveredStage').classList.toggle('hidden', result.sentToDelivered === null);
             document.getElementById('deliveredStage').classList.toggle('hidden', !result.deliveredTime);
+
+            const headerTimestampsDiv = document.getElementById('headerTimestamps');
+            headerTimestampsDiv.innerHTML = '';
+            if (result.headerTimestamps.length > 0) {
+                result.headerTimestamps.forEach((entry, index) => {
+                    const stageDiv = document.createElement('div');
+                    stageDiv.className = 'stage';
+                    const prevDelta = index > 0 ? 
+                        (new Date(entry.timestamp) - new Date(result.headerTimestamps[index - 1].timestamp)) / 1000 : null;
+                    stageDiv.innerHTML = `
+                        <div class="timeline-dot"></div>
+                        <h3 class="stage-title">${entry.headerName}</h3>
+                        <p class="stage-text">Time: ${new Date(entry.timestamp).toLocaleString()}</p>
+                        ${prevDelta !== null ? `
+                            <p class="stage-text">Time since previous: ${formatTimeDelta(prevDelta)}</p>
+                            <div class="timeline-bar ${prevDelta < 0 ? 'negative-bar' : ''}" style="width: ${calculateBarWidth(prevDelta)};"></div>
+                        ` : ''}
+                    `;
+                    headerTimestampsDiv.appendChild(stageDiv);
+                });
+            }
+
+            if (result.base64DecodeError) {
+                base64Message.textContent = result.base64DecodeError;
+                base64Message.classList.remove('hidden');
+            }
+
+            bodyResults.innerHTML = '';
+            if (result.bodyTimestamps.length === 0) {
+                bodyResults.innerHTML = '<p class="stage-text">No timestamps found in email body</p>';
+            } else {
+                result.bodyTimestamps.forEach((entry, index) => {
+                    const stageDiv = document.createElement('div');
+                    stageDiv.className = 'stage';
+                    stageDiv.innerHTML = `
+                        <div class="timeline-dot"></div>
+                        <h3 class="stage-title">Line ${entry.lineNumber}</h3>
+                        <p class="stage-text">Time: ${new Date(entry.timestamp).toLocaleString()}</p>
+                        <p class="stage-text">Content: ${entry.line}</p>
+                        ${entry.deltaFromCreation !== undefined ? `
+                            <p class="stage-text">Time from creation: ${formatTimeDelta(entry.deltaFromCreation)}</p>
+                            <div class="timeline-bar ${entry.deltaFromCreation < 0 ? 'negative-bar' : ''}" style="width: ${calculateBarWidth(entry.deltaFromCreation)};"></div>
+                        ` : ''}
+                        ${index > 0 ? `
+                            <p class="stage-text">Time since previous: ${formatTimeDelta(entry.delta)}</p>
+                            <div class="timeline-bar ${entry.delta < 0 ? 'negative-bar' : ''}" style="width: ${calculateBarWidth(entry.delta)};"></div>
+                        ` : ''}
+                    `;
+                    bodyResults.appendChild(stageDiv);
+                });
+            }
+
+            decodedBodyDiv.textContent = result.decodedBody;
 
             if (result.error) {
                 errorMessage.textContent = result.error;
