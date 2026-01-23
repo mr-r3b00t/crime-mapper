@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Network Graph → IP Table</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.datatables.net/2.1.8/css/dataTables.bootstrap5.min.css"/>
+  <style>
+    body { padding: 2rem; background: #f8f9fa; }
+    #drop-zone {
+      border: 3px dashed #6c757d;
+      border-radius: 12px;
+      padding: 3rem;
+      text-align: center;
+      background: white;
+      transition: all 0.2s;
+    }
+    #drop-zone.dragover { border-color: #0d6efd; background: #e7f1ff; }
+    #file-info { margin-top: 1rem; font-weight: bold; }
+    table.dataTable { font-size: 0.95rem; }
+    th, td { vertical-align: middle; }
+    #controls { margin: 1.5rem 0; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2 class="mb-4 text-center">Network Graph JSON → IP Table</h2>
+
+  <div id="drop-zone" class="mb-4">
+    <p class="lead mb-1">Drop your <code>network_graph-*.json</code> file here</p>
+    <p class="text-muted">or click to select file</p>
+    <input type="file" id="fileInput" accept=".json" style="display:none"/>
+    <div id="file-info" class="text-primary"></div>
+  </div>
+
+  <div id="result" class="d-none">
+    <div id="controls" class="d-flex justify-content-between align-items-center">
+      <h5>Extracted IP Records</h5>
+      <button id="exportCsvBtn" class="btn btn-success">Export to CSV</button>
+    </div>
+
+    <table id="ipTable" class="table table-striped table-hover table-bordered">
+      <thead class="table-dark">
+        <tr>
+          <th>IP</th>
+          <th>ASN</th>
+          <th>Country</th>
+          <th>City</th>
+          <th>Organization</th>
+          <th>Special</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div id="error" class="alert alert-danger d-none" role="alert"></div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.datatables.net/2.1.8/js/dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/2.1.8/js/dataTables.bootstrap5.min.js"></script>
+
+<script>
+// ────────────────────────────────────────────────
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('fileInput');
+const fileInfo  = document.getElementById('file-info');
+const resultDiv = document.getElementById('result');
+const errorDiv  = document.getElementById('error');
+const exportBtn = document.getElementById('exportCsvBtn');
+let dataTable   = null;
+
+// Click → open file dialog
+dropZone.addEventListener('click', () => fileInput.click());
+
+// File selected via dialog
+fileInput.addEventListener('change', e => {
+  if (e.target.files.length) processFile(e.target.files[0]);
+});
+
+// Drag & drop
+dropZone.addEventListener('dragover', e => {
+  e.preventDefault();
+  dropZone.classList.add('dragover');
+});
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  if (e.dataTransfer.files.length) processFile(e.dataTransfer.files[0]);
+});
+
+function showError(msg) {
+  errorDiv.textContent = msg;
+  errorDiv.classList.remove('d-none');
+  resultDiv.classList.add('d-none');
+}
+
+function clearError() {
+  errorDiv.classList.add('d-none');
+  errorDiv.textContent = '';
+}
+
+let allRows = []; // store full data for export
+
+function processFile(file) {
+  if (!file.name.endsWith('.json')) {
+    showError("Please upload a .json file");
+    return;
+  }
+
+  fileInfo.textContent = `Processing: ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
+  clearError();
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      buildTable(data);
+    } catch (err) {
+      showError("Invalid JSON format: " + err.message);
+    }
+  };
+  reader.onerror = () => showError("Failed to read file");
+  reader.readAsText(file);
+}
+
+function buildTable(json) {
+  // Build lookup maps
+  const nodesById = {};
+  json.nodes.forEach(node => {
+    nodesById[node.id] = node;
+  });
+
+  const edgesFrom = {};
+  json.edges.forEach(edge => {
+    if (!edgesFrom[edge.from]) edgesFrom[edge.from] = [];
+    edgesFrom[edge.from].push(edge);
+  });
+
+  // Collect IP rows
+  allRows = json.nodes
+    .filter(n => n.type === "ip")
+    .map(ipNode => {
+      const id = ipNode.id;
+      const conn = (edgesFrom[id] || []);
+
+      const findConnected = (type, labelTest) =>
+        conn.find(e => 
+          nodesById[e.to]?.type === type &&
+          labelTest(e.label)
+        )?.to ?? null;
+
+      const asnNodeId     = findConnected("asn",     l => l.includes("Assigned"));
+      const countryNodeId = findConnected("country", l => l.includes("Located"));
+      const cityNodeId    = findConnected("city",    l => l.includes("Located"));
+      const orgNodeId     = findConnected("organization", l => l.includes("Belongs"));
+      const usesNodes     = conn
+        .filter(e => e.label.includes("Uses"))
+        .map(e => nodesById[e.to]?.type)
+        .filter(Boolean);
+
+      return {
+        ip:          ipNode.ip || "",
+        asn:         nodesById[asnNodeId]?.asn    || "",
+        country:     nodesById[countryNodeId]?.country || "",
+        city:        nodesById[cityNodeId]?.city  || "",
+        organization:nodesById[orgNodeId]?.organization || "",
+        special:     [...new Set(usesNodes)].join(", ") || ""
+      };
+    });
+
+  // Destroy previous table if exists
+  if (dataTable) {
+    dataTable.destroy();
+    dataTable = null;
+    $('#ipTable tbody').empty();
+  }
+
+  // Fill table
+  const tbody = document.querySelector('#ipTable tbody');
+  allRows.forEach(row => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${row.ip}</td>
+      <td>${row.asn}</td>
+      <td>${row.country}</td>
+      <td>${row.city}</td>
+      <td>${row.organization}</td>
+      <td>${row.special}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  // Initialize DataTable
+  dataTable = $('#ipTable').DataTable({
+    pageLength: 15,
+    lengthMenu: [10, 15, 25, 50, 100],
+    order: [[0, 'asc']],
+    responsive: true,
+    language: { search: "Filter:" }
+  });
+
+  resultDiv.classList.remove('d-none');
+}
+
+// ─── Export CSV ────────────────────────────────────────
+exportBtn.addEventListener('click', () => {
+  if (!allRows.length) {
+    alert("No data to export yet.");
+    return;
+  }
+
+  // Use visible/filtered rows if user filtered the table
+  const visibleRows = dataTable.rows({ search: 'applied' }).data().toArray();
+
+  // If no rows visible (e.g. filter too strict), fall back to all
+  const rowsToExport = visibleRows.length > 0 ? visibleRows : allRows.map(r => [
+    r.ip, r.asn, r.country, r.city, r.organization, r.special
+  ]);
+
+  const headers = ["IP","ASN","Country","City","Organization","Special"];
+  const csvContent = [
+    headers.join(","),
+    ...rowsToExport.map(row => 
+      row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")
+    )
+  ].join("\n");
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", "ip_network_export.csv");
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+});
+</script>
+</body>
+</html>
