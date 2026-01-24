@@ -6,19 +6,32 @@
   <title>IP Enricher (Shodan InternetDB)</title>
   <style>
     :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    * { box-sizing: border-box; }
+
     body { margin: 0; padding: 16px; background: #0b0f14; color: #e7eef7; }
     h1 { margin: 0 0 12px; font-size: 18px; }
+
     .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    .card { background: #0f1620; border: 1px solid #243244; border-radius: 14px; padding: 12px; }
+    .muted { color: #a9b7c9; font-size: 12px; }
+    .small { font-size: 12px; }
+    .spacer { flex: 1; }
+
     textarea {
       width: 100%;
-      min-height: 140px;
+      box-sizing: border-box;
+      min-height: 170px;
+      max-height: 340px;
       resize: vertical;
       background: #0f1620;
       color: #e7eef7;
       border: 1px solid #243244;
       border-radius: 10px;
       padding: 12px;
+      line-height: 1.4;
+      display: block;
     }
+
     button, select, input[type="number"], input[type="text"] {
       background: #132033;
       color: #e7eef7;
@@ -28,22 +41,23 @@
       cursor: pointer;
     }
     button:disabled { opacity: .5; cursor: not-allowed; }
-    .card { background: #0f1620; border: 1px solid #243244; border-radius: 14px; padding: 12px; }
-    .muted { color: #a9b7c9; font-size: 12px; }
+
     progress { width: 100%; height: 14px; }
+
     table { width: 100%; border-collapse: collapse; }
     th, td { border-bottom: 1px solid #223044; padding: 10px 8px; text-align: left; vertical-align: top; }
     th { position: sticky; top: 0; background: #0f1620; z-index: 1; }
+
     .pill { display: inline-block; padding: 2px 8px; border: 1px solid #2b3b53; border-radius: 999px; margin: 2px 4px 2px 0; font-size: 12px; color: #cfe1ff; }
+
     .grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
-    @media (min-width: 1100px) { .grid { grid-template-columns: 1.2fr .8fr; } }
+    @media (min-width: 1100px) { .grid { grid-template-columns: 1.5fr .5fr; } }
+
     .tableWrap { max-height: 62vh; overflow: auto; border-radius: 14px; border: 1px solid #243244; }
-    .right { margin-left: auto; }
+
     .warn { color: #ffd48a; }
     .err { color: #ff9aa7; }
     .ok { color: #9affc2; }
-    .small { font-size: 12px; }
-    .spacer { flex: 1; }
 
     /* Keep pagination footer visible within results card */
     .resultsFooter {
@@ -92,7 +106,8 @@
         <progress id="progress" value="0" max="100"></progress>
         <div class="row" style="margin-top:6px;">
           <div id="status" class="muted">Paste text, then click “Extract IPs”.</div>
-          <div class="right muted" id="counts"></div>
+          <div class="spacer"></div>
+          <div class="muted" id="counts"></div>
         </div>
       </div>
 
@@ -122,7 +137,7 @@
     </div>
   </div>
 
-  <!-- Results (table + pagination lives here now) -->
+  <!-- Results (table + pagination) -->
   <div class="card" style="margin-top:12px;">
     <div class="tableWrap">
       <table id="table">
@@ -131,7 +146,6 @@
       </table>
     </div>
 
-    <!-- Pagination footer -->
     <div class="row resultsFooter">
       <button id="prevBtn" disabled>◀ Prev</button>
       <button id="nextBtn" disabled>Next ▶</button>
@@ -165,9 +179,9 @@
   const IPV6_RE = /\b(?:[A-F0-9]{1,4}:){2,7}[A-F0-9]{1,4}\b|\b(?:[A-F0-9]{1,4}:){1,7}:\b|\b:(?::[A-F0-9]{1,4}){1,7}\b/gi;
 
   // --- State ---
-  let extracted = [];                 // list of unique IPs to enrich
-  let resultsByIp = new Map();        // ip -> raw response or error object
-  let flatRows = [];                  // table rows for current pivot mode
+  let extracted = [];                 // unique IPs to enrich
+  let resultsByIp = new Map();        // ip -> response or {_error}
+  let flatRows = [];                  // rows for current pivot mode
   let currentPage = 1;
   let stopRequested = false;
 
@@ -247,18 +261,19 @@
         hostnames: safeJoin(obj.hostnames),
         tags: safeJoin(obj.tags),
         cpes: safeJoin(obj.cpes),
-        vulns: safeJoin(obj.vulns)
+        vulns: safeJoin(obj.vulns),
+        error: ""
       };
 
       const ports = Array.isArray(obj.ports) ? obj.ports : [];
 
       if (pivotMode === "ip") {
-        rows.push({ ...base, ports: safeJoin(ports.map(String)), error: "" });
+        rows.push({ ...base, ports: safeJoin(ports.map(String)) });
       } else {
         if (ports.length === 0) {
-          rows.push({ ...base, port: "", error: "" });
+          rows.push({ ...base, port: "" });
         } else {
-          for (const p of ports) rows.push({ ...base, port: String(p), error: "" });
+          for (const p of ports) rows.push({ ...base, port: String(p) });
         }
       }
     }
