@@ -9,10 +9,23 @@
     body { margin: 0; padding: 16px; background: #0b0f14; color: #e7eef7; }
     h1 { margin: 0 0 12px; font-size: 18px; }
     .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
-    textarea { width: 100%; min-height: 140px; resize: vertical; background: #0f1620; color: #e7eef7; border: 1px solid #243244; border-radius: 10px; padding: 12px; }
-    button, select, input[type="number"] {
-      background: #132033; color: #e7eef7; border: 1px solid #243244; border-radius: 10px;
-      padding: 10px 12px; cursor: pointer;
+    textarea {
+      width: 100%;
+      min-height: 140px;
+      resize: vertical;
+      background: #0f1620;
+      color: #e7eef7;
+      border: 1px solid #243244;
+      border-radius: 10px;
+      padding: 12px;
+    }
+    button, select, input[type="number"], input[type="text"] {
+      background: #132033;
+      color: #e7eef7;
+      border: 1px solid #243244;
+      border-radius: 10px;
+      padding: 10px 12px;
+      cursor: pointer;
     }
     button:disabled { opacity: .5; cursor: not-allowed; }
     .card { background: #0f1620; border: 1px solid #243244; border-radius: 14px; padding: 12px; }
@@ -31,6 +44,16 @@
     .ok { color: #9affc2; }
     .small { font-size: 12px; }
     .spacer { flex: 1; }
+
+    /* Keep pagination footer visible within results card */
+    .resultsFooter {
+      position: sticky;
+      bottom: 0;
+      background: #0f1620;
+      padding-top: 10px;
+      margin-top: 10px;
+      border-top: 1px solid #223044;
+    }
   </style>
 </head>
 <body>
@@ -80,34 +103,8 @@
         <span class="spacer"></span>
 
         <label class="small muted">Search:
-          <input id="search" type="text" placeholder="filter table..." style="width:240px; padding:10px 12px; border-radius:10px; border:1px solid #243244; background:#132033; color:#e7eef7;">
+          <input id="search" type="text" placeholder="filter table..." style="width:240px;">
         </label>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="row">
-        <div>
-          <div class="muted">Pagination</div>
-          <div class="small muted">Results are paginated client-side.</div>
-        </div>
-        <span class="spacer"></span>
-        <label class="small muted">Page size:
-          <select id="pageSize">
-            <option>10</option>
-            <option selected>25</option>
-            <option>50</option>
-            <option>100</option>
-            <option>250</option>
-          </select>
-        </label>
-      </div>
-
-      <div class="row" style="margin-top:10px;">
-        <button id="prevBtn" disabled>◀ Prev</button>
-        <button id="nextBtn" disabled>Next ▶</button>
-        <span class="spacer"></span>
-        <div id="pageInfo" class="muted small"></div>
       </div>
 
       <div style="margin-top:10px;" class="muted small">
@@ -115,14 +112,44 @@
         <div style="margin-top:6px;"><span class="pill warn">Note</span> If requests fail with CORS, use the proxy snippet at the bottom.</div>
       </div>
     </div>
+
+    <div class="card">
+      <div class="muted small">
+        <div><span class="pill">Workflow</span> Extract → Process → Pivot → Export</div>
+        <div style="margin-top:6px;"><span class="pill">Pivot</span> Use “Pivot by Port” for one row per IP+Port.</div>
+        <div style="margin-top:6px;"><span class="pill warn">CORS</span> If blocked, run local proxy and set <code>API_BASE</code>.</div>
+      </div>
+    </div>
   </div>
 
+  <!-- Results (table + pagination lives here now) -->
   <div class="card" style="margin-top:12px;">
     <div class="tableWrap">
       <table id="table">
         <thead><tr id="theadRow"></tr></thead>
         <tbody id="tbody"></tbody>
       </table>
+    </div>
+
+    <!-- Pagination footer -->
+    <div class="row resultsFooter">
+      <button id="prevBtn" disabled>◀ Prev</button>
+      <button id="nextBtn" disabled>Next ▶</button>
+
+      <span class="muted small" id="pageInfo" style="margin-left:10px;"></span>
+
+      <span class="spacer"></span>
+
+      <label class="small muted">
+        Page size:
+        <select id="pageSize">
+          <option>10</option>
+          <option selected>25</option>
+          <option>50</option>
+          <option>100</option>
+          <option>250</option>
+        </select>
+      </label>
     </div>
   </div>
 
@@ -176,10 +203,8 @@
   function extractIps(text) {
     const v4 = text.match(IPV4_RE) || [];
     const v6 = text.match(IPV6_RE) || [];
-    // Normalize IPv6 to lowercase for dedupe consistency.
     const all = [...v4, ...v6.map(x => x.toLowerCase())];
-    const uniq = Array.from(new Set(all));
-    return uniq;
+    return Array.from(new Set(all));
   }
 
   function downloadBlob(filename, contentType, data) {
@@ -228,12 +253,12 @@
       const ports = Array.isArray(obj.ports) ? obj.ports : [];
 
       if (pivotMode === "ip") {
-        rows.push({ ...base, ports: safeJoin(ports.map(String)) });
+        rows.push({ ...base, ports: safeJoin(ports.map(String)), error: "" });
       } else {
         if (ports.length === 0) {
-          rows.push({ ...base, port: "" });
+          rows.push({ ...base, port: "", error: "" });
         } else {
-          for (const p of ports) rows.push({ ...base, port: String(p) });
+          for (const p of ports) rows.push({ ...base, port: String(p), error: "" });
         }
       }
     }
@@ -250,9 +275,7 @@
     const pivotMode = elMode.value;
     const pageSize = parseInt(elPageSize.value, 10);
 
-    // rebuild flat rows on-demand
     flatRows = buildRows(pivotMode);
-
     const filtered = applyFilter(flatRows);
 
     const total = filtered.length;
@@ -262,12 +285,10 @@
     const start = (currentPage - 1) * pageSize;
     const pageRows = filtered.slice(start, start + pageSize);
 
-    // columns
     const columns = pivotMode === "ip"
       ? ["ip","status","ports","hostnames","tags","cpes","vulns","error"]
       : ["ip","status","port","hostnames","tags","cpes","vulns","error"];
 
-    // header
     elTheadRow.innerHTML = "";
     for (const c of columns) {
       const th = document.createElement("th");
@@ -275,7 +296,6 @@
       elTheadRow.appendChild(th);
     }
 
-    // body
     elTbody.innerHTML = "";
     for (const row of pageRows) {
       const tr = document.createElement("tr");
@@ -292,12 +312,10 @@
       elTbody.appendChild(tr);
     }
 
-    // pager UI
     elPrevBtn.disabled = currentPage <= 1;
     elNextBtn.disabled = currentPage >= totalPages;
     elPageInfo.textContent = `Page ${currentPage} / ${totalPages} • ${total} row(s)`;
 
-    // exports enabled if any results exist
     const hasAny = resultsByIp.size > 0;
     elExportJsonBtn.disabled = !hasAny;
     elExportCsvBtn.disabled = !hasAny;
@@ -323,7 +341,6 @@
     return await res.json();
   }
 
-  // Simple concurrency runner
   async function runWithConcurrency(items, workerFn, concurrency) {
     let idx = 0;
     let done = 0;
@@ -344,7 +361,7 @@
           elProgress.value = pct;
           elCounts.textContent = `${done}/${total}`;
           setStatus(`Processing… ${done}/${total}`, "muted");
-          renderTable(); // progressive rendering
+          renderTable();
         }
       }
     }
@@ -355,15 +372,15 @@
 
   // --- Events ---
   elExtractBtn.addEventListener("click", () => {
-    const text = elInput.value || "";
-    extracted = extractIps(text);
-    resultsByIp = new Map(); // reset results
+    extracted = extractIps(elInput.value || "");
+    resultsByIp = new Map();
     currentPage = 1;
     elProgress.value = 0;
 
     if (extracted.length === 0) {
       setStatus("No IPs found. Paste content containing IPv4/IPv6, then try again.", "warn");
       elProcessBtn.disabled = true;
+      elCounts.textContent = "";
       renderTable();
       return;
     }
@@ -449,8 +466,19 @@
 </script>
 
 <!--
-If CORS blocks fetch() to https://internetdb.shodan.io, use a tiny proxy (example below).
+If CORS blocks fetch() to https://internetdb.shodan.io, use a tiny proxy and set API_BASE accordingly.
+
+Example Node/Express proxy (proxy.js):
+
+import express from "express";
+const app = express();
+app.get("/internetdb/:ip", async (req, res) => {
+  const upstream = await fetch(`https://internetdb.shodan.io/${encodeURIComponent(req.params.ip)}`);
+  const body = await upstream.text();
+  res.set("Access-Control-Allow-Origin", "*");
+  res.status(upstream.status).type(upstream.headers.get("content-type") || "application/json").send(body);
+});
+app.listen(8787);
 -->
 </body>
 </html>
-
