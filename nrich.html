@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>IP Enricher (Shodan InternetDB)</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    body { margin: 0; padding: 16px; background: #0b0f14; color: #e7eef7; }
+    h1 { margin: 0 0 12px; font-size: 18px; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    textarea { width: 100%; min-height: 140px; resize: vertical; background: #0f1620; color: #e7eef7; border: 1px solid #243244; border-radius: 10px; padding: 12px; }
+    button, select, input[type="number"] {
+      background: #132033; color: #e7eef7; border: 1px solid #243244; border-radius: 10px;
+      padding: 10px 12px; cursor: pointer;
+    }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    .card { background: #0f1620; border: 1px solid #243244; border-radius: 14px; padding: 12px; }
+    .muted { color: #a9b7c9; font-size: 12px; }
+    progress { width: 100%; height: 14px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid #223044; padding: 10px 8px; text-align: left; vertical-align: top; }
+    th { position: sticky; top: 0; background: #0f1620; z-index: 1; }
+    .pill { display: inline-block; padding: 2px 8px; border: 1px solid #2b3b53; border-radius: 999px; margin: 2px 4px 2px 0; font-size: 12px; color: #cfe1ff; }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+    @media (min-width: 1100px) { .grid { grid-template-columns: 1.2fr .8fr; } }
+    .tableWrap { max-height: 62vh; overflow: auto; border-radius: 14px; border: 1px solid #243244; }
+    .right { margin-left: auto; }
+    .warn { color: #ffd48a; }
+    .err { color: #ff9aa7; }
+    .ok { color: #9affc2; }
+    .small { font-size: 12px; }
+    .spacer { flex: 1; }
+  </style>
+</head>
+<body>
+  <h1>IP Enricher (Shodan InternetDB)</h1>
+
+  <div class="grid">
+    <div class="card">
+      <div class="muted">
+        Enrichment endpoint used by <code>nrich</code>: <code>https://internetdb.shodan.io/{IP}</code>.
+      </div>
+
+      <div style="margin-top:10px;">
+        <textarea id="input" placeholder="Paste text that contains IPs (logs, alerts, etc) ..."></textarea>
+      </div>
+
+      <div class="row" style="margin-top:10px;">
+        <button id="extractBtn">Extract IPs</button>
+        <button id="processBtn" disabled>Process</button>
+        <button id="stopBtn" disabled>Stop</button>
+
+        <span class="spacer"></span>
+
+        <label class="small muted">Concurrency:
+          <input id="concurrency" type="number" value="8" min="1" max="50" style="width:80px;">
+        </label>
+
+        <label class="small muted">Mode:
+          <select id="mode">
+            <option value="ip">Pivot by IP</option>
+            <option value="port">Pivot by Port</option>
+          </select>
+        </label>
+      </div>
+
+      <div style="margin-top:10px;">
+        <progress id="progress" value="0" max="100"></progress>
+        <div class="row" style="margin-top:6px;">
+          <div id="status" class="muted">Paste text, then click “Extract IPs”.</div>
+          <div class="right muted" id="counts"></div>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px;">
+        <button id="exportJsonBtn" disabled>Export JSON</button>
+        <button id="exportCsvBtn" disabled>Export CSV</button>
+
+        <span class="spacer"></span>
+
+        <label class="small muted">Search:
+          <input id="search" type="text" placeholder="filter table..." style="width:240px; padding:10px 12px; border-radius:10px; border:1px solid #243244; background:#132033; color:#e7eef7;">
+        </label>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <div>
+          <div class="muted">Pagination</div>
+          <div class="small muted">Results are paginated client-side.</div>
+        </div>
+        <span class="spacer"></span>
+        <label class="small muted">Page size:
+          <select id="pageSize">
+            <option>10</option>
+            <option selected>25</option>
+            <option>50</option>
+            <option>100</option>
+            <option>250</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="row" style="margin-top:10px;">
+        <button id="prevBtn" disabled>◀ Prev</button>
+        <button id="nextBtn" disabled>Next ▶</button>
+        <span class="spacer"></span>
+        <div id="pageInfo" class="muted small"></div>
+      </div>
+
+      <div style="margin-top:10px;" class="muted small">
+        <div><span class="pill">Tip</span> “Pivot by Port” repeats IP metadata per port for easy spreadsheet pivoting.</div>
+        <div style="margin-top:6px;"><span class="pill warn">Note</span> If requests fail with CORS, use the proxy snippet at the bottom.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:12px;">
+    <div class="tableWrap">
+      <table id="table">
+        <thead><tr id="theadRow"></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // --- Config ---
+  // If you need a proxy, set API_BASE to something like: "http://localhost:8787/internetdb/"
+  // and have it forward to https://internetdb.shodan.io/
+  const API_BASE = "https://internetdb.shodan.io/"; // endpoint used by nrich
+
+  // IPv4 regex (strict-ish), IPv6 regex (practical, not full RFC edge-cases).
+  const IPV4_RE = /\b(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\b/g;
+  const IPV6_RE = /\b(?:[A-F0-9]{1,4}:){2,7}[A-F0-9]{1,4}\b|\b(?:[A-F0-9]{1,4}:){1,7}:\b|\b:(?::[A-F0-9]{1,4}){1,7}\b/gi;
+
+  // --- State ---
+  let extracted = [];                 // list of unique IPs to enrich
+  let resultsByIp = new Map();        // ip -> raw response or error object
+  let flatRows = [];                  // table rows for current pivot mode
+  let currentPage = 1;
+  let stopRequested = false;
+
+  // --- Elements ---
+  const elInput = document.getElementById("input");
+  const elExtractBtn = document.getElementById("extractBtn");
+  const elProcessBtn = document.getElementById("processBtn");
+  const elStopBtn = document.getElementById("stopBtn");
+  const elProgress = document.getElementById("progress");
+  const elStatus = document.getElementById("status");
+  const elCounts = document.getElementById("counts");
+  const elMode = document.getElementById("mode");
+  const elConcurrency = document.getElementById("concurrency");
+
+  const elExportJsonBtn = document.getElementById("exportJsonBtn");
+  const elExportCsvBtn = document.getElementById("exportCsvBtn");
+
+  const elSearch = document.getElementById("search");
+
+  const elPageSize = document.getElementById("pageSize");
+  const elPrevBtn = document.getElementById("prevBtn");
+  const elNextBtn = document.getElementById("nextBtn");
+  const elPageInfo = document.getElementById("pageInfo");
+
+  const elTheadRow = document.getElementById("theadRow");
+  const elTbody = document.getElementById("tbody");
+
+  function setStatus(msg, cls="muted") {
+    elStatus.className = cls;
+    elStatus.textContent = msg;
+  }
+
+  function extractIps(text) {
+    const v4 = text.match(IPV4_RE) || [];
+    const v6 = text.match(IPV6_RE) || [];
+    // Normalize IPv6 to lowercase for dedupe consistency.
+    const all = [...v4, ...v6.map(x => x.toLowerCase())];
+    const uniq = Array.from(new Set(all));
+    return uniq;
+  }
+
+  function downloadBlob(filename, contentType, data) {
+    const blob = new Blob([data], { type: contentType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function safeJoin(arr) {
+    if (!Array.isArray(arr) || arr.length === 0) return "";
+    return arr.join(", ");
+  }
+
+  function buildRows(pivotMode) {
+    const rows = [];
+    for (const [ip, obj] of resultsByIp.entries()) {
+      if (!obj || obj._error) {
+        rows.push({
+          ip,
+          status: "error",
+          error: obj?._error || "Unknown error",
+          ports: "",
+          hostnames: "",
+          tags: "",
+          cpes: "",
+          vulns: ""
+        });
+        continue;
+      }
+
+      const base = {
+        ip,
+        status: "ok",
+        hostnames: safeJoin(obj.hostnames),
+        tags: safeJoin(obj.tags),
+        cpes: safeJoin(obj.cpes),
+        vulns: safeJoin(obj.vulns)
+      };
+
+      const ports = Array.isArray(obj.ports) ? obj.ports : [];
+
+      if (pivotMode === "ip") {
+        rows.push({ ...base, ports: safeJoin(ports.map(String)) });
+      } else {
+        if (ports.length === 0) {
+          rows.push({ ...base, port: "" });
+        } else {
+          for (const p of ports) rows.push({ ...base, port: String(p) });
+        }
+      }
+    }
+    return rows;
+  }
+
+  function applyFilter(rows) {
+    const q = (elSearch.value || "").trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(r => JSON.stringify(r).toLowerCase().includes(q));
+  }
+
+  function renderTable() {
+    const pivotMode = elMode.value;
+    const pageSize = parseInt(elPageSize.value, 10);
+
+    // rebuild flat rows on-demand
+    flatRows = buildRows(pivotMode);
+
+    const filtered = applyFilter(flatRows);
+
+    const total = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    currentPage = Math.min(currentPage, totalPages);
+
+    const start = (currentPage - 1) * pageSize;
+    const pageRows = filtered.slice(start, start + pageSize);
+
+    // columns
+    const columns = pivotMode === "ip"
+      ? ["ip","status","ports","hostnames","tags","cpes","vulns","error"]
+      : ["ip","status","port","hostnames","tags","cpes","vulns","error"];
+
+    // header
+    elTheadRow.innerHTML = "";
+    for (const c of columns) {
+      const th = document.createElement("th");
+      th.textContent = c.toUpperCase();
+      elTheadRow.appendChild(th);
+    }
+
+    // body
+    elTbody.innerHTML = "";
+    for (const row of pageRows) {
+      const tr = document.createElement("tr");
+      for (const c of columns) {
+        const td = document.createElement("td");
+        const v = row[c] ?? "";
+        if (c === "status") {
+          td.innerHTML = v === "ok" ? '<span class="ok">ok</span>' : '<span class="err">error</span>';
+        } else {
+          td.textContent = String(v);
+        }
+        tr.appendChild(td);
+      }
+      elTbody.appendChild(tr);
+    }
+
+    // pager UI
+    elPrevBtn.disabled = currentPage <= 1;
+    elNextBtn.disabled = currentPage >= totalPages;
+    elPageInfo.textContent = `Page ${currentPage} / ${totalPages} • ${total} row(s)`;
+
+    // exports enabled if any results exist
+    const hasAny = resultsByIp.size > 0;
+    elExportJsonBtn.disabled = !hasAny;
+    elExportCsvBtn.disabled = !hasAny;
+  }
+
+  function toCSV(rows) {
+    if (!rows.length) return "";
+    const cols = Object.keys(rows[0]);
+    const esc = (s) => {
+      const str = String(s ?? "");
+      if (/[",\n]/.test(str)) return '"' + str.replace(/"/g, '""') + '"';
+      return str;
+    };
+    const head = cols.map(esc).join(",");
+    const body = rows.map(r => cols.map(c => esc(r[c])).join(",")).join("\n");
+    return head + "\n" + body;
+  }
+
+  async function fetchInternetDB(ip) {
+    const url = API_BASE.endsWith("/") ? (API_BASE + encodeURIComponent(ip)) : (API_BASE + "/" + encodeURIComponent(ip));
+    const res = await fetch(url, { method: "GET" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  }
+
+  // Simple concurrency runner
+  async function runWithConcurrency(items, workerFn, concurrency) {
+    let idx = 0;
+    let done = 0;
+    const total = items.length;
+
+    async function worker() {
+      while (true) {
+        if (stopRequested) return;
+        const myIdx = idx++;
+        if (myIdx >= total) return;
+
+        const item = items[myIdx];
+        try {
+          await workerFn(item, myIdx);
+        } finally {
+          done++;
+          const pct = total ? Math.round((done / total) * 100) : 100;
+          elProgress.value = pct;
+          elCounts.textContent = `${done}/${total}`;
+          setStatus(`Processing… ${done}/${total}`, "muted");
+          renderTable(); // progressive rendering
+        }
+      }
+    }
+
+    const workers = Array.from({ length: Math.max(1, concurrency) }, () => worker());
+    await Promise.all(workers);
+  }
+
+  // --- Events ---
+  elExtractBtn.addEventListener("click", () => {
+    const text = elInput.value || "";
+    extracted = extractIps(text);
+    resultsByIp = new Map(); // reset results
+    currentPage = 1;
+    elProgress.value = 0;
+
+    if (extracted.length === 0) {
+      setStatus("No IPs found. Paste content containing IPv4/IPv6, then try again.", "warn");
+      elProcessBtn.disabled = true;
+      renderTable();
+      return;
+    }
+
+    setStatus(`Found ${extracted.length} unique IP(s). Click “Process” to enrich.`, "muted");
+    elCounts.textContent = `0/${extracted.length}`;
+    elProcessBtn.disabled = false;
+    renderTable();
+  });
+
+  elProcessBtn.addEventListener("click", async () => {
+    if (!extracted.length) return;
+
+    stopRequested = false;
+    elStopBtn.disabled = false;
+    elProcessBtn.disabled = true;
+    elExtractBtn.disabled = true;
+
+    setStatus("Starting enrichment…", "muted");
+    elProgress.value = 0;
+
+    const conc = Math.max(1, Math.min(50, parseInt(elConcurrency.value, 10) || 8));
+
+    await runWithConcurrency(
+      extracted,
+      async (ip) => {
+        if (stopRequested) return;
+        try {
+          const data = await fetchInternetDB(ip);
+          resultsByIp.set(ip, data);
+        } catch (e) {
+          resultsByIp.set(ip, { _error: String(e?.message || e) });
+        }
+      },
+      conc
+    );
+
+    elStopBtn.disabled = true;
+    elExtractBtn.disabled = false;
+    elProcessBtn.disabled = false;
+
+    if (stopRequested) {
+      setStatus("Stopped. Partial results shown.", "warn");
+    } else {
+      setStatus("Done. Results are ready.", "ok");
+      elProgress.value = 100;
+    }
+
+    renderTable();
+  });
+
+  elStopBtn.addEventListener("click", () => {
+    stopRequested = true;
+    elStopBtn.disabled = true;
+    setStatus("Stopping… (finishing in-flight requests)", "warn");
+  });
+
+  elMode.addEventListener("change", () => { currentPage = 1; renderTable(); });
+  elSearch.addEventListener("input", () => { currentPage = 1; renderTable(); });
+  elPageSize.addEventListener("change", () => { currentPage = 1; renderTable(); });
+
+  elPrevBtn.addEventListener("click", () => { currentPage = Math.max(1, currentPage - 1); renderTable(); });
+  elNextBtn.addEventListener("click", () => { currentPage = currentPage + 1; renderTable(); });
+
+  elExportJsonBtn.addEventListener("click", () => {
+    const exportObj = {
+      pivotMode: elMode.value,
+      extractedCount: extracted.length,
+      resultsByIp: Object.fromEntries(resultsByIp.entries()),
+      rows: buildRows(elMode.value)
+    };
+    downloadBlob("internetdb_results.json", "application/json;charset=utf-8", JSON.stringify(exportObj, null, 2));
+  });
+
+  elExportCsvBtn.addEventListener("click", () => {
+    const rows = buildRows(elMode.value);
+    downloadBlob("internetdb_results.csv", "text/csv;charset=utf-8", toCSV(rows));
+  });
+
+  // Initial render
+  renderTable();
+})();
+</script>
+
+<!--
+If CORS blocks fetch() to https://internetdb.shodan.io, use a tiny proxy (example below).
+-->
+</body>
+</html>
+
